@@ -259,11 +259,14 @@ const EmergencyDashboard = () => {
                                     <div className="w-3 h-3 bg-yellow-300 rounded-full"></div>
                                     <span>Low Performance</span>
                                 </div>
+                                <div className="bg-red-500 bg-opacity-30 px-3 py-1 rounded-full text-sm">
+                                    <span className="font-semibold">{zeroROITerritories.length}</span> territories flagged
+                                </div>
                             </div>
                         </div>
-                        <div className="overflow-x-auto shadow-lg rounded-lg">
+                        <div className="overflow-x-auto shadow-lg rounded-lg max-h-96 overflow-y-auto">
                             <table className="w-full bg-white">
-                                <thead className="bg-gradient-to-r from-red-500 to-red-600 text-white">
+                                <thead className="bg-gradient-to-r from-red-500 to-red-600 text-white sticky top-0 z-10">
                                     <tr>
                                         <th className="px-4 py-4 text-left text-sm font-bold uppercase tracking-wider">Territory</th>
                                         <th className="px-4 py-4 text-left text-sm font-bold uppercase tracking-wider">MR Name</th>
