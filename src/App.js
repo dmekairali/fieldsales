@@ -1,6 +1,6 @@
 import React from 'react';
 import EmergencyDashboard from './components/EmergencyDashboard';
-import './App.css';
+import './Index.css';
 
 function App() {
   return (
