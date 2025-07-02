@@ -1,6 +1,6 @@
 // Emergency Dashboard Component (React)
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
+import { supabase } from '../supabaseClient';
 
 const EmergencyDashboard = () => {
     const [zeroROITerritories, setZeroROITerritories] = useState([]);
