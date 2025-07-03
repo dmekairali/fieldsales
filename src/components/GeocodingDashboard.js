@@ -1,6 +1,6 @@
 // Google Maps Geocoding API Integration
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from './supabaseClient';
 
 // Configuration
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
@@ -57,21 +57,38 @@ class GeocodingService {
         }
     }
 
-    // Get customers without coordinates
+    // Get customers without coordinates (fixed to get ALL customers)
     async getCustomersWithoutCoordinates() {
+        // First, get the count
+        const { count, error: countError } = await supabase
+            .from('customer_master')
+            .select('*', { count: 'exact', head: true })
+            .or('latitude.is.null,longitude.is.null')
+            .eq('status', 'ACTIVE')
+            .not('full_address', 'is', null);
+
+        if (countError) {
+            console.error('Error counting customers:', countError);
+        } else {
+            console.log(`Total customers needing geocoding: ${count}`);
+        }
+
+        // Get all customers without coordinates (no limit)
         const { data, error } = await supabase
             .from('customer_master')
             .select('id, customer_code, customer_name, full_address, city_name, pin_code')
             .or('latitude.is.null,longitude.is.null')
             .eq('status', 'ACTIVE')
             .not('full_address', 'is', null)
-            .order('id');
+            .order('id')
+            .limit(10000); // Set high limit to get all
 
         if (error) {
             console.error('Error fetching customers:', error);
             return [];
         }
 
+        console.log(`Fetched ${data?.length || 0} customers for geocoding`);
         return data || [];
     }
 
@@ -329,11 +346,13 @@ class GeocodingService {
         }
     }
 
-    // Get geocoding statistics
+    // Get geocoding statistics (improved with detailed logging)
     async getGeocodingStats() {
+        console.log('Fetching geocoding statistics...');
+        
         const { data, error } = await supabase
             .from('customer_master')
-            .select('latitude, longitude')
+            .select('latitude, longitude, full_address, status')
             .eq('status', 'ACTIVE');
 
         if (error) {
@@ -341,14 +360,27 @@ class GeocodingService {
             return null;
         }
 
+        console.log(`Total active customers in database: ${data.length}`);
+
         const total = data.length;
         const withCoordinates = data.filter(item => item.latitude && item.longitude).length;
         const withoutCoordinates = total - withCoordinates;
+        const hasAddress = data.filter(item => item.full_address && item.full_address.trim()).length;
+        const noAddress = total - hasAddress;
+
+        console.log('Statistics breakdown:');
+        console.log(`- Total: ${total}`);
+        console.log(`- With coordinates: ${withCoordinates}`);
+        console.log(`- Without coordinates: ${withoutCoordinates}`);
+        console.log(`- Has address: ${hasAddress}`);
+        console.log(`- No address: ${noAddress}`);
 
         return {
             total,
             withCoordinates,
             withoutCoordinates,
+            hasAddress,
+            noAddress,
             completionPercentage: total > 0 ? (withCoordinates / total * 100).toFixed(1) : 0
         };
     }
