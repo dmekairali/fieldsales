@@ -2,35 +2,25 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
+      "use": "@vercel/static-build"
     },
     {
       "src": "api/main.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb",
+        "runtime": "python3.9"
+      }
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "env": {
-    "REACT_APP_SUPABASE_URL": "@react_app_supabase_url",
-    "REACT_APP_SUPABASE_ANON_KEY": "@react_app_supabase_anon_key",
-    "REACT_APP_API_BASE_URL": "@react_app_api_base_url",
-    "SUPABASE_DB_URL": "@supabase_db_url"
-  },
   "functions": {
     "api/main.py": {
-      "runtime": "python3.9"
+      "maxDuration": 30,
+      "memory": 1024
     }
-  }
+  },
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/main.py" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }
