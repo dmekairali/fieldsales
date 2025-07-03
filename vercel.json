@@ -1,5 +1,4 @@
 {
-  "functions": {
-    "api/*.py": {}
-  }
+  // Remove this:
+  
 }
