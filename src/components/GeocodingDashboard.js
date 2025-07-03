@@ -1,4 +1,5 @@
 // Google Maps Geocoding API Integration
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
 // Configuration
