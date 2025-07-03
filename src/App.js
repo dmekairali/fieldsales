@@ -10,7 +10,6 @@ function App() {
   const [activeTab, setActiveTab] = useState('emergency');
   const [selectedMR, setSelectedMR] = useState(null);
 
-  echo "// Updated $(date)" >> 
   // Use the custom hook to fetch MRs from database
   const { 
     mrList, 
