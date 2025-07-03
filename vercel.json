@@ -23,4 +23,5 @@
     { "src": "/api/(.*)", "dest": "/api/main.py" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
+  
 }
