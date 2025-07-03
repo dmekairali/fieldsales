@@ -1,0 +1,4 @@
+# api/layer_requirements.txt
+numpy==1.24.4
+scipy==1.10.1
+geopy==2.4.0
