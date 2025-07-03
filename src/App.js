@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import EmergencyDashboard from './components/EmergencyDashboard';
+import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
 import './index.css';
 
 function App() {
@@ -11,6 +12,12 @@ function App() {
       name: 'Emergency Dashboard',
       icon: '🚨',
       description: 'Critical territory & visit monitoring'
+    },
+    {
+      id: 'nbd',
+      name: 'NBD Performance',
+      icon: '📈',
+      description: 'New business development tracking'
     },
     {
       id: 'analytics',
@@ -36,6 +43,8 @@ function App() {
     switch (activeTab) {
       case 'emergency':
         return <EmergencyDashboard />;
+      case 'nbd':
+        return <NBDPerformanceDashboard />;
       case 'analytics':
         return (
           <div className="min-h-screen bg-gray-50 p-6">
