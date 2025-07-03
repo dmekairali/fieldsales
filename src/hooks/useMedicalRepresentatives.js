@@ -48,7 +48,7 @@ export const useMedicalRepresentatives = () => {
     useEffect(() => {
         fetchMRs();
         
-        // Set up real-time subscription for MR changes
+        
         const mrSubscription = supabase
             .channel('medical_representatives_changes')
             .on('postgres_changes', 
