@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import EmergencyDashboard from './components/EmergencyDashboard';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
 import './index.css';
+import GeocodingDashboard from './components/GeocodingDashboard';
 
 function App() {
   const [activeTab, setActiveTab] = useState('emergency');
@@ -36,6 +37,12 @@ function App() {
       name: 'Settings',
       icon: '⚙️',
       description: 'Dashboard configuration'
+    },
+    {
+    id: 'geocoding',
+    name: 'Geocoding',
+    icon: '📍',
+    description: 'Add GPS coordinates to customers'
     }
   ];
 
@@ -165,6 +172,9 @@ function App() {
             </div>
           </div>
         );
+      case 'geocoding':
+     return <GeocodingDashboard />;
+      
       default:
         return <EmergencyDashboard />;
     }
