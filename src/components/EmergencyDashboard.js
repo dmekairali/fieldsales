@@ -42,7 +42,6 @@ const EmergencyDashboard = () => {
 
             if (territoriesError) {
                 console.error('Territory data error:', territoriesError);
-                await fetchTerritoryDataDirect();
             } else {
                 setZeroROITerritories(territories || []);
             }
@@ -57,7 +56,6 @@ const EmergencyDashboard = () => {
 
             if (visitsError) {
                 console.error('Visits data error:', visitsError);
-                await fetchSuspiciousVisitsDirect();
             } else {
                 setSuspiciousVisits(visits || []);
             }
@@ -82,8 +80,6 @@ const EmergencyDashboard = () => {
                 setQualityAlerts(alerts || []);
             } else {
                 console.error('Quality alerts error:', alertsError);
-                // Fallback to direct query if view doesn't exist
-                await fetchQualityDataDirect();
             }
 
             // Get MR performance summary
