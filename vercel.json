@@ -2,26 +2,36 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build"
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
     },
     {
       "src": "api/main.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "50mb",
         "runtime": "python3.9"
       }
     }
   ],
   "functions": {
     "api/main.py": {
-      "maxDuration": 30,
-      "memory": 1024
+      "runtime": "python3.9",
+      "maxDuration": 30
     }
   },
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/main.py" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ]
-  
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/main.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "github": {
+    "autoDeployment": true
+  }
 }
