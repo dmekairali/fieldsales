@@ -10,8 +10,8 @@ const EmergencyDashboard = () => {
     useEffect(() => {
         fetchEmergencyData();
         
-        // Set up real-time updates every 30 seconds
-        const interval = setInterval(fetchEmergencyData, 30000);
+        // Set up real-time updates every 30 min
+        const interval = setInterval(fetchEmergencyData, 30 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
 
