@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 
 const NBDPerformanceDashboard = () => {
     const [nbdData, setNbdData] = useState([]);
+    const [allMRs, setAllMRs] = useState([]);
     const [mrFilter, setMrFilter] = useState('');
     const [dateRange, setDateRange] = useState(30);
     const [loading, setLoading] = useState(true);
@@ -32,6 +33,12 @@ const NBDPerformanceDashboard = () => {
                 setError('Failed to load NBD performance data');
             } else {
                 setNbdData(data || []);
+                
+                // Extract unique MR names for dropdown
+                const uniqueMRs = [...new Set((data || []).map(item => item.mr_name))]
+                    .filter(name => name && name.trim())
+                    .sort();
+                setAllMRs(uniqueMRs);
             }
             
             setLoading(false);
@@ -115,20 +122,25 @@ const NBDPerformanceDashboard = () => {
                     <div className="flex flex-wrap gap-4">
                         <div className="flex-1 min-w-64">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Filter by MR Name</label>
-                            <input 
-                                type="text" 
-                                placeholder="Search MR name..."
+                            <select 
                                 value={mrFilter}
                                 onChange={(e) => setMrFilter(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                            />
+                                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+                            >
+                                <option value="">All MRs ({allMRs.length})</option>
+                                {allMRs.map((mrName, index) => (
+                                    <option key={index} value={mrName}>
+                                        {mrName}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
                             <select 
                                 value={dateRange} 
                                 onChange={(e) => setDateRange(e.target.value)}
-                                className="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                className="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
                             >
                                 <option value={7}>Last 7 days</option>
                                 <option value={30}>Last 30 days</option>
@@ -143,11 +155,11 @@ const NBDPerformanceDashboard = () => {
                     <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg p-6 transform hover:scale-105 transition-transform">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-green-100 text-sm font-medium uppercase tracking-wide">Total MRs</div>
+                                <div className="text-green-100 text-sm font-medium uppercase tracking-wide">Total Areas</div>
                                 <div className="text-3xl font-bold mt-2">{stats.totalMRs}</div>
                                 <div className="text-green-100 text-sm mt-1">Active</div>
                             </div>
-                            <div className="text-4xl opacity-80">👥</div>
+                            <div className="text-4xl opacity-80">🏢</div>
                         </div>
                     </div>
                     <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg p-6 transform hover:scale-105 transition-transform">
