@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
+
 export const useMedicalRepresentatives = () => {
     const [mrList, setMrList] = useState([]);
     const [loading, setLoading] = useState(true);
