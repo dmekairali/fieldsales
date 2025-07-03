@@ -1,5 +1,5 @@
 // Google Maps Geocoding API Integration
-import { supabase } from './supabaseClient';
+import { supabase } from '../supabaseClient';
 
 // Configuration
 const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
