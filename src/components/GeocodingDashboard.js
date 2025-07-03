@@ -93,24 +93,112 @@ class GeocodingService {
         return true;
     }
 
-    // Build address string for geocoding
+    // Build address string for geocoding (improved based on Apps Script success)
     buildAddressString(customer) {
         const parts = [];
         
+        // Keep full address exactly as is (including Plus Codes - they help!)
+        if (customer.full_address && customer.full_address.trim()) {
+            parts.push(customer.full_address.trim());
+        }
+        
+        // Only add city if it's not already in the address
+        if (customer.city_name && customer.city_name.trim()) {
+            const cityName = customer.city_name.trim();
+            const currentAddress = parts.join(', ').toLowerCase();
+            if (!currentAddress.includes(cityName.toLowerCase())) {
+                parts.push(cityName);
+            }
+        }
+        
+        // Only add pincode if not already present
+        if (customer.pin_code && customer.pin_code.trim()) {
+            const pinCode = customer.pin_code.trim();
+            const currentAddress = parts.join(', ');
+            if (!currentAddress.includes(pinCode)) {
+                parts.push(pinCode);
+            }
+        }
+        
+        // Add India if not already present
+        const addressStr = parts.join(', ');
+        if (!addressStr.toLowerCase().includes('india')) {
+            parts.push('India');
+        }
+        
+        return parts.join(', ');
+    }
+
+    // Enhanced geocoding with multiple strategies like your Apps Script
+    async geocodeAddressWithFallback(customer) {
+        // Strategy 1: Full address (exactly like your Apps Script)
+        const fullAddress = this.buildAddressString(customer);
+        let result = await this.geocodeAddress(fullAddress);
+        if (result.status === 'SUCCESS') {
+            return { ...result, strategy: 'full_address' };
+        }
+
+        // Strategy 2: Plus Code only (if present)
         if (customer.full_address) {
-            parts.push(customer.full_address);
+            const plusCodeMatch = customer.full_address.match(/[A-Z0-9]{4}\+[A-Z0-9]{2,}/);
+            if (plusCodeMatch) {
+                const plusCodeAddress = `${plusCodeMatch[0]}, ${customer.city_name || ''}, India`;
+                result = await this.geocodeAddress(plusCodeAddress);
+                if (result.status === 'SUCCESS') {
+                    return { ...result, strategy: 'plus_code' };
+                }
+            }
         }
-        if (customer.city_name) {
-            parts.push(customer.city_name);
+
+        // Strategy 3: Simplified with state (common in Indian addresses)
+        if (customer.city_name && customer.pin_code) {
+            // Try to detect state from full address
+            const stateKeywords = ['delhi', 'mumbai', 'bangalore', 'kolkata', 'chennai', 'hyderabad', 'pune', 'odisha', 'uttar pradesh', 'maharashtra', 'karnataka', 'tamil nadu', 'west bengal', 'telangana'];
+            let detectedState = '';
+            
+            if (customer.full_address) {
+                const addressLower = customer.full_address.toLowerCase();
+                for (const state of stateKeywords) {
+                    if (addressLower.includes(state)) {
+                        detectedState = state;
+                        break;
+                    }
+                }
+            }
+            
+            const stateAddress = detectedState 
+                ? `${customer.city_name}, ${detectedState}, ${customer.pin_code}, India`
+                : `${customer.city_name}, ${customer.pin_code}, India`;
+                
+            result = await this.geocodeAddress(stateAddress);
+            if (result.status === 'SUCCESS') {
+                return { ...result, strategy: 'city_state_pin' };
+            }
         }
+
+        // Strategy 4: Just PIN code (very reliable in India)
         if (customer.pin_code) {
-            parts.push(customer.pin_code);
+            result = await this.geocodeAddress(`${customer.pin_code}, India`);
+            if (result.status === 'SUCCESS') {
+                return { ...result, strategy: 'pin_only' };
+            }
         }
-        
-        // Add India for better geocoding accuracy
-        parts.push('India');
-        
-        return parts.filter(part => part && part.trim()).join(', ');
+
+        // Strategy 5: Just city
+        if (customer.city_name) {
+            result = await this.geocodeAddress(`${customer.city_name}, India`);
+            if (result.status === 'SUCCESS') {
+                return { ...result, strategy: 'city_only' };
+            }
+        }
+
+        return { 
+            latitude: null, 
+            longitude: null, 
+            status: 'FAILED', 
+            error: 'All strategies failed',
+            strategy: 'none'
+        };
     }
 
     // Process single batch of customers
@@ -122,16 +210,17 @@ class GeocodingService {
             const address = this.buildAddressString(customer);
             
             try {
-                const geocodeResult = await this.geocodeAddress(address);
+                const geocodeResult = await this.geocodeAddressWithFallback(customer);
                 
                 if (geocodeResult.status === 'SUCCESS') {
                     const updateSuccess = await this.updateCustomerCoordinates(customer.id, geocodeResult);
                     if (updateSuccess) {
                         this.successCount++;
+                        console.log(`✅ Success (${geocodeResult.strategy}): ${customer.customer_name}`);
                     }
                 } else {
                     this.errorCount++;
-                    console.warn(`Failed to geocode: ${customer.customer_name} - ${address}`);
+                    console.warn(`❌ Failed: ${customer.customer_name} - ${address} (tried all strategies)`);
                 }
                 
                 this.processedCount++;
