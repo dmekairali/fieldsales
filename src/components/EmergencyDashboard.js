@@ -13,7 +13,8 @@ const EmergencyDashboard = () => {
         fetchAllData();
         
         // Set up real-time updates every 30 seconds
-        const interval = setInterval(fetchAllData, 30000);
+        // New (30 minutes)  
+   const interval = setInterval(fetchAllData, 1800000);
         return () => clearInterval(interval);
     }, []);
 
