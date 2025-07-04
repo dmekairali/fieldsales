@@ -1,456 +1,720 @@
-import React, { useState, useEffect } from 'react';
-import { routeOptimizer } from '../services/RouteOptimizer';
+const weeklyRoutes = {};
+        const usedCustomers = new Set();
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-const RouteOptimizationDashboard = ({ mrName, mrData }) => {
-    const [customers, setCustomers] = useState([]);
-    const [dailyRoute, setDailyRoute] = useState(null);
-    const [weeklyRoutes, setWeeklyRoutes] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [expandedDays, setExpandedDays] = useState({});
-    const [optimizationParams, setOptimizationParams] = useState({
-        maxVisits: 10,
-        maxTravelTime: 240,
-        prioritizeUrgency: true,
-        includeReturnTime: true
-    });
+        days.forEach((day, dayIndex) => {
+            const availableCustomers = [];
 
-    useEffect(() => {
-        if (mrName) {
-            console.log(`🔄 MR changed to: ${mrName}, fetching customers...`);
-            fetchCustomers();
-        }
-    }, [mrName]);
+            // Critical customers: Visit 3-4 times per week (Mon, Wed, Fri, Sat)
+            if ([0, 2, 4, 5].includes(dayIndex)) { // Mon, Wed, Fri, Sat
+                const criticalAvailable = categories.critical.filter(c => !usedCustomers.has(c.customer_code));
+                availableCustomers.push(...criticalAvailable.slice(0, 6));
+            }
 
-    const fetchCustomers = async () => {
-        if (!mrName) {
-            setError('Please select an MR first');
-            return;
-        }
+            // Urgent customers: Distribute across all weekdays
+            const urgentAvailable = categories.urgent.filter(c => !usedCustomers.has(c.customer_code));
+            const urgentPerDay = Math.ceil(urgentAvailable.length / 7);
+            const urgentToAdd = urgentAvailable.slice(dayIndex * urgentPerDay, (dayIndex + 1) * urgentPerDay);
+            availableCustomers.push(...urgentToAdd);
 
-        setLoading(true);
-        setError(null);
-        
-        try {
-            const customerData = await routeOptimizer.getCustomersForMR(mrName);
-            setCustomers(customerData);
-            console.log(`✅ Successfully loaded ${customerData.length} customers for ${mrName}`);
-        } catch (err) {
-            console.error('❌ Error fetching customers:', err);
-            setError(`Failed to fetch customers: ${err.message}`);
-            setCustomers([]);
-        } finally {
-            setLoading(false);
-        }
-    };
+            // High churn customers: Spread across week (priority on weekdays)
+            if (dayIndex < 5) { // Mon-Fri
+                const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
+                const churnToAdd = churnAvailable.slice(dayIndex * 6, (dayIndex + 1) * 6);
+                availableCustomers.push(...churnToAdd);
+            } else if (dayIndex === 5) { // Saturday - some high churn
+                const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
+                const churnToAdd = churnAvailable.slice(0, 4);
+                availableCustomers.push(...churnToAdd);
+            }
 
-    const optimizeDailyRoute = async () => {
-        if (!customers || customers.length === 0) {
-            setError('No customers available for optimization');
-            return;
-        }
+            // Medium priority: Weekdays + Saturday
+            if (dayIndex < 6) { // Mon-Sat
+                const mediumAvailable = categories.mediumPriority.filter(c => !usedCustomers.has(c.customer_code));
+                const mediumToAdd = mediumAvailable.slice(Math.floor(dayIndex / 2) * 4, (Math.floor(dayIndex / 2) + 1) * 4);
+                availableCustomers.push(...mediumToAdd);
+            }
 
-        setLoading(true);
-        setError(null);
-        
-        try {
-            console.log('🎯 Starting route optimization...');
-            const result = routeOptimizer.optimizeDailyRoute(customers, optimizationParams);
-            setDailyRoute(result);
-            console.log('✅ Route optimization completed:', result);
-        } catch (err) {
-            console.error('❌ Route optimization error:', err);
-            setError(`Route optimization failed: ${err.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
+            // Regular customers: Weekdays + Saturday
+            if (dayIndex < 6) { // Mon-Sat
+                const regularAvailable = categories.regular.filter(c => !usedCustomers.has(c.customer_code));
+                const regularToAdd = regularAvailable.slice(Math.floor(dayIndex / 2) * 5, (Math.floor(dayIndex / 2) + 1) * 5);
+                availableCustomers.push(...regularToAdd);
+            }
 
-    const generateWeeklyRoutes = async () => {
-        if (!mrName) {
-            setError('Please select an MR first');
-            return;
-        }
+            // Prospects: Lighter schedule, mainly weekdays
+            if (dayIndex < 3) { // Mon, Tue, Wed
+                const prospectsAvailable = categories.prospects.filter(c => !usedCustomers.has(c.customer_code));
+                const prospectsToAdd = prospectsAvailable.slice(dayIndex * 2, (dayIndex + 1) * 2);
+                availableCustomers.push(...prospectsToAdd);
+            }
 
-        setLoading(true);
-        setError(null);
-        
-        try {
-            console.log('📅 Generating weekly routes...');
-            const result = await routeOptimizer.generateWeeklyRoutes(mrName, optimizationParams);
-            setWeeklyRoutes(result);
-            console.log('✅ Weekly routes generated:', result);
-        } catch (err) {
-            console.error('❌ Weekly routes error:', err);
-            setError(`Weekly route generation failed: ${err.message}`);
-        } finally {
-            setLoading(false);
-        }
-    };
+            // Sunday: Very light schedule, only critical customers
+            if (dayIndex === 6) { // Sunday
+                const sundayCritical = categories.critical.filter(c => !usedCustomers.has(c.customer_code));
+                availableCustomers.push(...sundayCritical.slice(0, 3));
+            }
 
-    const toggleDayExpansion = (day) => {
-        setExpandedDays(prev => ({
-            ...prev,
-            [day]: !prev[day]
-        }));
-    };
+            console.log(`🗓️ ${day}: ${availableCustomers.length} customers available for optimization`);
 
-    const getUrgencyColor = (score) => {
-        if (score >= 75) return 'text-red-600 bg-red-100';
-        if (score >= 50) return 'text-orange-600 bg-orange-100';
-        return 'text-green-600 bg-green-100';
-    };
+            if (availableCustomers.length > 0) {
+                // Adjust visit limits based on day
+                const maxVisitsForDay = dayIndex === 6 ? 5 : dayIndex === 5 ? 8 : 11; // Sunday: 5, Saturday: 8, Weekdays: 11
+                const maxTravelForDay = dayIndex === 6 ? 120 : dayIndex === 5 ? 180 : 220; // Shorter days on weekends
 
-    const getChurnRiskColor = (risk) => {
-        if (risk >= 0.7) return 'text-red-600 bg-red-100';
-        if (risk >= 0.4) return 'text-orange-600 bg-orange-100';
-        return 'text-green-600 bg-green-100';
-    };
+                const dailyRoute = this.optimizeDailyRoute(availableCustomers, {
+                    maxVisits: maxVisitsForDay,
+                    maxTravelTime: maxTravelForDay,
+                    prioritizeUrgency: true
+                });
 
-    const formatDuration = (minutes) => {
-        const hours = Math.floor(minutes / 60);
-        const mins = Math.round(minutes % 60);
-        if (hours > 0) {
-            return `${hours}h ${mins}m`;
-        }
-        return `${mins}m`;
-    };
+                weeklyRoutes[day] = {
+                    ...dailyRoute,
+                    day: day,
+                    planned_date: this.getNextWeekday(dayIndex)
+                };
 
-    const formatDistance = (km) => {
-        return km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`;
-    };
+                // Mark customers as used (critical customers can be revisited)
+                dailyRoute.route.forEach(customer => {
+                    if (customer.priority_score < 80) { // Only non-critical customers marked as used
+                        usedCustomers.add(customer.customer_code);
+                    }
+                });
 
-    if (!mrName) {
-        return (
-            <div className="min-h-screen bg-gray-50 p-4">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center py-16">
-                        <div className="text-5xl mb-4">🗺️</div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-3">Route Optimization</h2>
-                        <p className="text-gray-600 text-lg">Please select an MR from the dropdown to start route optimization</p>
-                        <div className="mt-6 bg-blue-50 p-4 rounded-lg max-w-lg mx-auto">
-                            <h3 className="font-semibold text-blue-800 mb-2">✨ AI Features</h3>
-                            <div className="text-sm text-blue-700 space-y-1 text-left">
-                                <div>• Performance-based customer prioritization</div>
-                                <div>• Geographic clustering & TSP optimization</div>
-                                <div>• Churn risk and urgency scoring</div>
-                                <div>• Smart weekly route distribution</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
+                console.log(`✅ ${day}: ${dailyRoute.total_customers} customers, ₹${dailyRoute.estimated_revenue} revenue, avg priority: ${dailyRoute.avg_priority_score}`);
+            } else {
+                weeklyRoutes[day] = {
+                    ...this.createEmptyRoute(),
+                    day: day,
+                    planned_date: this.getNextWeekday(dayIndex)
+                };
+                console.log(`📅 ${day}: No customers available`);
+            }
+        });// src/services/ProductionRouteOptimizer.js - Using customer_performance table
+import { supabase } from '../supabaseClient';
+
+class ProductionRouteOptimizer {
+    constructor() {
+        this.cache = new Map();
+        this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
 
-    return (
-        <div className="min-h-screen bg-gray-50 p-4">
-            <div className="max-w-7xl mx-auto">
-                {/* Compact Header */}
-                <div className="mb-6 text-center">
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent flex items-center justify-center gap-2">
-                        🗺️ Route Optimization
-                    </h1>
-                    <div className="mt-2 inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                        {mrName} • {customers.length} Customers
-                        {mrData?.territory && ` • ${mrData.territory}`}
-                    </div>
-                </div>
+    // Get customers with all pre-calculated performance metrics
+    async getCustomersForMR(mrName) {
+        const cacheKey = `customers_${mrName}`;
+        const cached = this.cache.get(cacheKey);
+        
+        if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+            console.log('📋 Using cached customer data');
+            return cached.data;
+        }
 
-                {/* Compact Controls */}
-                <div className="bg-white rounded-lg shadow p-4 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Max Visits</label>
-                            <input
-                                type="number"
-                                value={optimizationParams.maxVisits}
-                                onChange={(e) => setOptimizationParams({
-                                    ...optimizationParams, 
-                                    maxVisits: parseInt(e.target.value)
-                                })}
-                                className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500"
-                                min="5" max="20"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Max Travel (min)</label>
-                            <input
-                                type="number"
-                                value={optimizationParams.maxTravelTime}
-                                onChange={(e) => setOptimizationParams({
-                                    ...optimizationParams, 
-                                    maxTravelTime: parseInt(e.target.value)
-                                })}
-                                className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500"
-                                min="120" max="480"
-                            />
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={optimizeDailyRoute}
-                                disabled={loading || customers.length === 0}
-                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm font-semibold transition-colors"
-                            >
-                                {loading ? '🔄' : '🎯'} Daily Route
-                            </button>
-                            <button
-                                onClick={fetchCustomers}
-                                disabled={loading}
-                                className="bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm transition-colors"
-                            >
-                                🔄
-                            </button>
-                        </div>
-                        <div>
-                            <button
-                                onClick={generateWeeklyRoutes}
-                                disabled={loading || customers.length === 0}
-                                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-3 py-1 rounded text-sm font-semibold transition-colors"
-                            >
-                                {loading ? '🔄 Generating...' : '📅 Generate Weekly Routes'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        try {
+            console.log(`🔍 Fetching customers with performance metrics for MR: ${mrName}`);
+            
+            // Join customer_master with customer_performance for complete data
+            const { data: customers, error } = await supabase
+                .from('customer_master')
+                .select(`
+                    customer_code,
+                    customer_name,
+                    customer_type,
+                    customer_segment,
+                    area_name,
+                    city_name,
+                    latitude,
+                    longitude,
+                    total_visits,
+                    total_orders,
+                    total_order_value,
+                    avg_order_value,
+                    days_since_last_visit,
+                    days_since_last_order,
+                    last_visit_date,
+                    last_order_date,
+                    customer_performance!inner(
+                        total_priority_score,
+                        churn_risk_score,
+                        order_probability,
+                        predicted_order_value
+                    )
+                `)
+                .eq('mr_name', mrName)
+                .eq('status', 'ACTIVE')
+                .not('latitude', 'is', null)
+                .not('longitude', 'is', null);
 
-                {/* Error Display */}
-                {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
-                        <div className="flex items-center gap-2">
-                            <span className="text-red-500">⚠️</span>
-                            <div className="text-red-600 text-sm">{error}</div>
-                        </div>
-                    </div>
-                )}
+            if (error) {
+                console.error('❌ Error fetching customers:', error);
+                return [];
+            }
 
-                {/* Weekly Routes Results */}
-                {weeklyRoutes && (
-                    <div className="bg-white rounded-lg shadow p-4 mb-6">
-                        <h2 className="text-lg font-bold text-gray-800 mb-3">📅 Weekly Route Plan</h2>
-                        
-                        {/* Compact Weekly Summary */}
-                        <div className="bg-blue-50 p-3 rounded-lg mb-4">
-                            <div className="grid grid-cols-4 gap-4 text-center">
-                                <div>
-                                    <div className="text-lg font-bold text-blue-700">{weeklyRoutes.weekly_summary.total_customers_week}</div>
-                                    <div className="text-xs text-blue-600">Total Customers</div>
-                                </div>
-                                <div>
-                                    <div className="text-lg font-bold text-green-700">₹{(weeklyRoutes.weekly_summary.total_estimated_revenue / 1000).toFixed(0)}K</div>
-                                    <div className="text-xs text-green-600">Est. Revenue</div>
-                                </div>
-                                <div>
-                                    <div className="text-lg font-bold text-orange-700">{formatDuration(weeklyRoutes.weekly_summary.total_travel_time)}</div>
-                                    <div className="text-xs text-orange-600">Total Travel</div>
-                                </div>
-                                <div>
-                                    <div className="text-lg font-bold text-purple-700">{weeklyRoutes.weekly_summary.avg_customers_per_day}</div>
-                                    <div className="text-xs text-purple-600">Avg/Day</div>
-                                </div>
-                            </div>
-                        </div>
+            if (!customers || customers.length === 0) {
+                console.log('📋 No customers found with performance data');
+                return [];
+            }
 
-                        {/* Compact Daily Routes Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                            {Object.entries(weeklyRoutes.weekly_routes).map(([day, route]) => (
-                                <div key={day} className="border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h4 className="font-semibold text-sm text-gray-800">{day}</h4>
-                                        <div className="text-xs text-gray-500">{route.planned_date}</div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-3 gap-1 text-xs mb-3">
-                                        <div className="text-center">
-                                            <div className="font-bold text-blue-600">{route.total_customers}</div>
-                                            <div className="text-gray-500">Customers</div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="font-bold text-green-600">₹{(route.estimated_revenue / 1000).toFixed(0)}K</div>
-                                            <div className="text-gray-500">Revenue</div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="font-bold text-orange-600">{formatDuration(route.total_travel_time)}</div>
-                                            <div className="text-gray-500">Travel</div>
-                                        </div>
-                                    </div>
+            // Flatten the performance data and calculate urgency score
+            const enrichedCustomers = customers.map(customer => {
+                const performance = customer.customer_performance;
+                
+                // Calculate urgency score from priority and churn risk
+                const urgencyScore = this.calculateUrgencyScore(
+                    performance.total_priority_score,
+                    performance.churn_risk_score,
+                    customer.days_since_last_visit
+                );
 
-                                    {route.route && route.route.length > 0 ? (
-                                        <div className="space-y-1">
-                                            {route.route.slice(0, expandedDays[day] ? route.route.length : 3).map((customer, index) => (
-                                                <div key={customer.customer_code} className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs">
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="font-medium text-gray-900 truncate">{customer.customer_name}</div>
-                                                        <div className="text-gray-500 truncate">{customer.customer_type}</div>
-                                                    </div>
-                                                    <div className="text-right ml-2">
-                                                        <div className="font-bold text-green-600">₹{(customer.expected_revenue || 0).toLocaleString()}</div>
-                                                        <div className={`text-xs px-1 rounded ${getUrgencyColor(customer.urgency_score)}`}>
-                                                            {Math.round(customer.urgency_score)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {route.route.length > 3 && (
-                                                <button
-                                                    onClick={() => toggleDayExpansion(day)}
-                                                    className="w-full text-center text-xs text-blue-600 hover:text-blue-800 py-1"
-                                                >
-                                                    {expandedDays[day] 
-                                                        ? 'Show Less' 
-                                                        : `+${route.route.length - 3} more customers`
-                                                    }
-                                                </button>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center text-gray-500 py-3 text-xs">
-                                            No customers scheduled
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                return {
+                    ...customer,
+                    // Use pre-calculated performance metrics
+                    priority_score: performance.total_priority_score,
+                    churn_risk: performance.churn_risk_score,
+                    order_probability: performance.order_probability,
+                    predicted_value: performance.predicted_order_value,
+                    urgency_score: urgencyScore,
+                    
+                    // Route optimization metadata
+                    route_position: null,
+                    visited_in_route: false
+                };
+            });
 
-                {/* Daily Route Results */}
-                {dailyRoute && (
-                    <div className="bg-white rounded-lg shadow p-4 mb-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-gray-800">🎯 Optimized Daily Route</h2>
-                            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-lg text-sm font-semibold">
-                                Score: {dailyRoute.optimization_score}/100
-                            </div>
-                        </div>
+            // Log performance distribution
+            const stats = this.calculatePerformanceStats(enrichedCustomers);
+            console.log('📊 Performance distribution:', stats);
+            
+            // Cache the results
+            this.cache.set(cacheKey, {
+                data: enrichedCustomers,
+                timestamp: Date.now()
+            });
 
-                        {/* Compact Route Metrics */}
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
-                            <div className="bg-blue-50 p-2 rounded text-center">
-                                <div className="text-blue-600 text-xs font-medium">Customers</div>
-                                <div className="text-lg font-bold text-blue-700">{dailyRoute.total_customers}</div>
-                            </div>
-                            <div className="bg-green-50 p-2 rounded text-center">
-                                <div className="text-green-600 text-xs font-medium">Revenue</div>
-                                <div className="text-lg font-bold text-green-700">₹{(dailyRoute.estimated_revenue / 1000).toFixed(0)}K</div>
-                            </div>
-                            <div className="bg-orange-50 p-2 rounded text-center">
-                                <div className="text-orange-600 text-xs font-medium">Travel</div>
-                                <div className="text-lg font-bold text-orange-700">{formatDuration(dailyRoute.total_travel_time)}</div>
-                            </div>
-                            <div className="bg-purple-50 p-2 rounded text-center">
-                                <div className="text-purple-600 text-xs font-medium">Distance</div>
-                                <div className="text-lg font-bold text-purple-700">{formatDistance(dailyRoute.total_distance)}</div>
-                            </div>
-                            <div className="bg-indigo-50 p-2 rounded text-center">
-                                <div className="text-indigo-600 text-xs font-medium">Efficiency</div>
-                                <div className="text-lg font-bold text-indigo-700">{dailyRoute.route_efficiency.toFixed(1)}</div>
-                            </div>
-                            <div className="bg-pink-50 p-2 rounded text-center">
-                                <div className="text-pink-600 text-xs font-medium">Rev/Hr</div>
-                                <div className="text-lg font-bold text-pink-700">₹{(dailyRoute.revenue_per_hour / 1000).toFixed(0)}K</div>
-                            </div>
-                        </div>
+            console.log(`✅ Loaded ${enrichedCustomers.length} customers with performance metrics`);
+            return enrichedCustomers;
 
-                        {/* Compact Route Table */}
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-2 py-2 text-left text-xs font-bold text-gray-700">#</th>
-                                        <th className="px-2 py-2 text-left text-xs font-bold text-gray-700">Customer</th>
-                                        <th className="px-2 py-2 text-center text-xs font-bold text-gray-700">Type</th>
-                                        <th className="px-2 py-2 text-center text-xs font-bold text-gray-700">Urgency</th>
-                                        <th className="px-2 py-2 text-center text-xs font-bold text-gray-700">Risk</th>
-                                        <th className="px-2 py-2 text-center text-xs font-bold text-gray-700">Travel</th>
-                                        <th className="px-2 py-2 text-center text-xs font-bold text-gray-700">Revenue</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {dailyRoute.route.map((customer, index) => (
-                                        <tr key={customer.customer_code} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}>
-                                            <td className="px-2 py-2 text-center">
-                                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 font-bold text-xs">
-                                                    {customer.route_position}
-                                                </span>
-                                            </td>
-                                            <td className="px-2 py-2">
-                                                <div className="font-semibold text-gray-900 text-xs">{customer.customer_name}</div>
-                                                <div className="text-xs text-gray-500">{customer.area_name}</div>
-                                            </td>
-                                            <td className="px-2 py-2 text-center">
-                                                <span className="inline-flex items-center px-1 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                                                    {customer.customer_type}
-                                                </span>
-                                            </td>
-                                            <td className="px-2 py-2 text-center">
-                                                <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-bold ${getUrgencyColor(customer.urgency_score)}`}>
-                                                    {Math.round(customer.urgency_score)}
-                                                </span>
-                                            </td>
-                                            <td className="px-2 py-2 text-center">
-                                                <span className={`inline-flex items-center px-1 py-0.5 rounded text-xs font-bold ${getChurnRiskColor(customer.churn_risk)}`}>
-                                                    {Math.round(customer.churn_risk * 100)}%
-                                                </span>
-                                            </td>
-                                            <td className="px-2 py-2 text-center text-xs">
-                                                {formatDuration(customer.travel_time_from_previous || 0)}
-                                            </td>
-                                            <td className="px-2 py-2 text-center font-semibold text-green-600 text-xs">
-                                                ₹{((customer.expected_revenue || 0) / 1000).toFixed(0)}K
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
+        } catch (error) {
+            console.error('❌ Database error:', error);
+            return [];
+        }
+    }
 
-                {/* Customer List Preview */}
-                {customers.length > 0 && !dailyRoute && !weeklyRoutes && (
-                    <div className="bg-white rounded-lg shadow p-4">
-                        <h2 className="text-lg font-bold text-gray-800 mb-3">📋 Available Customers ({customers.length})</h2>
-                        <div className="text-sm text-gray-600 mb-3">
-                            Ready for route optimization with AI performance metrics
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {customers.slice(0, 9).map((customer, index) => (
-                                <div key={customer.customer_code} className="border border-gray-200 rounded p-3">
-                                    <div className="font-medium text-gray-900 text-sm">{customer.customer_name}</div>
-                                    <div className="text-xs text-gray-500">{customer.customer_type} • {customer.area_name}</div>
-                                    <div className="flex justify-between items-center mt-2">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${getUrgencyColor(customer.urgency_score)}`}>
-                                            Urgency: {Math.round(customer.urgency_score)}
-                                        </span>
-                                        <span className="text-xs text-gray-600">₹{(customer.predicted_value / 1000).toFixed(0)}K</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        
-                        {customers.length > 9 && (
-                            <div className="text-center mt-3 text-sm text-gray-500">
-                                +{customers.length - 9} more customers available for optimization
-                            </div>
-                        )}
-                    </div>
-                )}
+    // Calculate urgency score from existing metrics
+    calculateUrgencyScore(priorityScore, churnRisk, daysSinceVisit) {
+        let urgency = priorityScore * 0.6; // Base from priority score
+        
+        // Churn risk urgency (high churn = more urgent)
+        urgency += churnRisk * 30;
+        
+        // Visit recency urgency
+        if (daysSinceVisit > 60) urgency += 20;
+        else if (daysSinceVisit > 45) urgency += 15;
+        else if (daysSinceVisit > 30) urgency += 10;
+        else if (daysSinceVisit > 14) urgency += 5;
+        
+        return Math.min(Math.max(urgency, 10), 100);
+    }
 
-                {/* Loading State */}
-                {loading && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg p-6 text-center">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
-                            <p className="text-gray-600">Optimizing routes...</p>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
+    calculatePerformanceStats(customers) {
+        return {
+            total: customers.length,
+            highPriority: customers.filter(c => c.priority_score >= 80).length,
+            mediumPriority: customers.filter(c => c.priority_score >= 60 && c.priority_score < 80).length,
+            lowPriority: customers.filter(c => c.priority_score >= 40 && c.priority_score < 60).length,
+            veryLowPriority: customers.filter(c => c.priority_score < 40).length,
+            highChurnRisk: customers.filter(c => c.churn_risk > 0.7).length,
+            highOrderProb: customers.filter(c => c.order_probability > 0.3).length,
+            avgUrgency: Math.round(customers.reduce((sum, c) => sum + c.urgency_score, 0) / customers.length)
+        };
+    }
 
-export default RouteOptimizationDashboard;
+    // Haversine formula for distance calculation
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Earth's radius in kilometers
+        const dLat = this.toRadians(lat2 - lat1);
+        const dLon = this.toRadians(lon2 - lon1);
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    toRadians(degrees) {
+        return degrees * (Math.PI / 180);
+    }
+
+    calculateTravelTime(distance) {
+        // Delhi traffic conditions: conservative estimate
+        const avgSpeedKmh = 22; 
+        return (distance / avgSpeedKmh) * 60; // Return in minutes
+    }
+
+    // Optimized daily route using performance metrics
+    optimizeDailyRoute(customers, options = {}) {
+        const {
+            maxVisits = 10,
+            maxTravelTime = 240,
+            startLocation = { latitude: 28.6285, longitude: 77.0594 }, // Delhi center
+            prioritizeUrgency = true,
+            includeReturnTime = true
+        } = options;
+
+        console.log(`🎯 Optimizing route for ${customers.length} customers using performance metrics`);
+
+        if (!customers || customers.length === 0) {
+            return this.createEmptyRoute();
+        }
+
+        // Validate customers have required data
+        const validCustomers = customers.filter(c => 
+            c.latitude && c.longitude && 
+            c.priority_score !== undefined &&
+            c.urgency_score !== undefined &&
+            !isNaN(parseFloat(c.latitude)) && !isNaN(parseFloat(c.longitude))
+        );
+
+        if (validCustomers.length === 0) {
+            console.log('❌ No valid customers with performance metrics');
+            return this.createEmptyRoute();
+        }
+
+        console.log(`📋 ${validCustomers.length} customers have valid data for optimization`);
+
+        // Smart customer selection based on performance data
+        const selectedCustomers = this.selectOptimalCustomers(validCustomers, maxVisits);
+        
+        if (selectedCustomers.length === 0) {
+            return this.createEmptyRoute();
+        }
+
+        console.log(`🎯 Selected ${selectedCustomers.length} optimal customers`);
+
+        // Optimize route order using TSP-style algorithm
+        const optimizedRoute = this.optimizeRouteOrder(selectedCustomers, startLocation, maxTravelTime);
+        
+        // Calculate comprehensive metrics
+        const metrics = this.calculateRouteMetrics(optimizedRoute, startLocation, includeReturnTime);
+
+        console.log(`📊 Route optimized: ${metrics.total_customers} customers, ₹${metrics.estimated_revenue} revenue`);
+
+        return {
+            route: optimizedRoute,
+            ...metrics,
+            algorithm_used: 'performance_based_optimization',
+            optimization_score: this.calculateOptimizationScore(optimizedRoute, metrics)
+        };
+    }
+
+    // Select optimal customers using performance metrics
+    selectOptimalCustomers(customers, maxVisits) {
+        // Strategy: Balance high priority, urgency, and revenue potential
+        
+        // Priority 1: High priority customers (80-90 score) - must include
+        const highPriority = customers.filter(c => c.priority_score >= 80)
+            .sort((a, b) => b.urgency_score - a.urgency_score);
+        
+        // Priority 2: Medium priority with high urgency (60-79 score, urgency >= 70)
+        const mediumUrgent = customers.filter(c => 
+            c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score >= 70
+        ).sort((a, b) => b.urgency_score - a.urgency_score);
+        
+        // Priority 3: High churn risk customers (need immediate attention)
+        const highChurnRisk = customers.filter(c => 
+            c.churn_risk > 0.7 && c.priority_score >= 40
+        ).sort((a, b) => b.urgency_score - a.urgency_score);
+        
+        // Priority 4: High revenue potential customers
+        const highRevenue = customers.filter(c => 
+            c.predicted_value > 10000 && c.order_probability > 0.2
+        ).sort((a, b) => (b.predicted_value * b.order_probability) - (a.predicted_value * a.order_probability));
+
+        // Combine selections without duplicates
+        const selected = [];
+        const selectedCodes = new Set();
+
+        // Add high priority customers (guarantee inclusion)
+        highPriority.forEach(customer => {
+            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
+                selected.push(customer);
+                selectedCodes.add(customer.customer_code);
+            }
+        });
+
+        // Add medium urgent customers
+        mediumUrgent.forEach(customer => {
+            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
+                selected.push(customer);
+                selectedCodes.add(customer.customer_code);
+            }
+        });
+
+        // Add high churn risk customers
+        highChurnRisk.forEach(customer => {
+            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
+                selected.push(customer);
+                selectedCodes.add(customer.customer_code);
+            }
+        });
+
+        // Fill remaining slots with high revenue potential
+        highRevenue.forEach(customer => {
+            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
+                selected.push(customer);
+                selectedCodes.add(customer.customer_code);
+            }
+        });
+
+        // If still have slots, add by urgency score
+        if (selected.length < maxVisits) {
+            const remaining = customers.filter(c => !selectedCodes.has(c.customer_code))
+                .sort((a, b) => b.urgency_score - a.urgency_score);
+            
+            remaining.forEach(customer => {
+                if (selected.length < maxVisits) {
+                    selected.push(customer);
+                    selectedCodes.add(customer.customer_code);
+                }
+            });
+        }
+
+        console.log(`📊 Selection breakdown: High Priority: ${highPriority.filter(c => selectedCodes.has(c.customer_code)).length}, Medium Urgent: ${mediumUrgent.filter(c => selectedCodes.has(c.customer_code)).length}, High Churn: ${highChurnRisk.filter(c => selectedCodes.has(c.customer_code)).length}, High Revenue: ${highRevenue.filter(c => selectedCodes.has(c.customer_code)).length}`);
+
+        return selected;
+    }
+
+    // Optimize route order using nearest neighbor with performance weighting
+    optimizeRouteOrder(customers, startLocation, maxTravelTime) {
+        if (customers.length <= 1) return customers;
+
+        const route = [];
+        const unvisited = [...customers];
+        let currentLocation = startLocation;
+        let totalTravelTime = 0;
+
+        while (unvisited.length > 0 && totalTravelTime < maxTravelTime) {
+            let bestCustomer = null;
+            let bestScore = -Infinity;
+            let bestIndex = -1;
+
+            unvisited.forEach((customer, index) => {
+                const distance = this.calculateDistance(
+                    currentLocation.latitude, currentLocation.longitude,
+                    customer.latitude, customer.longitude
+                );
+                const travelTime = this.calculateTravelTime(distance);
+                
+                if (totalTravelTime + travelTime > maxTravelTime) return;
+
+                // Combined score: urgency + revenue potential / distance
+                const revenueScore = customer.predicted_value * customer.order_probability;
+                const performanceScore = (customer.urgency_score * 0.7) + (revenueScore / 1000 * 0.3);
+                const efficiencyScore = performanceScore / Math.max(distance, 0.1);
+                
+                if (efficiencyScore > bestScore) {
+                    bestScore = efficiencyScore;
+                    bestCustomer = customer;
+                    bestIndex = index;
+                }
+            });
+
+            if (bestCustomer) {
+                const distance = this.calculateDistance(
+                    currentLocation.latitude, currentLocation.longitude,
+                    bestCustomer.latitude, bestCustomer.longitude
+                );
+                const travelTime = this.calculateTravelTime(distance);
+
+                route.push({
+                    ...bestCustomer,
+                    route_position: route.length + 1,
+                    travel_time_from_previous: travelTime,
+                    distance_from_previous: distance,
+                    cumulative_travel_time: totalTravelTime + travelTime,
+                    expected_revenue: Math.round(bestCustomer.predicted_value * bestCustomer.order_probability)
+                });
+
+                totalTravelTime += travelTime;
+                currentLocation = { latitude: bestCustomer.latitude, longitude: bestCustomer.longitude };
+                unvisited.splice(bestIndex, 1);
+            } else {
+                break; // No more customers can be reached within time limit
+            }
+        }
+
+        return route;
+    }
+
+    calculateRouteMetrics(route, startLocation, includeReturnTime) {
+        if (!route || route.length === 0) {
+            return this.createEmptyRoute();
+        }
+
+        let totalTravelTime = 0;
+        let totalRevenue = 0;
+        let totalDistance = 0;
+
+        route.forEach(customer => {
+            totalDistance += customer.distance_from_previous || 0;
+            totalTravelTime += customer.travel_time_from_previous || 0;
+            totalRevenue += customer.expected_revenue || 0;
+        });
+
+        // Add return time if requested
+        if (includeReturnTime && startLocation && route.length > 0) {
+            const lastCustomer = route[route.length - 1];
+            const returnDistance = this.calculateDistance(
+                lastCustomer.latitude, lastCustomer.longitude,
+                startLocation.latitude, startLocation.longitude
+            );
+            totalDistance += returnDistance;
+            totalTravelTime += this.calculateTravelTime(returnDistance);
+        }
+
+        const avgPriority = route.reduce((sum, c) => sum + c.priority_score, 0) / route.length;
+        const avgUrgency = route.reduce((sum, c) => sum + c.urgency_score, 0) / route.length;
+        const avgChurnRisk = route.reduce((sum, c) => sum + c.churn_risk, 0) / route.length;
+        const avgOrderProb = route.reduce((sum, c) => sum + c.order_probability, 0) / route.length;
+        const totalVisitTime = route.length * 35; // 35 minutes average per visit
+
+        return {
+            total_customers: route.length,
+            total_distance: Math.round(totalDistance * 100) / 100,
+            total_travel_time: Math.round(totalTravelTime),
+            total_visit_time: totalVisitTime,
+            total_day_time: Math.round(totalTravelTime + totalVisitTime),
+            estimated_revenue: Math.round(totalRevenue),
+            avg_priority_score: Math.round(avgPriority * 10) / 10,
+            avg_urgency_score: Math.round(avgUrgency * 10) / 10,
+            avg_churn_risk: Math.round(avgChurnRisk * 100) / 100,
+            avg_order_probability: Math.round(avgOrderProb * 100) / 100,
+            route_efficiency: route.length / Math.max(totalTravelTime / 60, 0.1),
+            revenue_per_hour: Math.round(totalRevenue / Math.max((totalTravelTime + totalVisitTime) / 60, 0.1)),
+            route: route
+        };
+    }
+
+    calculateOptimizationScore(route, metrics) {
+        if (!route || route.length === 0) return 0;
+
+        // Multi-factor scoring
+        const efficiencyScore = Math.min(metrics.route_efficiency * 7, 30);
+        const priorityScore = (metrics.avg_priority_score / 100) * 25;
+        const revenueScore = Math.min(metrics.estimated_revenue / 8000, 25);
+        const urgencyScore = (metrics.avg_urgency_score / 100) * 20;
+
+        return Math.round(efficiencyScore + priorityScore + revenueScore + urgencyScore);
+    }
+
+    createEmptyRoute() {
+        return {
+            route: [],
+            total_customers: 0,
+            total_distance: 0,
+            total_travel_time: 0,
+            total_visit_time: 0,
+            total_day_time: 0,
+            estimated_revenue: 0,
+            avg_priority_score: 0,
+            avg_urgency_score: 0,
+            avg_churn_risk: 0,
+            avg_order_probability: 0,
+            route_efficiency: 0,
+            revenue_per_hour: 0,
+            optimization_score: 0
+        };
+    }
+
+    // Weekly route generation using performance-based distribution
+    async generateWeeklyRoutes(mrName, options = {}) {
+        const customers = await this.getCustomersForMR(mrName);
+        
+        if (!customers || customers.length === 0) {
+            return this.createEmptyWeeklyRoutes();
+        }
+
+        console.log(`📅 Generating performance-based weekly routes for ${customers.length} customers`);
+
+        // Categorize customers by performance metrics
+        const categories = {
+            critical: customers.filter(c => c.priority_score >= 80), // 27 customers
+            urgent: customers.filter(c => c.urgency_score >= 75 && c.priority_score >= 60 && c.priority_score < 80), 
+            highChurn: customers.filter(c => c.churn_risk > 0.7 && c.priority_score >= 40), // 111 very low priority
+            mediumPriority: customers.filter(c => c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score < 75), // 47 medium
+            regular: customers.filter(c => c.priority_score >= 40 && c.priority_score < 60), // 87 low
+            prospects: customers.filter(c => c.priority_score < 40 && c.churn_risk <= 0.7) // Some very low priority
+        };
+
+        console.log(`📊 Weekly categorization:`, {
+            critical: categories.critical.length,
+            urgent: categories.urgent.length,
+            highChurn: categories.highChurn.length,
+            mediumPriority: categories.mediumPriority.length,
+            regular: categories.regular.length,
+            prospects: categories.prospects.length
+        });
+
+        const weeklyRoutes = {};
+        const usedCustomers = new Set();
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+        days.forEach((day, dayIndex) => {
+            const availableCustomers = [];
+
+            // Critical customers: Visit 2-3 times per week (Monday, Wednesday, Friday)
+            if ([0, 2, 4].includes(dayIndex)) { // Mon, Wed, Fri
+                const criticalAvailable = categories.critical.filter(c => !usedCustomers.has(c.customer_code));
+                availableCustomers.push(...criticalAvailable.slice(0, 6));
+            }
+
+            // Urgent customers: Distribute across all weekdays
+            const urgentAvailable = categories.urgent.filter(c => !usedCustomers.has(c.customer_code));
+            const urgentPerDay = Math.ceil(urgentAvailable.length / 5);
+            const urgentToAdd = urgentAvailable.slice(dayIndex * urgentPerDay, (dayIndex + 1) * urgentPerDay);
+            availableCustomers.push(...urgentToAdd);
+
+            // High churn customers: Spread across week (priority on early days)
+            if (dayIndex < 3) { // Mon, Tue, Wed
+                const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
+                const churnToAdd = churnAvailable.slice(dayIndex * 8, (dayIndex + 1) * 8);
+                availableCustomers.push(...churnToAdd);
+            }
+
+            // Medium priority: Every other day
+            if (dayIndex % 2 === 0) { // Mon, Wed, Fri
+                const mediumAvailable = categories.mediumPriority.filter(c => !usedCustomers.has(c.customer_code));
+                const mediumToAdd = mediumAvailable.slice(0, 5);
+                availableCustomers.push(...mediumToAdd);
+            }
+
+            // Regular customers: 2-3 times per week
+            if ([0, 2, 4].includes(dayIndex)) { // Mon, Wed, Fri
+                const regularAvailable = categories.regular.filter(c => !usedCustomers.has(c.customer_code));
+                const regularToAdd = regularAvailable.slice(Math.floor(dayIndex / 2) * 6, (Math.floor(dayIndex / 2) + 1) * 6);
+                availableCustomers.push(...regularToAdd);
+            }
+
+            // Prospects: Once per week, distributed
+            if (dayIndex < 2) { // Mon, Tue
+                const prospectsAvailable = categories.prospects.filter(c => !usedCustomers.has(c.customer_code));
+                const prospectsToAdd = prospectsAvailable.slice(dayIndex * 3, (dayIndex + 1) * 3);
+                availableCustomers.push(...prospectsToAdd);
+            }
+
+            console.log(`🗓️ ${day}: ${availableCustomers.length} customers available for optimization`);
+
+            if (availableCustomers.length > 0) {
+                const dailyRoute = this.optimizeDailyRoute(availableCustomers, {
+                    maxVisits: 11,
+                    maxTravelTime: 220,
+                    prioritizeUrgency: true
+                });
+
+                weeklyRoutes[day] = {
+                    ...dailyRoute,
+                    day: day,
+                    planned_date: this.getNextWeekday(dayIndex)
+                };
+
+                // Mark customers as used (critical customers can be revisited)
+                dailyRoute.route.forEach(customer => {
+                    if (customer.priority_score < 80) { // Only non-critical customers marked as used
+                        usedCustomers.add(customer.customer_code);
+                    }
+                });
+
+                console.log(`✅ ${day}: ${dailyRoute.total_customers} customers, ₹${dailyRoute.estimated_revenue} revenue, avg priority: ${dailyRoute.avg_priority_score}`);
+            } else {
+                weeklyRoutes[day] = {
+                    ...this.createEmptyRoute(),
+                    day: day,
+                    planned_date: this.getNextWeekday(dayIndex)
+                };
+                console.log(`📅 ${day}: No customers available`);
+            }
+        });
+
+        const result = {
+            status: 'success',
+            mr_name: mrName,
+            total_customers_available: customers.length,
+            weekly_routes: weeklyRoutes,
+            weekly_summary: this.calculateWeeklySummary(weeklyRoutes),
+            performance_distribution: categories,
+            generated_at: new Date().toISOString()
+        };
+
+        console.log('📋 Weekly routes summary:', result.weekly_summary);
+        return result;
+    }
+
+    getNextWeekday(dayIndex) {
+        const today = new Date();
+        const daysUntilMonday = (1 + 7 - today.getDay()) % 7;
+        const nextMonday = new Date(today);
+        nextMonday.setDate(today.getDate() + daysUntilMonday);
+        nextMonday.setDate(nextMonday.getDate() + dayIndex);
+        return nextMonday.toISOString().split('T')[0];
+    }
+
+    calculateWeeklySummary(weeklyRoutes) {
+        const days = Object.keys(weeklyRoutes);
+        const totalCustomers = days.reduce((sum, day) => sum + weeklyRoutes[day].total_customers, 0);
+        const totalRevenue = days.reduce((sum, day) => sum + weeklyRoutes[day].estimated_revenue, 0);
+        const totalTravelTime = days.reduce((sum, day) => sum + weeklyRoutes[day].total_travel_time, 0);
+        const totalDistance = days.reduce((sum, day) => sum + weeklyRoutes[day].total_distance, 0);
+        
+        const avgPriority = days.reduce((sum, day) => sum + (weeklyRoutes[day].avg_priority_score || 0), 0) / days.length;
+        const avgUrgency = days.reduce((sum, day) => sum + (weeklyRoutes[day].avg_urgency_score || 0), 0) / days.length;
+
+        return {
+            total_customers_week: totalCustomers,
+            total_estimated_revenue: Math.round(totalRevenue),
+            total_travel_time: Math.round(totalTravelTime),
+            total_distance: Math.round(totalDistance * 100) / 100,
+            avg_customers_per_day: Math.round((totalCustomers / days.length) * 10) / 10,
+            avg_revenue_per_day: Math.round(totalRevenue / days.length),
+            avg_priority_score: Math.round(avgPriority * 10) / 10,
+            avg_urgency_score: Math.round(avgUrgency * 10) / 10,
+            efficiency_score: totalCustomers > 0 ? Math.round((totalRevenue / totalTravelTime) * 10) / 10 : 0
+        };
+    }
+
+    createEmptyWeeklyRoutes() {
+        const weeklyRoutes = {};
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        
+        days.forEach((day, index) => {
+            weeklyRoutes[day] = {
+                ...this.createEmptyRoute(),
+                day: day,
+                planned_date: this.getNextWeekday(index)
+            };
+        });
+
+        return {
+            status: 'success',
+            mr_name: 'Unknown',
+            total_customers_available: 0,
+            weekly_routes: weeklyRoutes,
+            weekly_summary: this.calculateWeeklySummary(weeklyRoutes),
+            generated_at: new Date().toISOString()
+        };
+    }
+
+    clearCache() {
+        this.cache.clear();
+        console.log('🗑️ Route optimizer cache cleared');
+    }
+
+    getCacheStats() {
+        return {
+            cached_items: this.cache.size,
+            cache_expiry_minutes: this.cacheExpiry / (60 * 1000)
+        };
+    }
+}
+
+export const routeOptimizer = new RouteOptimizer();
+export default RouteOptimizer;
