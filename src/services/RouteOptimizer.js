@@ -1,4 +1,4 @@
-
+// src/services/RouteOptimizer.js - Clean production version
 import { supabase } from '../supabaseClient';
 
 class RouteOptimizer {
@@ -7,7 +7,7 @@ class RouteOptimizer {
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
 
-    // Get customers with all pre-calculated performance metrics
+    // Get customers with performance metrics from customer_master table
     async getCustomersForMR(mrName) {
         const cacheKey = `customers_${mrName}`;
         const cached = this.cache.get(cacheKey);
@@ -18,9 +18,8 @@ class RouteOptimizer {
         }
 
         try {
-            console.log(`🔍 Fetching customers with performance metrics for MR: ${mrName}`);
+            console.log(`🔍 Fetching customers for MR: ${mrName}`);
             
-            // Join customer_master with customer_performance for complete data
             const { data: customers, error } = await supabase
                 .from('customer_master')
                 .select(`
@@ -40,17 +39,16 @@ class RouteOptimizer {
                     days_since_last_order,
                     last_visit_date,
                     last_order_date,
-                    customer_performance!inner(
-                        total_priority_score,
-                        churn_risk_score,
-                        order_probability,
-                        predicted_order_value
-                    )
+                    total_priority_score,
+                    churn_risk_score,
+                    order_probability,
+                    predicted_order_value
                 `)
                 .eq('mr_name', mrName)
                 .eq('status', 'ACTIVE')
                 .not('latitude', 'is', null)
-                .not('longitude', 'is', null);
+                .not('longitude', 'is', null)
+                .not('total_priority_score', 'is', null);
 
             if (error) {
                 console.error('❌ Error fetching customers:', error);
@@ -62,43 +60,33 @@ class RouteOptimizer {
                 return [];
             }
 
-            // Flatten the performance data and calculate urgency score
+            // Enrich with calculated urgency scores
             const enrichedCustomers = customers.map(customer => {
-                const performance = customer.customer_performance;
-                
-                // Calculate urgency score from priority and churn risk
                 const urgencyScore = this.calculateUrgencyScore(
-                    performance.total_priority_score,
-                    performance.churn_risk_score,
+                    customer.total_priority_score,
+                    customer.churn_risk_score,
                     customer.days_since_last_visit
                 );
 
                 return {
                     ...customer,
-                    // Use pre-calculated performance metrics
-                    priority_score: performance.total_priority_score,
-                    churn_risk: performance.churn_risk_score,
-                    order_probability: performance.order_probability,
-                    predicted_value: performance.predicted_order_value,
+                    priority_score: customer.total_priority_score,
+                    churn_risk: customer.churn_risk_score,
+                    order_probability: customer.order_probability,
+                    predicted_value: customer.predicted_order_value,
                     urgency_score: urgencyScore,
-                    
-                    // Route optimization metadata
                     route_position: null,
                     visited_in_route: false
                 };
             });
 
-            // Log performance distribution
-            const stats = this.calculatePerformanceStats(enrichedCustomers);
-            console.log('📊 Performance distribution:', stats);
-            
-            // Cache the results
+            // Cache results
             this.cache.set(cacheKey, {
                 data: enrichedCustomers,
                 timestamp: Date.now()
             });
 
-            console.log(`✅ Loaded ${enrichedCustomers.length} customers with performance metrics`);
+            console.log(`✅ Loaded ${enrichedCustomers.length} customers for ${mrName}`);
             return enrichedCustomers;
 
         } catch (error) {
@@ -107,14 +95,11 @@ class RouteOptimizer {
         }
     }
 
-    // Calculate urgency score from existing metrics
+    // Calculate urgency score
     calculateUrgencyScore(priorityScore, churnRisk, daysSinceVisit) {
-        let urgency = priorityScore * 0.6; // Base from priority score
-        
-        // Churn risk urgency (high churn = more urgent)
+        let urgency = priorityScore * 0.6;
         urgency += churnRisk * 30;
         
-        // Visit recency urgency
         if (daysSinceVisit > 60) urgency += 20;
         else if (daysSinceVisit > 45) urgency += 15;
         else if (daysSinceVisit > 30) urgency += 10;
@@ -123,20 +108,7 @@ class RouteOptimizer {
         return Math.min(Math.max(urgency, 10), 100);
     }
 
-    calculatePerformanceStats(customers) {
-        return {
-            total: customers.length,
-            highPriority: customers.filter(c => c.priority_score >= 80).length,
-            mediumPriority: customers.filter(c => c.priority_score >= 60 && c.priority_score < 80).length,
-            lowPriority: customers.filter(c => c.priority_score >= 40 && c.priority_score < 60).length,
-            veryLowPriority: customers.filter(c => c.priority_score < 40).length,
-            highChurnRisk: customers.filter(c => c.churn_risk > 0.7).length,
-            highOrderProb: customers.filter(c => c.order_probability > 0.3).length,
-            avgUrgency: Math.round(customers.reduce((sum, c) => sum + c.urgency_score, 0) / customers.length)
-        };
-    }
-
-    // Haversine formula for distance calculation
+    // Distance calculation using Haversine formula
     calculateDistance(lat1, lon1, lat2, lon2) {
         const R = 6371; // Earth's radius in kilometers
         const dLat = this.toRadians(lat2 - lat1);
@@ -154,28 +126,27 @@ class RouteOptimizer {
     }
 
     calculateTravelTime(distance) {
-        // Delhi traffic conditions: conservative estimate
-        const avgSpeedKmh = 22; 
-        return (distance / avgSpeedKmh) * 60; // Return in minutes
+        const avgSpeedKmh = 22; // Delhi traffic
+        return (distance / avgSpeedKmh) * 60; // minutes
     }
 
-    // Optimized daily route using performance metrics
+    // Daily route optimization
     optimizeDailyRoute(customers, options = {}) {
         const {
             maxVisits = 10,
             maxTravelTime = 240,
-            startLocation = { latitude: 28.6285, longitude: 77.0594 }, // Delhi center
+            startLocation = { latitude: 28.6285, longitude: 77.0594 },
             prioritizeUrgency = true,
             includeReturnTime = true
         } = options;
 
-        console.log(`🎯 Optimizing route for ${customers.length} customers using performance metrics`);
+        console.log(`🎯 Optimizing route for ${customers.length} customers`);
 
         if (!customers || customers.length === 0) {
             return this.createEmptyRoute();
         }
 
-        // Validate customers have required data
+        // Validate customers
         const validCustomers = customers.filter(c => 
             c.latitude && c.longitude && 
             c.priority_score !== undefined &&
@@ -184,28 +155,21 @@ class RouteOptimizer {
         );
 
         if (validCustomers.length === 0) {
-            console.log('❌ No valid customers with performance metrics');
             return this.createEmptyRoute();
         }
 
-        console.log(`📋 ${validCustomers.length} customers have valid data for optimization`);
-
-        // Smart customer selection based on performance data
+        // Select optimal customers
         const selectedCustomers = this.selectOptimalCustomers(validCustomers, maxVisits);
         
         if (selectedCustomers.length === 0) {
             return this.createEmptyRoute();
         }
 
-        console.log(`🎯 Selected ${selectedCustomers.length} optimal customers`);
-
-        // Optimize route order using TSP-style algorithm
+        // Optimize route order
         const optimizedRoute = this.optimizeRouteOrder(selectedCustomers, startLocation, maxTravelTime);
         
-        // Calculate comprehensive metrics
+        // Calculate metrics
         const metrics = this.calculateRouteMetrics(optimizedRoute, startLocation, includeReturnTime);
-
-        console.log(`📊 Route optimized: ${metrics.total_customers} customers, ₹${metrics.estimated_revenue} revenue`);
 
         return {
             route: optimizedRoute,
@@ -217,64 +181,35 @@ class RouteOptimizer {
 
     // Select optimal customers using performance metrics
     selectOptimalCustomers(customers, maxVisits) {
-        // Strategy: Balance high priority, urgency, and revenue potential
-        
-        // Priority 1: High priority customers (80-90 score) - must include
         const highPriority = customers.filter(c => c.priority_score >= 80)
             .sort((a, b) => b.urgency_score - a.urgency_score);
         
-        // Priority 2: Medium priority with high urgency (60-79 score, urgency >= 70)
         const mediumUrgent = customers.filter(c => 
             c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score >= 70
         ).sort((a, b) => b.urgency_score - a.urgency_score);
         
-        // Priority 3: High churn risk customers (need immediate attention)
         const highChurnRisk = customers.filter(c => 
             c.churn_risk > 0.7 && c.priority_score >= 40
         ).sort((a, b) => b.urgency_score - a.urgency_score);
         
-        // Priority 4: High revenue potential customers
         const highRevenue = customers.filter(c => 
             c.predicted_value > 10000 && c.order_probability > 0.2
         ).sort((a, b) => (b.predicted_value * b.order_probability) - (a.predicted_value * a.order_probability));
 
-        // Combine selections without duplicates
         const selected = [];
         const selectedCodes = new Set();
 
-        // Add high priority customers (guarantee inclusion)
-        highPriority.forEach(customer => {
-            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
-                selected.push(customer);
-                selectedCodes.add(customer.customer_code);
-            }
+        // Add customers by priority
+        [highPriority, mediumUrgent, highChurnRisk, highRevenue].forEach(group => {
+            group.forEach(customer => {
+                if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
+                    selected.push(customer);
+                    selectedCodes.add(customer.customer_code);
+                }
+            });
         });
 
-        // Add medium urgent customers
-        mediumUrgent.forEach(customer => {
-            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
-                selected.push(customer);
-                selectedCodes.add(customer.customer_code);
-            }
-        });
-
-        // Add high churn risk customers
-        highChurnRisk.forEach(customer => {
-            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
-                selected.push(customer);
-                selectedCodes.add(customer.customer_code);
-            }
-        });
-
-        // Fill remaining slots with high revenue potential
-        highRevenue.forEach(customer => {
-            if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
-                selected.push(customer);
-                selectedCodes.add(customer.customer_code);
-            }
-        });
-
-        // If still have slots, add by urgency score
+        // Fill remaining slots by urgency
         if (selected.length < maxVisits) {
             const remaining = customers.filter(c => !selectedCodes.has(c.customer_code))
                 .sort((a, b) => b.urgency_score - a.urgency_score);
@@ -287,12 +222,10 @@ class RouteOptimizer {
             });
         }
 
-        console.log(`📊 Selection breakdown: High Priority: ${highPriority.filter(c => selectedCodes.has(c.customer_code)).length}, Medium Urgent: ${mediumUrgent.filter(c => selectedCodes.has(c.customer_code)).length}, High Churn: ${highChurnRisk.filter(c => selectedCodes.has(c.customer_code)).length}, High Revenue: ${highRevenue.filter(c => selectedCodes.has(c.customer_code)).length}`);
-
         return selected;
     }
 
-    // Optimize route order using nearest neighbor with performance weighting
+    // Optimize route order using nearest neighbor
     optimizeRouteOrder(customers, startLocation, maxTravelTime) {
         if (customers.length <= 1) return customers;
 
@@ -315,7 +248,6 @@ class RouteOptimizer {
                 
                 if (totalTravelTime + travelTime > maxTravelTime) return;
 
-                // Combined score: urgency + revenue potential / distance
                 const revenueScore = customer.predicted_value * customer.order_probability;
                 const performanceScore = (customer.urgency_score * 0.7) + (revenueScore / 1000 * 0.3);
                 const efficiencyScore = performanceScore / Math.max(distance, 0.1);
@@ -347,13 +279,14 @@ class RouteOptimizer {
                 currentLocation = { latitude: bestCustomer.latitude, longitude: bestCustomer.longitude };
                 unvisited.splice(bestIndex, 1);
             } else {
-                break; // No more customers can be reached within time limit
+                break;
             }
         }
 
         return route;
     }
 
+    // Calculate route metrics
     calculateRouteMetrics(route, startLocation, includeReturnTime) {
         if (!route || route.length === 0) {
             return this.createEmptyRoute();
@@ -369,7 +302,6 @@ class RouteOptimizer {
             totalRevenue += customer.expected_revenue || 0;
         });
 
-        // Add return time if requested
         if (includeReturnTime && startLocation && route.length > 0) {
             const lastCustomer = route[route.length - 1];
             const returnDistance = this.calculateDistance(
@@ -384,7 +316,7 @@ class RouteOptimizer {
         const avgUrgency = route.reduce((sum, c) => sum + c.urgency_score, 0) / route.length;
         const avgChurnRisk = route.reduce((sum, c) => sum + c.churn_risk, 0) / route.length;
         const avgOrderProb = route.reduce((sum, c) => sum + c.order_probability, 0) / route.length;
-        const totalVisitTime = route.length * 35; // 35 minutes average per visit
+        const totalVisitTime = route.length * 35;
 
         return {
             total_customers: route.length,
@@ -406,7 +338,6 @@ class RouteOptimizer {
     calculateOptimizationScore(route, metrics) {
         if (!route || route.length === 0) return 0;
 
-        // Multi-factor scoring
         const efficiencyScore = Math.min(metrics.route_efficiency * 7, 30);
         const priorityScore = (metrics.avg_priority_score / 100) * 25;
         const revenueScore = Math.min(metrics.estimated_revenue / 8000, 25);
@@ -434,7 +365,7 @@ class RouteOptimizer {
         };
     }
 
-    // Weekly route generation using performance-based distribution
+    // Weekly route generation - 6 days (Monday-Saturday)
     async generateWeeklyRoutes(mrName, options = {}) {
         const customers = await this.getCustomersForMR(mrName);
         
@@ -442,80 +373,77 @@ class RouteOptimizer {
             return this.createEmptyWeeklyRoutes();
         }
 
-        console.log(`📅 Generating performance-based weekly routes for ${customers.length} customers`);
+        console.log(`📅 Generating weekly routes for ${customers.length} customers`);
 
-        // Categorize customers by performance metrics
+        // Categorize customers
         const categories = {
-            critical: customers.filter(c => c.priority_score >= 80), // 27 customers
-            urgent: customers.filter(c => c.urgency_score >= 75 && c.priority_score >= 60 && c.priority_score < 80), 
-            highChurn: customers.filter(c => c.churn_risk > 0.7 && c.priority_score >= 40), // 111 very low priority
-            mediumPriority: customers.filter(c => c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score < 75), // 47 medium
-            regular: customers.filter(c => c.priority_score >= 40 && c.priority_score < 60), // 87 low
-            prospects: customers.filter(c => c.priority_score < 40 && c.churn_risk <= 0.7) // Some very low priority
+            critical: customers.filter(c => c.priority_score >= 80),
+            urgent: customers.filter(c => c.urgency_score >= 75 && c.priority_score >= 60 && c.priority_score < 80),
+            highChurn: customers.filter(c => c.churn_risk > 0.7 && c.priority_score >= 40),
+            mediumPriority: customers.filter(c => c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score < 75),
+            regular: customers.filter(c => c.priority_score >= 40 && c.priority_score < 60),
+            prospects: customers.filter(c => c.priority_score < 40 && c.churn_risk <= 0.7)
         };
-
-        console.log(`📊 Weekly categorization:`, {
-            critical: categories.critical.length,
-            urgent: categories.urgent.length,
-            highChurn: categories.highChurn.length,
-            mediumPriority: categories.mediumPriority.length,
-            regular: categories.regular.length,
-            prospects: categories.prospects.length
-        });
 
         const weeklyRoutes = {};
         const usedCustomers = new Set();
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
         days.forEach((day, dayIndex) => {
             const availableCustomers = [];
 
-            // Critical customers: Visit 2-3 times per week (Monday, Wednesday, Friday)
-            if ([0, 2, 4].includes(dayIndex)) { // Mon, Wed, Fri
+            // Critical customers: Mon, Wed, Fri, Sat
+            if ([0, 2, 4, 5].includes(dayIndex)) {
                 const criticalAvailable = categories.critical.filter(c => !usedCustomers.has(c.customer_code));
                 availableCustomers.push(...criticalAvailable.slice(0, 6));
             }
 
-            // Urgent customers: Distribute across all weekdays
+            // Urgent customers: All days
             const urgentAvailable = categories.urgent.filter(c => !usedCustomers.has(c.customer_code));
-            const urgentPerDay = Math.ceil(urgentAvailable.length / 5);
+            const urgentPerDay = Math.ceil(urgentAvailable.length / 6);
             const urgentToAdd = urgentAvailable.slice(dayIndex * urgentPerDay, (dayIndex + 1) * urgentPerDay);
             availableCustomers.push(...urgentToAdd);
 
-            // High churn customers: Spread across week (priority on early days)
-            if (dayIndex < 3) { // Mon, Tue, Wed
+            // High churn: Mon-Fri + some Saturday
+            if (dayIndex < 5) {
                 const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
-                const churnToAdd = churnAvailable.slice(dayIndex * 8, (dayIndex + 1) * 8);
+                const churnToAdd = churnAvailable.slice(dayIndex * 6, (dayIndex + 1) * 6);
                 availableCustomers.push(...churnToAdd);
+            } else if (dayIndex === 5) {
+                const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
+                availableCustomers.push(...churnAvailable.slice(0, 4));
             }
 
-            // Medium priority: Every other day
-            if (dayIndex % 2 === 0) { // Mon, Wed, Fri
+            // Medium priority: Mon-Sat
+            if (dayIndex < 6) {
                 const mediumAvailable = categories.mediumPriority.filter(c => !usedCustomers.has(c.customer_code));
-                const mediumToAdd = mediumAvailable.slice(0, 5);
+                const mediumToAdd = mediumAvailable.slice(Math.floor(dayIndex / 2) * 4, (Math.floor(dayIndex / 2) + 1) * 4);
                 availableCustomers.push(...mediumToAdd);
             }
 
-            // Regular customers: 2-3 times per week
-            if ([0, 2, 4].includes(dayIndex)) { // Mon, Wed, Fri
+            // Regular: Mon-Sat
+            if (dayIndex < 6) {
                 const regularAvailable = categories.regular.filter(c => !usedCustomers.has(c.customer_code));
-                const regularToAdd = regularAvailable.slice(Math.floor(dayIndex / 2) * 6, (Math.floor(dayIndex / 2) + 1) * 6);
+                const regularToAdd = regularAvailable.slice(Math.floor(dayIndex / 2) * 5, (Math.floor(dayIndex / 2) + 1) * 5);
                 availableCustomers.push(...regularToAdd);
             }
 
-            // Prospects: Once per week, distributed
-            if (dayIndex < 2) { // Mon, Tue
+            // Prospects: Mon-Wed
+            if (dayIndex < 3) {
                 const prospectsAvailable = categories.prospects.filter(c => !usedCustomers.has(c.customer_code));
-                const prospectsToAdd = prospectsAvailable.slice(dayIndex * 3, (dayIndex + 1) * 3);
+                const prospectsToAdd = prospectsAvailable.slice(dayIndex * 2, (dayIndex + 1) * 2);
                 availableCustomers.push(...prospectsToAdd);
             }
 
-            console.log(`🗓️ ${day}: ${availableCustomers.length} customers available for optimization`);
+            console.log(`🗓️ ${day}: ${availableCustomers.length} customers available`);
 
             if (availableCustomers.length > 0) {
+                const maxVisitsForDay = dayIndex === 5 ? 8 : 11; // Saturday: 8, Weekdays: 11
+                const maxTravelForDay = dayIndex === 5 ? 180 : 220; // Saturday shorter
+
                 const dailyRoute = this.optimizeDailyRoute(availableCustomers, {
-                    maxVisits: 11,
-                    maxTravelTime: 220,
+                    maxVisits: maxVisitsForDay,
+                    maxTravelTime: maxTravelForDay,
                     prioritizeUrgency: true
                 });
 
@@ -525,25 +453,24 @@ class RouteOptimizer {
                     planned_date: this.getNextWeekday(dayIndex)
                 };
 
-                // Mark customers as used (critical customers can be revisited)
+                // Mark non-critical customers as used
                 dailyRoute.route.forEach(customer => {
-                    if (customer.priority_score < 80) { // Only non-critical customers marked as used
+                    if (customer.priority_score < 80) {
                         usedCustomers.add(customer.customer_code);
                     }
                 });
 
-                console.log(`✅ ${day}: ${dailyRoute.total_customers} customers, ₹${dailyRoute.estimated_revenue} revenue, avg priority: ${dailyRoute.avg_priority_score}`);
+                console.log(`✅ ${day}: ${dailyRoute.total_customers} customers, ₹${dailyRoute.estimated_revenue} revenue`);
             } else {
                 weeklyRoutes[day] = {
                     ...this.createEmptyRoute(),
                     day: day,
                     planned_date: this.getNextWeekday(dayIndex)
                 };
-                console.log(`📅 ${day}: No customers available`);
             }
         });
 
-        const result = {
+        return {
             status: 'success',
             mr_name: mrName,
             total_customers_available: customers.length,
@@ -552,9 +479,6 @@ class RouteOptimizer {
             performance_distribution: categories,
             generated_at: new Date().toISOString()
         };
-
-        console.log('📋 Weekly routes summary:', result.weekly_summary);
-        return result;
     }
 
     getNextWeekday(dayIndex) {
@@ -624,5 +548,6 @@ class RouteOptimizer {
     }
 }
 
+// Export singleton instance
 export const routeOptimizer = new RouteOptimizer();
 export default RouteOptimizer;
