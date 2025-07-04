@@ -21,36 +21,36 @@ class RouteOptimizer {
             console.log(`🔍 Fetching customers with performance metrics for MR: ${mrName}`);
             
             // Join customer_master with customer_performance for complete data
-            const { data: customers, error } = await supabase
-                .from('customer_master')
-                .select(`
-                    customer_code,
-                    customer_name,
-                    customer_type,
-                    customer_segment,
-                    area_name,
-                    city_name,
-                    latitude,
-                    longitude,
-                    total_visits,
-                    total_orders,
-                    total_order_value,
-                    avg_order_value,
-                    days_since_last_visit,
-                    days_since_last_order,
-                    last_visit_date,
-                    last_order_date,
-                    customer_performance!inner(
-                        total_priority_score,
-                        churn_risk_score,
-                        order_probability,
-                        predicted_order_value
-                    )
-                `)
-                .eq('mr_name', mrName)
-                .eq('status', 'ACTIVE')
-                .not('latitude', 'is', null)
-                .not('longitude', 'is', null);
+            // Much simpler query - no joins needed!
+const { data: customers, error } = await supabase
+    .from('customer_master')
+    .select(`
+        customer_code,
+        customer_name,
+        customer_type,
+        customer_segment,
+        area_name,
+        city_name,
+        latitude,
+        longitude,
+        total_visits,
+        total_orders,
+        total_order_value,
+        avg_order_value,
+        days_since_last_visit,
+        days_since_last_order,
+        last_visit_date,
+        last_order_date,
+        total_priority_score,
+        churn_risk_score,
+        order_probability,
+        predicted_order_value
+    `)
+    .eq('mr_name', mrName)
+    .eq('status', 'ACTIVE')
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null)
+    .not('total_priority_score', 'is', null);
 
             if (error) {
                 console.error('❌ Error fetching customers:', error);
