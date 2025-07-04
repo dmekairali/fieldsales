@@ -129,7 +129,7 @@ async def test_database():
         
         # Test connection with timeout
         conn = await asyncio.wait_for(
-            asyncpg.connect(db_url),
+            asyncpg.connect(db_url, statement_cache_size=0),
             timeout=8.0  # 8 second timeout for Vercel
         )
         
@@ -186,7 +186,7 @@ async def get_customers(mr_name: str):
         
         # Connect with timeout
         conn = await asyncio.wait_for(
-            asyncpg.connect(db_url),
+            asyncpg.connect(db_url, statement_cache_size=0),
             timeout=5.0
         )
         
