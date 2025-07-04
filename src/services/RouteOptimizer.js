@@ -63,30 +63,25 @@ const { data: customers, error } = await supabase
             }
 
             // Flatten the performance data and calculate urgency score
-            const enrichedCustomers = customers.map(customer => {
-                const performance = customer.customer_performance;
-                
-                // Calculate urgency score from priority and churn risk
-                const urgencyScore = this.calculateUrgencyScore(
-                    performance.total_priority_score,
-                    performance.churn_risk_score,
-                    customer.days_since_last_visit
-                );
+           // Much simpler - no complex joins!
+const enrichedCustomers = customers.map(customer => {
+    const urgencyScore = this.calculateUrgencyScore(
+        customer.total_priority_score,
+        customer.churn_risk_score,
+        customer.days_since_last_visit
+    );
 
-                return {
-                    ...customer,
-                    // Use pre-calculated performance metrics
-                    priority_score: performance.total_priority_score,
-                    churn_risk: performance.churn_risk_score,
-                    order_probability: performance.order_probability,
-                    predicted_value: performance.predicted_order_value,
-                    urgency_score: urgencyScore,
-                    
-                    // Route optimization metadata
-                    route_position: null,
-                    visited_in_route: false
-                };
-            });
+    return {
+        ...customer,
+        priority_score: customer.total_priority_score,
+        churn_risk: customer.churn_risk_score,
+        order_probability: customer.order_probability,
+        predicted_value: customer.predicted_order_value,
+        urgency_score: urgencyScore,
+        route_position: null,
+        visited_in_route: false
+    };
+});
 
             // Log performance distribution
             const stats = this.calculatePerformanceStats(enrichedCustomers);
