@@ -59,11 +59,20 @@ try:
     # Try to import and initialize Supabase
     try:
         from supabase import create_client, Client
-        supabase: Client = create_client(supabase_url, supabase_key)
+        
+        # Create client with minimal configuration for v1.0.4
+        supabase: Client = create_client(
+            supabase_url, 
+            supabase_key,
+            options={
+                'auto_refresh_token': True,
+                'persist_session': True
+            }
+        )
         logger.info("✅ Supabase client initialized successfully")
         
         # Test the connection immediately
-        test_response = supabase.table('customer_master').select("count", count="exact").limit(1).execute()
+        test_response = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
         logger.info(f"✅ Supabase connection test successful. Customer count: {test_response.count}")
         
     except ImportError as e:
@@ -72,6 +81,7 @@ try:
     except Exception as e:
         supabase_error = f"Supabase connection failed: {str(e)}"
         logger.error(f"❌ {supabase_error}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         
 except Exception as e:
     supabase_error = f"Environment setup failed: {str(e)}"
@@ -139,7 +149,7 @@ async def health_check():
         # Additional connection test if Supabase is available
         if supabase:
             try:
-                result = supabase.table('customer_master').select("count", count="exact").limit(1).execute()
+                result = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
                 health_data["database"]["test"] = "✅ Working"
                 health_data["database"]["customer_count"] = result.count
             except Exception as e:
@@ -177,7 +187,7 @@ async def test_database():
         logger.info("🧪 Testing Supabase connection...")
         
         # Test 1: Count query
-        response = supabase.table('customer_master').select("count", count="exact").limit(1).execute()
+        response = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
         total_customers = response.count
         
         # Test 2: Sample data
