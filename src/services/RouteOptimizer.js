@@ -625,5 +625,6 @@ class RouteOptimizer {
 }
 
 // Export singleton instance
-export const RouteOptimizer = new RouteOptimizer();
+export const routeOptimizer = new RouteOptimizer();
+
 export default RouteOptimizer;
