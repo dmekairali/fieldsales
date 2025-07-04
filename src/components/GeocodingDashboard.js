@@ -424,56 +424,56 @@ const GeocodingDashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
+        <div className="min-h-screen bg-gray-50 p-4 md:p-6">
             <div className="max-w-4xl mx-auto">
-                <div className="mb-8 text-center">
-                    <h1 className="text-3xl font-bold text-blue-600 mb-4">
+                <div className="mb-6 md:mb-8 text-center">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-blue-600 mb-2 md:mb-4">
                         📍 Customer Geocoding Dashboard
                     </h1>
-                    <p className="text-gray-600">
+                    <p className="text-gray-600 text-sm md:text-base">
                         Add GPS coordinates to customer addresses using Google Maps API
                     </p>
                 </div>
 
                 {/* Statistics Card */}
                 {stats && (
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-                        <h2 className="text-xl font-semibold mb-4">Geocoding Statistics</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="text-center">
-                                <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-                                <div className="text-sm text-gray-600">Total Customers</div>
+                    <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
+                        <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">Geocoding Statistics</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+                            <div className="text-center p-2 bg-blue-50 rounded-lg">
+                                <div className="text-xl md:text-2xl font-bold text-blue-600">{stats.total}</div>
+                                <div className="text-xs md:text-sm text-gray-600">Total Customers</div>
                             </div>
-                            <div className="text-center">
-                                <div className="text-2xl font-bold text-green-600">{stats.withCoordinates}</div>
-                                <div className="text-sm text-gray-600">With Coordinates</div>
+                            <div className="text-center p-2 bg-green-50 rounded-lg">
+                                <div className="text-xl md:text-2xl font-bold text-green-600">{stats.withCoordinates}</div>
+                                <div className="text-xs md:text-sm text-gray-600">With Coordinates</div>
                             </div>
-                            <div className="text-center">
-                                <div className="text-2xl font-bold text-red-600">{stats.withoutCoordinates}</div>
-                                <div className="text-sm text-gray-600">Missing Coordinates</div>
+                            <div className="text-center p-2 bg-red-50 rounded-lg">
+                                <div className="text-xl md:text-2xl font-bold text-red-600">{stats.withoutCoordinates}</div>
+                                <div className="text-xs md:text-sm text-gray-600">Missing Coordinates</div>
                             </div>
-                            <div className="text-center">
-                                <div className="text-2xl font-bold text-purple-600">{stats.completionPercentage}%</div>
-                                <div className="text-sm text-gray-600">Completion Rate</div>
+                            <div className="text-center p-2 bg-purple-50 rounded-lg">
+                                <div className="text-xl md:text-2xl font-bold text-purple-600">{stats.completionPercentage}%</div>
+                                <div className="text-xs md:text-sm text-gray-600">Completion Rate</div>
                             </div>
                         </div>
                     </div>
                 )}
 
                 {/* Control Panel */}
-                <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-                    <h2 className="text-xl font-semibold mb-4">Geocoding Control</h2>
+                <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
+                    <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">Geocoding Control</h2>
                     
                     {!isRunning ? (
                         <button
                             onClick={startGeocoding}
                             disabled={stats?.withoutCoordinates === 0}
-                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg font-semibold"
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 md:px-6 md:py-3 rounded-lg font-semibold text-sm md:text-base"
                         >
-                            {stats?.withoutCoordinates === 0 ? 'All Customers Geocoded!' : `Start Geocoding ${stats?.withoutCoordinates} Customers`}
+                            {stats?.withoutCoordinates === 0 ? 'All Customers Geocoded!' : `Start Geocoding ${stats?.withoutCoordinates || ''} Customers`}
                         </button>
                     ) : (
-                        <div className="text-blue-600 font-semibold">
+                        <div className="text-blue-600 font-semibold text-sm md:text-base">
                             🔄 Geocoding in progress...
                         </div>
                     )}
@@ -481,9 +481,9 @@ const GeocodingDashboard = () => {
 
                 {/* Progress Display */}
                 {progress && (
-                    <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-                        <h2 className="text-xl font-semibold mb-4">Progress</h2>
-                        <div className="space-y-3">
+                    <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 mb-6 md:mb-8">
+                        <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">Progress</h2>
+                        <div className="space-y-2 md:space-y-3 text-sm md:text-base">
                             <div className="flex justify-between">
                                 <span>Processed:</span>
                                 <span className="font-semibold">{progress.processed}</span>
@@ -496,10 +496,10 @@ const GeocodingDashboard = () => {
                                 <span>Errors:</span>
                                 <span className="font-semibold text-red-600">{progress.errors}</span>
                             </div>
-                            <div className="mt-4">
-                                <div className="text-sm text-gray-600 mb-2">Currently processing:</div>
-                                <div className="font-medium">{progress.currentCustomer}</div>
-                                <div className="text-sm text-gray-500">{progress.currentAddress}</div>
+                            <div className="mt-3 md:mt-4">
+                                <div className="text-xs md:text-sm text-gray-600 mb-1 md:mb-2">Currently processing:</div>
+                                <div className="font-medium truncate">{progress.currentCustomer}</div>
+                                <div className="text-xs md:text-sm text-gray-500 truncate">{progress.currentAddress}</div>
                             </div>
                         </div>
                     </div>
@@ -507,9 +507,9 @@ const GeocodingDashboard = () => {
 
                 {/* Results Display */}
                 {results && (
-                    <div className="bg-white rounded-lg shadow-lg p-6">
-                        <h2 className="text-xl font-semibold mb-4">Geocoding Results</h2>
-                        <div className="space-y-2">
+                    <div className="bg-white rounded-lg shadow-lg p-4 md:p-6">
+                        <h2 className="text-lg md:text-xl font-semibold mb-3 md:mb-4">Geocoding Results</h2>
+                        <div className="space-y-1.5 md:space-y-2 text-sm md:text-base">
                             <div className="flex justify-between">
                                 <span>Total Customers:</span>
                                 <span className="font-semibold">{results.totalCustomers}</span>
@@ -530,12 +530,12 @@ const GeocodingDashboard = () => {
                             </div>
                         </div>
                         {results.message && (
-                            <div className="mt-4 p-3 bg-green-100 text-green-800 rounded">
+                            <div className="mt-3 md:mt-4 p-2 md:p-3 bg-green-100 text-green-800 rounded text-sm md:text-base">
                                 {results.message}
                             </div>
                         )}
                         {results.error && (
-                            <div className="mt-4 p-3 bg-red-100 text-red-800 rounded">
+                            <div className="mt-3 md:mt-4 p-2 md:p-3 bg-red-100 text-red-800 rounded text-sm md:text-base">
                                 Error: {results.error}
                             </div>
                         )}
