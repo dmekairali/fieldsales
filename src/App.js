@@ -5,7 +5,7 @@ import RouteOptimizationDashboard from './components/RouteOptimizationDashboard'
 import GeocodingDashboard from './components/GeocodingDashboard';
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
-//okay
+
 function App() {
   const [activeTab, setActiveTab] = useState('emergency');
   const [selectedMR, setSelectedMR] = useState(null);
