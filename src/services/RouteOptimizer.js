@@ -1,6 +1,6 @@
 const weeklyRoutes = {};
         const usedCustomers = new Set();
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
         days.forEach((day, dayIndex) => {
             const availableCustomers = [];
@@ -49,11 +49,7 @@ const weeklyRoutes = {};
                 availableCustomers.push(...prospectsToAdd);
             }
 
-            // Sunday: Very light schedule, only critical customers
-            if (dayIndex === 6) { // Sunday
-                const sundayCritical = categories.critical.filter(c => !usedCustomers.has(c.customer_code));
-                availableCustomers.push(...sundayCritical.slice(0, 3));
-            }
+            
 
             console.log(`🗓️ ${day}: ${availableCustomers.length} customers available for optimization`);
 
@@ -683,7 +679,7 @@ class ProductionRouteOptimizer {
 
     createEmptyWeeklyRoutes() {
         const weeklyRoutes = {};
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         
         days.forEach((day, index) => {
             weeklyRoutes[day] = {
