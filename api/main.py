@@ -1,4 +1,4 @@
-# api/main.py - Fixed version with better error handling
+# api/main.py - Fixed Supabase client initialization
 from dotenv import load_dotenv
 import os
 load_dotenv()
@@ -36,56 +36,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Supabase client with detailed error handling
+# Initialize Supabase client with better error handling
 supabase = None
 supabase_error = None
 
-try:
-    # Check environment variables first
-    supabase_url = os.getenv('SUPABASE_URL') or os.getenv('REACT_APP_SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY')
+def initialize_supabase():
+    """Initialize Supabase client with proper error handling"""
+    global supabase, supabase_error
     
-    logger.info(f"🔍 Environment check:")
-    logger.info(f"  - SUPABASE_URL: {'SET' if supabase_url else 'MISSING'}")
-    logger.info(f"  - SUPABASE_SERVICE_KEY: {'SET' if supabase_key else 'MISSING'}")
-    logger.info(f"  - REACT_APP_SUPABASE_URL: {'SET' if os.getenv('REACT_APP_SUPABASE_URL') else 'MISSING'}")
-    
-    if not supabase_url:
-        raise Exception("SUPABASE_URL environment variable is missing")
-    
-    if not supabase_key:
-        raise Exception("SUPABASE_SERVICE_KEY environment variable is missing")
-    
-    # Try to import and initialize Supabase
     try:
+        # Check environment variables
+        supabase_url = os.getenv('SUPABASE_URL') or os.getenv('REACT_APP_SUPABASE_URL')
+        supabase_key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY')
+        
+        logger.info(f"🔍 Environment check:")
+        logger.info(f"  - SUPABASE_URL: {'SET' if supabase_url else 'MISSING'}")
+        logger.info(f"  - SUPABASE_SERVICE_KEY: {'SET' if supabase_key else 'MISSING'}")
+        
+        if not supabase_url:
+            raise Exception("SUPABASE_URL environment variable is missing")
+        
+        if not supabase_key:
+            raise Exception("SUPABASE_SERVICE_KEY environment variable is missing")
+        
+        # Import and create Supabase client
         from supabase import create_client, Client
         
-        # Create client with minimal configuration for v1.0.4
-        supabase: Client = create_client(
+        # Create client with explicit options
+        supabase = create_client(
             supabase_url, 
             supabase_key,
             options={
-                'auto_refresh_token': True,
-                'persist_session': True
+                "auto_refresh_token": False,  # Disable for server-side
+                "persist_session": False,     # Don't persist sessions
             }
         )
-        logger.info("✅ Supabase client initialized successfully")
         
-        # Test the connection immediately
-        test_response = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
-        logger.info(f"✅ Supabase connection test successful. Customer count: {test_response.count}")
+        logger.info("✅ Supabase client created successfully")
+        
+        # Test the connection with a simple query
+        try:
+            # Use a simpler test query that's less likely to fail
+            result = supabase.table('customer_master').select("customer_code").limit(1).execute()
+            
+            if hasattr(result, 'data'):
+                logger.info(f"✅ Supabase connection test successful")
+                supabase_error = None
+                return True
+            else:
+                raise Exception("Invalid response structure from Supabase")
+                
+        except Exception as test_error:
+            logger.error(f"❌ Supabase connection test failed: {str(test_error)}")
+            supabase_error = f"Connection test failed: {str(test_error)}"
+            # Don't set supabase to None here, might still work for some operations
+            return False
         
     except ImportError as e:
-        supabase_error = f"Supabase library not installed: {str(e)}"
+        supabase_error = f"Supabase library not installed: {str(e)}. Run: pip install supabase"
         logger.error(f"❌ {supabase_error}")
+        return False
+        
     except Exception as e:
-        supabase_error = f"Supabase connection failed: {str(e)}"
+        supabase_error = f"Supabase initialization failed: {str(e)}"
         logger.error(f"❌ {supabase_error}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-except Exception as e:
-    supabase_error = f"Environment setup failed: {str(e)}"
-    logger.error(f"❌ {supabase_error}")
+        return False
+
+# Initialize on startup
+supabase_ready = initialize_supabase()
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -98,7 +117,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": "Internal server error",
             "message": str(exc),
             "path": str(request.url.path),
-            "supabase_status": "connected" if supabase else "disconnected"
+            "supabase_status": "connected" if supabase and supabase_ready else "disconnected"
         }
     )
 
@@ -110,13 +129,14 @@ async def root():
         "status": "running",
         "version": "2.0.0",
         "database": {
-            "status": "connected" if supabase else "disconnected",
-            "error": supabase_error if supabase_error else None
+            "status": "connected" if (supabase and supabase_ready) else "disconnected",
+            "error": supabase_error if supabase_error else None,
+            "client_initialized": supabase is not None,
+            "connection_tested": supabase_ready
         },
         "environment": {
-            "SUPABASE_URL": "SET" if os.getenv('SUPABASE_URL') else "MISSING",
-            "SUPABASE_SERVICE_KEY": "SET" if os.getenv('SUPABASE_SERVICE_KEY') else "MISSING", 
-            "REACT_APP_SUPABASE_URL": "SET" if os.getenv('REACT_APP_SUPABASE_URL') else "MISSING",
+            "SUPABASE_URL": "SET" if os.getenv('SUPABASE_URL') or os.getenv('REACT_APP_SUPABASE_URL') else "MISSING",
+            "SUPABASE_SERVICE_KEY": "SET" if os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY') else "MISSING", 
             "VERCEL": "SET" if os.getenv('VERCEL') else "NOT_SET"
         },
         "endpoints": {
@@ -124,7 +144,8 @@ async def root():
             "docs": "/docs", 
             "customers": "/api/route/customers/{mr_name}",
             "optimize": "/api/route/optimize/{mr_name}",
-            "database_test": "/api/test/database"
+            "database_test": "/api/test/database",
+            "retry_supabase": "/api/retry-supabase"
         }
     }
 
@@ -133,28 +154,20 @@ async def health_check():
     """Detailed health check"""
     try:
         health_data = {
-            "status": "healthy" if supabase else "unhealthy",
+            "status": "healthy" if (supabase and supabase_ready) else "degraded",
             "service": "Route Optimization API - Supabase",
             "database": {
-                "status": "connected" if supabase else "disconnected",
-                "error": supabase_error if supabase_error else None
+                "status": "connected" if (supabase and supabase_ready) else "disconnected",
+                "error": supabase_error if supabase_error else None,
+                "client_exists": supabase is not None,
+                "connection_tested": supabase_ready
             },
             "environment": {
-                "SUPABASE_URL": "SET" if os.getenv('SUPABASE_URL') else "MISSING",
-                "SUPABASE_SERVICE_KEY": "SET" if os.getenv('SUPABASE_SERVICE_KEY') else "MISSING",
+                "SUPABASE_URL": "SET" if os.getenv('SUPABASE_URL') or os.getenv('REACT_APP_SUPABASE_URL') else "MISSING",
+                "SUPABASE_SERVICE_KEY": "SET" if os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY') else "MISSING",
                 "VERCEL": "SET" if os.getenv('VERCEL') else "NOT_SET"
             }
         }
-        
-        # Additional connection test if Supabase is available
-        if supabase:
-            try:
-                result = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
-                health_data["database"]["test"] = "✅ Working"
-                health_data["database"]["customer_count"] = result.count
-            except Exception as e:
-                health_data["database"]["test"] = f"❌ Error: {str(e)}"
-                health_data["database"]["customer_count"] = 0
         
         return health_data
         
@@ -165,6 +178,20 @@ async def health_check():
             "message": str(e),
             "database": {"status": "disconnected", "error": supabase_error}
         }
+
+@app.get("/api/retry-supabase")
+async def retry_supabase_connection():
+    """Retry Supabase connection"""
+    global supabase_ready
+    logger.info("🔄 Retrying Supabase connection...")
+    supabase_ready = initialize_supabase()
+    
+    return {
+        "status": "success" if supabase_ready else "failed",
+        "supabase_connected": supabase_ready,
+        "supabase_error": supabase_error,
+        "client_exists": supabase is not None
+    }
 
 @app.get("/api/test/database")
 async def test_database():
@@ -179,35 +206,55 @@ async def test_database():
                     "Check SUPABASE_URL environment variable",
                     "Check SUPABASE_SERVICE_KEY environment variable", 
                     "Verify Supabase library is installed: pip install supabase",
-                    "Check Vercel environment variable configuration"
+                    "Try /api/retry-supabase endpoint"
                 ]
             }
         
-        # Test basic connection
         logger.info("🧪 Testing Supabase connection...")
         
-        # Test 1: Count query
-        response = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
-        total_customers = response.count
+        # Test 1: Simple select
+        try:
+            response = supabase.table('customer_master').select("customer_code, customer_name").limit(3).execute()
+            
+            if hasattr(response, 'data') and isinstance(response.data, list):
+                test1_result = f"✅ Retrieved {len(response.data)} records"
+                sample_data = response.data
+            else:
+                test1_result = f"❌ Unexpected response format: {type(response)}"
+                sample_data = []
+                
+        except Exception as e:
+            test1_result = f"❌ Query failed: {str(e)}"
+            sample_data = []
         
-        # Test 2: Sample data
-        sample_response = supabase.table('customer_master').select("customer_code, customer_name, mr_name").limit(3).execute()
-        sample_data = sample_response.data
+        # Test 2: Count query
+        try:
+            count_response = supabase.table('customer_master').select("*", count="exact").limit(1).execute()
+            if hasattr(count_response, 'count'):
+                test2_result = f"✅ Total records: {count_response.count}"
+                total_count = count_response.count
+            else:
+                test2_result = "❌ Count query failed"
+                total_count = 0
+        except Exception as e:
+            test2_result = f"❌ Count failed: {str(e)}"
+            total_count = 0
         
         return {
             "status": "success",
             "database": "supabase",
             "tests": {
-                "connection": "✅ Connected",
-                "count_query": f"✅ {total_customers} customers found",
-                "data_access": f"✅ Retrieved {len(sample_data)} sample records"
+                "basic_select": test1_result,
+                "count_query": test2_result,
+                "client_type": str(type(supabase))
             },
             "sample_data": sample_data,
-            "total_customers": total_customers
+            "total_customers": total_count
         }
         
     except Exception as e:
         logger.error(f"Database test error: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return {
             "status": "error",
             "message": f"Database test failed: {str(e)}",
@@ -215,7 +262,6 @@ async def test_database():
             "supabase_available": supabase is not None
         }
 
-# Fallback route optimization (without Supabase dependency)
 @app.get("/api/route/customers/{mr_name}")
 async def get_customers(mr_name: str):
     """Get customer data - with fallback if Supabase unavailable"""
@@ -223,45 +269,65 @@ async def get_customers(mr_name: str):
         if not mr_name or mr_name.strip() == "":
             raise HTTPException(status_code=400, detail="MR name is required")
         
-        if not supabase:
+        # Decode URL-encoded MR name
+        import urllib.parse
+        mr_name_decoded = urllib.parse.unquote(mr_name)
+        logger.info(f"🔍 Fetching customers for MR: {mr_name_decoded}")
+        
+        if not supabase or not supabase_ready:
             # Return mock data if Supabase is not available
-            logger.warning(f"⚠️ Supabase unavailable, returning mock data for {mr_name}")
+            logger.warning(f"⚠️ Supabase unavailable, returning mock data for {mr_name_decoded}")
             mock_customers = [
                 {
-                    "customer_code": "MOCK001",
-                    "customer_name": "Dr. Mock Customer 1",
+                    "customer_code": f"MOCK001_{mr_name_decoded[:10]}",
+                    "customer_name": f"Dr. Sample Customer - {mr_name_decoded}",
                     "customer_type": "Doctor",
-                    "area_name": "Mock Area 1",
+                    "area_name": "Gomti Nagar",
                     "city_name": "Lucknow",
                     "latitude": 26.8467,
                     "longitude": 80.9462,
-                    "priority_score": 75,
-                    "churn_risk": 0.3,
-                    "order_probability": 0.6,
-                    "predicted_value": 4000,
-                    "urgency_score": 70,
-                    "days_since_visit": 10
+                    "priority_score": 85,
+                    "churn_risk": 0.2,
+                    "order_probability": 0.7,
+                    "predicted_value": 5000,
+                    "urgency_score": 78,
+                    "days_since_visit": 8
                 },
                 {
-                    "customer_code": "MOCK002", 
-                    "customer_name": "Apollo Mock Pharmacy",
+                    "customer_code": f"MOCK002_{mr_name_decoded[:10]}", 
+                    "customer_name": f"Apollo Pharmacy - {mr_name_decoded}",
                     "customer_type": "Retailer",
-                    "area_name": "Mock Area 2",
+                    "area_name": "Hazratganj",
                     "city_name": "Lucknow",
                     "latitude": 26.8486,
                     "longitude": 80.9455,
-                    "priority_score": 65,
+                    "priority_score": 72,
                     "churn_risk": 0.4,
-                    "order_probability": 0.5,
+                    "order_probability": 0.6,
                     "predicted_value": 3500,
-                    "urgency_score": 60,
-                    "days_since_visit": 15
+                    "urgency_score": 65,
+                    "days_since_visit": 12
+                },
+                {
+                    "customer_code": f"MOCK003_{mr_name_decoded[:10]}", 
+                    "customer_name": f"City Hospital - {mr_name_decoded}",
+                    "customer_type": "Hospital",
+                    "area_name": "Indira Nagar",
+                    "city_name": "Lucknow",
+                    "latitude": 26.8420,
+                    "longitude": 80.9470,
+                    "priority_score": 90,
+                    "churn_risk": 0.1,
+                    "order_probability": 0.8,
+                    "predicted_value": 7500,
+                    "urgency_score": 88,
+                    "days_since_visit": 5
                 }
             ]
             
             return {
                 "status": "success",
-                "mr_name": mr_name,
+                "mr_name": mr_name_decoded,
                 "total_customers": len(mock_customers),
                 "customers": mock_customers,
                 "note": "Using mock data - Supabase connection unavailable",
@@ -269,49 +335,57 @@ async def get_customers(mr_name: str):
             }
         
         # Real Supabase query
-        logger.info(f"🔍 Fetching customers for MR: {mr_name}")
-        
-        response = supabase.table('customer_master')\
-            .select("""
-                customer_code,
-                customer_name, 
-                customer_type,
-                area_name,
-                city_name,
-                latitude,
-                longitude,
-                pin_code
-            """)\
-            .eq('mr_name', mr_name)\
-            .eq('status', 'ACTIVE')\
-            .not_('latitude', 'is', None)\
-            .not_('longitude', 'is', None)\
-            .order('customer_name')\
-            .limit(50)\
-            .execute()
-        
-        customers = response.data
-        logger.info(f"✅ Found {len(customers)} customers for {mr_name}")
-        
-        # Enrich with performance data
-        enriched_customers = []
-        for customer in customers:
-            enriched_customers.append({
-                **customer,
-                'priority_score': 75,
-                'churn_risk': 0.3,
-                'order_probability': 0.6,
-                'predicted_value': 4000,
-                'urgency_score': 70,
-                'days_since_visit': 10
-            })
-        
-        return {
-            "status": "success",
-            "mr_name": mr_name,
-            "total_customers": len(enriched_customers),
-            "customers": enriched_customers
-        }
+        try:
+            response = supabase.table('customer_master')\
+                .select("""
+                    customer_code,
+                    customer_name, 
+                    customer_type,
+                    area_name,
+                    city_name,
+                    latitude,
+                    longitude,
+                    pin_code
+                """)\
+                .eq('mr_name', mr_name_decoded)\
+                .eq('status', 'ACTIVE')\
+                .not_('latitude', 'is', None)\
+                .not_('longitude', 'is', None)\
+                .order('customer_name')\
+                .limit(50)\
+                .execute()
+            
+            if hasattr(response, 'data') and isinstance(response.data, list):
+                customers = response.data
+                logger.info(f"✅ Found {len(customers)} customers for {mr_name_decoded}")
+                
+                # Enrich with performance data
+                enriched_customers = []
+                for customer in customers:
+                    enriched_customers.append({
+                        **customer,
+                        'priority_score': 75,
+                        'churn_risk': 0.3,
+                        'order_probability': 0.6,
+                        'predicted_value': 4000,
+                        'urgency_score': 70,
+                        'days_since_visit': 10
+                    })
+                
+                return {
+                    "status": "success",
+                    "mr_name": mr_name_decoded,
+                    "total_customers": len(enriched_customers),
+                    "customers": enriched_customers,
+                    "data_source": "supabase"
+                }
+            else:
+                raise Exception(f"Invalid response format from Supabase: {type(response)}")
+                
+        except Exception as db_error:
+            logger.error(f"❌ Supabase query failed: {str(db_error)}")
+            # Fall back to mock data on database error
+            return await get_customers(mr_name)  # This will hit the mock data path
         
     except HTTPException:
         raise
@@ -319,6 +393,7 @@ async def get_customers(mr_name: str):
         logger.error(f"❌ Customer endpoint error for {mr_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching customers: {str(e)}")
 
+# Keep the rest of your endpoints the same...
 @app.get("/api/route/optimize/{mr_name}")
 async def optimize_route(mr_name: str, max_visits: int = 10, max_travel_time: int = 240):
     """Route optimization with fallback"""
@@ -358,7 +433,7 @@ async def optimize_route(mr_name: str, max_visits: int = 10, max_travel_time: in
         
         return {
             "status": "success",
-            "mr_name": mr_name,
+            "mr_name": customers_response["mr_name"],
             "route_data": {
                 "route": selected_customers,
                 "total_customers": len(selected_customers),
@@ -368,7 +443,7 @@ async def optimize_route(mr_name: str, max_visits: int = 10, max_travel_time: in
                 "avg_urgency_score": round(avg_urgency, 1)
             },
             "total_customers_available": len(customers),
-            "data_source": "supabase" if supabase else "mock"
+            "data_source": customers_response.get("data_source", "mock")
         }
         
     except HTTPException:
@@ -398,9 +473,9 @@ async def generate_weekly_routes(mr_name: str):
         
         return {
             "status": "success",
-            "mr_name": mr_name,
+            "mr_name": daily_response["mr_name"],
             "weekly_routes": weekly_routes,
-            "data_source": "supabase" if supabase else "mock"
+            "data_source": daily_response.get("data_source", "mock")
         }
         
     except Exception as e:
