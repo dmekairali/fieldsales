@@ -1,7 +1,95 @@
-// src/services/RouteOptimizer.js - Using customer_performance table
+const weeklyRoutes = {};
+        const usedCustomers = new Set();
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        days.forEach((day, dayIndex) => {
+            const availableCustomers = [];
+
+            // Critical customers: Visit 3-4 times per week (Mon, Wed, Fri, Sat)
+            if ([0, 2, 4, 5].includes(dayIndex)) { // Mon, Wed, Fri, Sat
+                const criticalAvailable = categories.critical.filter(c => !usedCustomers.has(c.customer_code));
+                availableCustomers.push(...criticalAvailable.slice(0, 6));
+            }
+
+            // Urgent customers: Distribute across all weekdays
+            const urgentAvailable = categories.urgent.filter(c => !usedCustomers.has(c.customer_code));
+            const urgentPerDay = Math.ceil(urgentAvailable.length / 7);
+            const urgentToAdd = urgentAvailable.slice(dayIndex * urgentPerDay, (dayIndex + 1) * urgentPerDay);
+            availableCustomers.push(...urgentToAdd);
+
+            // High churn customers: Spread across week (priority on weekdays)
+            if (dayIndex < 5) { // Mon-Fri
+                const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
+                const churnToAdd = churnAvailable.slice(dayIndex * 6, (dayIndex + 1) * 6);
+                availableCustomers.push(...churnToAdd);
+            } else if (dayIndex === 5) { // Saturday - some high churn
+                const churnAvailable = categories.highChurn.filter(c => !usedCustomers.has(c.customer_code));
+                const churnToAdd = churnAvailable.slice(0, 4);
+                availableCustomers.push(...churnToAdd);
+            }
+
+            // Medium priority: Weekdays + Saturday
+            if (dayIndex < 6) { // Mon-Sat
+                const mediumAvailable = categories.mediumPriority.filter(c => !usedCustomers.has(c.customer_code));
+                const mediumToAdd = mediumAvailable.slice(Math.floor(dayIndex / 2) * 4, (Math.floor(dayIndex / 2) + 1) * 4);
+                availableCustomers.push(...mediumToAdd);
+            }
+
+            // Regular customers: Weekdays + Saturday
+            if (dayIndex < 6) { // Mon-Sat
+                const regularAvailable = categories.regular.filter(c => !usedCustomers.has(c.customer_code));
+                const regularToAdd = regularAvailable.slice(Math.floor(dayIndex / 2) * 5, (Math.floor(dayIndex / 2) + 1) * 5);
+                availableCustomers.push(...regularToAdd);
+            }
+
+            // Prospects: Lighter schedule, mainly weekdays
+            if (dayIndex < 3) { // Mon, Tue, Wed
+                const prospectsAvailable = categories.prospects.filter(c => !usedCustomers.has(c.customer_code));
+                const prospectsToAdd = prospectsAvailable.slice(dayIndex * 2, (dayIndex + 1) * 2);
+                availableCustomers.push(...prospectsToAdd);
+            }
+
+            
+
+            console.log(`🗓️ ${day}: ${availableCustomers.length} customers available for optimization`);
+
+            if (availableCustomers.length > 0) {
+                // Adjust visit limits based on day
+                const maxVisitsForDay = dayIndex === 6 ? 5 : dayIndex === 5 ? 8 : 11; // Sunday: 5, Saturday: 8, Weekdays: 11
+                const maxTravelForDay = dayIndex === 6 ? 120 : dayIndex === 5 ? 180 : 220; // Shorter days on weekends
+
+                const dailyRoute = this.optimizeDailyRoute(availableCustomers, {
+                    maxVisits: maxVisitsForDay,
+                    maxTravelTime: maxTravelForDay,
+                    prioritizeUrgency: true
+                });
+
+                weeklyRoutes[day] = {
+                    ...dailyRoute,
+                    day: day,
+                    planned_date: this.getNextWeekday(dayIndex)
+                };
+
+                // Mark customers as used (critical customers can be revisited)
+                dailyRoute.route.forEach(customer => {
+                    if (customer.priority_score < 80) { // Only non-critical customers marked as used
+                        usedCustomers.add(customer.customer_code);
+                    }
+                });
+
+                console.log(`✅ ${day}: ${dailyRoute.total_customers} customers, ₹${dailyRoute.estimated_revenue} revenue, avg priority: ${dailyRoute.avg_priority_score}`);
+            } else {
+                weeklyRoutes[day] = {
+                    ...this.createEmptyRoute(),
+                    day: day,
+                    planned_date: this.getNextWeekday(dayIndex)
+                };
+                console.log(`📅 ${day}: No customers available`);
+            }
+        });// src/services/ProductionRouteOptimizer.js - Using customer_performance table
 import { supabase } from '../supabaseClient';
 
-class RouteOptimizer {
+class ProductionRouteOptimizer {
     constructor() {
         this.cache = new Map();
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
@@ -21,36 +109,36 @@ class RouteOptimizer {
             console.log(`🔍 Fetching customers with performance metrics for MR: ${mrName}`);
             
             // Join customer_master with customer_performance for complete data
-            // Much simpler query - no joins needed!
-const { data: customers, error } = await supabase
-    .from('customer_master')
-    .select(`
-        customer_code,
-        customer_name,
-        customer_type,
-        customer_segment,
-        area_name,
-        city_name,
-        latitude,
-        longitude,
-        total_visits,
-        total_orders,
-        total_order_value,
-        avg_order_value,
-        days_since_last_visit,
-        days_since_last_order,
-        last_visit_date,
-        last_order_date,
-        total_priority_score,
-        churn_risk_score,
-        order_probability,
-        predicted_order_value
-    `)
-    .eq('mr_name', mrName)
-    .eq('status', 'ACTIVE')
-    .not('latitude', 'is', null)
-    .not('longitude', 'is', null)
-    .not('total_priority_score', 'is', null);
+            const { data: customers, error } = await supabase
+                .from('customer_master')
+                .select(`
+                    customer_code,
+                    customer_name,
+                    customer_type,
+                    customer_segment,
+                    area_name,
+                    city_name,
+                    latitude,
+                    longitude,
+                    total_visits,
+                    total_orders,
+                    total_order_value,
+                    avg_order_value,
+                    days_since_last_visit,
+                    days_since_last_order,
+                    last_visit_date,
+                    last_order_date,
+                    customer_performance!inner(
+                        total_priority_score,
+                        churn_risk_score,
+                        order_probability,
+                        predicted_order_value
+                    )
+                `)
+                .eq('mr_name', mrName)
+                .eq('status', 'ACTIVE')
+                .not('latitude', 'is', null)
+                .not('longitude', 'is', null);
 
             if (error) {
                 console.error('❌ Error fetching customers:', error);
@@ -63,25 +151,30 @@ const { data: customers, error } = await supabase
             }
 
             // Flatten the performance data and calculate urgency score
-           // Much simpler - no complex joins!
-const enrichedCustomers = customers.map(customer => {
-    const urgencyScore = this.calculateUrgencyScore(
-        customer.total_priority_score,
-        customer.churn_risk_score,
-        customer.days_since_last_visit
-    );
+            const enrichedCustomers = customers.map(customer => {
+                const performance = customer.customer_performance;
+                
+                // Calculate urgency score from priority and churn risk
+                const urgencyScore = this.calculateUrgencyScore(
+                    performance.total_priority_score,
+                    performance.churn_risk_score,
+                    customer.days_since_last_visit
+                );
 
-    return {
-        ...customer,
-        priority_score: customer.total_priority_score,
-        churn_risk: customer.churn_risk_score,
-        order_probability: customer.order_probability,
-        predicted_value: customer.predicted_order_value,
-        urgency_score: urgencyScore,
-        route_position: null,
-        visited_in_route: false
-    };
-});
+                return {
+                    ...customer,
+                    // Use pre-calculated performance metrics
+                    priority_score: performance.total_priority_score,
+                    churn_risk: performance.churn_risk_score,
+                    order_probability: performance.order_probability,
+                    predicted_value: performance.predicted_order_value,
+                    urgency_score: urgencyScore,
+                    
+                    // Route optimization metadata
+                    route_position: null,
+                    visited_in_route: false
+                };
+            });
 
             // Log performance distribution
             const stats = this.calculatePerformanceStats(enrichedCustomers);
@@ -586,7 +679,7 @@ const enrichedCustomers = customers.map(customer => {
 
     createEmptyWeeklyRoutes() {
         const weeklyRoutes = {};
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         
         days.forEach((day, index) => {
             weeklyRoutes[day] = {
@@ -620,6 +713,5 @@ const enrichedCustomers = customers.map(customer => {
 }
 
 // Export singleton instance
-export const routeOptimizer = new RouteOptimizer();
-
-export default RouteOptimizer;
+export const productionRouteOptimizer = new ProductionRouteOptimizer();
+export default ProductionRouteOptimizer;
