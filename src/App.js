@@ -113,7 +113,7 @@ function App() {
       case 'quality':
         return <VisitQualityMonitor mrName={selectedMR?.name} />;
       case 'nbd':
-        return <NBDPerformanceDashboard />;
+        return <NBDPerformanceDashboard mrName={selectedMR?.name} />;
       case 'routes':
         return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'geocoding':
