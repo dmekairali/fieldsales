@@ -438,19 +438,30 @@ class RouteOptimizer {
         return selected;
     }
 
-    // Optimize route order using nearest neighbor
+    // Optimize route order using nearest neighbor - FIXED WITH DEBUGGING
     optimizeRouteOrder(customers, startLocation, maxTravelTime) {
-        if (customers.length <= 1) return customers;
+        console.log(`🚀 Starting route optimization with ${customers.length} customers, maxTravelTime: ${maxTravelTime}min`);
+        
+        if (customers.length <= 1) {
+            console.log(`📌 Single customer or empty, returning as-is`);
+            return customers;
+        }
 
         const route = [];
         const unvisited = [...customers];
         let currentLocation = startLocation;
         let totalTravelTime = 0;
 
+        console.log(`📍 Starting location: ${startLocation.latitude}, ${startLocation.longitude}`);
+
         while (unvisited.length > 0 && totalTravelTime < maxTravelTime) {
             let bestCustomer = null;
             let bestScore = -Infinity;
             let bestIndex = -1;
+            let bestDistance = 0;
+            let bestTravelTime = 0;
+
+            console.log(`🔍 Evaluating ${unvisited.length} remaining customers, current travel time: ${totalTravelTime}min`);
 
             unvisited.forEach((customer, index) => {
                 const distance = this.calculateDistance(
@@ -459,43 +470,65 @@ class RouteOptimizer {
                 );
                 const travelTime = this.calculateTravelTime(distance);
                 
-                if (totalTravelTime + travelTime > maxTravelTime) return;
+                console.log(`  ${customer.customer_name}: ${distance.toFixed(2)}km, ${travelTime.toFixed(0)}min, total would be: ${totalTravelTime + travelTime}min`);
+                
+                // RELAXED: Allow if total would be under maxTravelTime + buffer
+                if (totalTravelTime + travelTime > maxTravelTime + 30) {
+                    console.log(`    ❌ Skipped: Would exceed time limit`);
+                    return;
+                }
 
                 const revenueScore = customer.predicted_value * customer.order_probability;
                 const performanceScore = (customer.urgency_score * 0.7) + (revenueScore / 1000 * 0.3);
                 const efficiencyScore = performanceScore / Math.max(distance, 0.1);
                 
+                console.log(`    💰 Revenue: ₹${revenueScore.toFixed(0)}, Performance: ${performanceScore.toFixed(1)}, Efficiency: ${efficiencyScore.toFixed(2)}`);
+                
                 if (efficiencyScore > bestScore) {
                     bestScore = efficiencyScore;
                     bestCustomer = customer;
                     bestIndex = index;
+                    bestDistance = distance;
+                    bestTravelTime = travelTime;
+                    console.log(`    ✅ New best candidate: ${customer.customer_name} (score: ${efficiencyScore.toFixed(2)})`);
                 }
             });
 
             if (bestCustomer) {
-                const distance = this.calculateDistance(
-                    currentLocation.latitude, currentLocation.longitude,
-                    bestCustomer.latitude, bestCustomer.longitude
-                );
-                const travelTime = this.calculateTravelTime(distance);
-
                 route.push({
                     ...bestCustomer,
                     route_position: route.length + 1,
-                    travel_time_from_previous: travelTime,
-                    distance_from_previous: distance,
-                    cumulative_travel_time: totalTravelTime + travelTime,
+                    travel_time_from_previous: bestTravelTime,
+                    distance_from_previous: bestDistance,
+                    cumulative_travel_time: totalTravelTime + bestTravelTime,
                     expected_revenue: Math.round(bestCustomer.predicted_value * bestCustomer.order_probability)
                 });
 
-                totalTravelTime += travelTime;
+                totalTravelTime += bestTravelTime;
                 currentLocation = { latitude: bestCustomer.latitude, longitude: bestCustomer.longitude };
                 unvisited.splice(bestIndex, 1);
+                
+                console.log(`✅ Added ${bestCustomer.customer_name} to route (position ${route.length})`);
+                console.log(`📊 Updated totals: ${totalTravelTime}min travel, ${unvisited.length} customers remaining`);
             } else {
+                console.log(`❌ No valid customers found, breaking optimization`);
+                console.log(`🔍 Debug info: ${unvisited.length} customers left, ${totalTravelTime}min used of ${maxTravelTime}min limit`);
+                
+                // DEBUG: Show why customers were rejected
+                unvisited.slice(0, 3).forEach(customer => {
+                    const distance = this.calculateDistance(
+                        currentLocation.latitude, currentLocation.longitude,
+                        customer.latitude, customer.longitude
+                    );
+                    const travelTime = this.calculateTravelTime(distance);
+                    console.log(`  🔍 ${customer.customer_name}: ${distance.toFixed(2)}km, ${travelTime.toFixed(0)}min, would total: ${totalTravelTime + travelTime}min (limit: ${maxTravelTime}min)`);
+                });
+                
                 break;
             }
         }
 
+        console.log(`🎯 Route optimization completed: ${route.length} customers selected`);
         return route;
     }
 
