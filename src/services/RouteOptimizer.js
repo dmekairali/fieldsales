@@ -301,12 +301,34 @@ class RouteOptimizer {
         return (distance / avgSpeedKmh) * 60; // minutes
     }
 
-    // Daily route optimization
+    // Calculate optimal start location based on customer distribution
+    calculateOptimalStartLocation(customers) {
+        if (!customers || customers.length === 0) {
+            // Default to India center if no customers
+            return { latitude: 20.5937, longitude: 78.9629 };
+        }
+
+        // Calculate centroid of all customer locations
+        const totalLat = customers.reduce((sum, c) => sum + parseFloat(c.latitude), 0);
+        const totalLng = customers.reduce((sum, c) => sum + parseFloat(c.longitude), 0);
+        
+        const centroidLat = totalLat / customers.length;
+        const centroidLng = totalLng / customers.length;
+        
+        console.log(`📍 Calculated optimal start location: ${centroidLat.toFixed(4)}, ${centroidLng.toFixed(4)} (centroid of ${customers.length} customers)`);
+        
+        return {
+            latitude: centroidLat,
+            longitude: centroidLng
+        };
+    }
+
+    // Daily route optimization - FIXED START LOCATION
     optimizeDailyRoute(customers, options = {}) {
         const {
             maxVisits = 10,
             maxTravelTime = 240,
-            startLocation = { latitude: 28.6285, longitude: 77.0594 },
+            startLocation = null, // Will be calculated dynamically
             prioritizeUrgency = true,
             includeReturnTime = true
         } = options;
@@ -332,6 +354,10 @@ class RouteOptimizer {
             return this.createEmptyRoute();
         }
 
+        // Calculate optimal start location if not provided
+        const optimalStartLocation = startLocation || this.calculateOptimalStartLocation(validCustomers);
+        console.log(`🚀 Using start location: ${optimalStartLocation.latitude.toFixed(4)}, ${optimalStartLocation.longitude.toFixed(4)}`);
+
         // Select optimal customers
         const selectedCustomers = this.selectOptimalCustomers(validCustomers, maxVisits);
         
@@ -340,15 +366,16 @@ class RouteOptimizer {
             return this.createEmptyRoute();
         }
 
-        // Optimize route order
-        const optimizedRoute = this.optimizeRouteOrder(selectedCustomers, startLocation, maxTravelTime);
+        // Optimize route order with dynamic start location
+        const optimizedRoute = this.optimizeRouteOrder(selectedCustomers, optimalStartLocation, maxTravelTime);
         
         // Calculate metrics
-        const metrics = this.calculateRouteMetrics(optimizedRoute, startLocation, includeReturnTime);
+        const metrics = this.calculateRouteMetrics(optimizedRoute, optimalStartLocation, includeReturnTime);
 
         return {
             route: optimizedRoute,
             ...metrics,
+            start_location: optimalStartLocation,
             algorithm_used: 'performance_based_optimization',
             optimization_score: this.calculateOptimizationScore(optimizedRoute, metrics)
         };
@@ -706,9 +733,13 @@ class RouteOptimizer {
                 const maxVisitsForDay = dayIndex === 5 ? 8 : 11; // Saturday: 8, Weekdays: 11
                 const maxTravelForDay = dayIndex === 5 ? 180 : 220; // Saturday shorter
 
+                // Calculate optimal start location for this day's customers
+                const dayStartLocation = this.calculateOptimalStartLocation(availableCustomers);
+
                 const dailyRoute = this.optimizeDailyRoute(availableCustomers, {
                     maxVisits: maxVisitsForDay,
                     maxTravelTime: maxTravelForDay,
+                    startLocation: dayStartLocation, // Use calculated location
                     prioritizeUrgency: true
                 });
 
