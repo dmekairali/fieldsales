@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const NBDPerformanceDashboard = () => {
+const NBDPerformanceDashboard = ({ mrName }) => {
     const [nbdData, setNbdData] = useState([]);
     const [allMRs, setAllMRs] = useState([]);
     const [mrFilter, setMrFilter] = useState('');
@@ -15,6 +15,13 @@ const NBDPerformanceDashboard = () => {
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 2000; // 2 seconds
     const REQUEST_TIMEOUT = 10000; // 10 seconds
+
+    // Update mrFilter when mrName prop changes
+    useEffect(() => {
+        if (mrName && mrName !== mrFilter) {
+            setMrFilter(mrName);
+        }
+    }, [mrName]);
 
     useEffect(() => {
         fetchNBDPerformance();
@@ -197,8 +204,14 @@ const NBDPerformanceDashboard = () => {
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
                                 📈 NBD Performance Analytics
+                                {mrName && (
+                                    <span className="text-lg font-normal text-blue-600">- {mrName}</span>
+                                )}
                             </h1>
-                            <p className="text-gray-600 mt-2">New Business Development tracking and conversion metrics</p>
+                            <p className="text-gray-600 mt-2">
+                                New Business Development tracking and conversion metrics
+                                {mrName && <span className="font-medium"> for {mrName}</span>}
+                            </p>
                             <div className="mt-3 flex items-center gap-4">
                                 <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
                                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -247,14 +260,20 @@ const NBDPerformanceDashboard = () => {
                                 value={mrFilter}
                                 onChange={(e) => setMrFilter(e.target.value)}
                                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-sm"
+                                disabled={!!mrName} // Disable when MR is selected from header
                             >
                                 <option value="">All MRs ({allMRs.length})</option>
-                                {allMRs.map((mrName, index) => (
-                                    <option key={index} value={mrName}>
-                                        {mrName}
+                                {allMRs.map((mrNameOption, index) => (
+                                    <option key={index} value={mrNameOption}>
+                                        {mrNameOption} {mrNameOption === mrName ? '(Selected)' : ''}
                                     </option>
                                 ))}
                             </select>
+                            {mrName && (
+                                <p className="text-xs text-blue-600 mt-1">
+                                    🔒 Filtered by selected MR from header
+                                </p>
+                            )}
                         </div>
                         <div className="min-w-48">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
