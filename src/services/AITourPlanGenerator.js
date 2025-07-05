@@ -28,20 +28,36 @@ class AITourPlanGenerator {
             console.log(`🔍 Fetching territory context for MR: ${mrName}`);
             this.requestCount++;
             
-            // Get customer tiers with comprehensive error handling
+            // OPTIMIZED: Get customers directly and calculate tiers in JavaScript
+            // This avoids the slow CROSS JOIN LATERAL in customer_tiers view
             const { data: customers, error: customersError } = await supabase
-                .from('customer_tiers')
-                .select('customer_code, customer_name, customer_type, territory, tier_score, tier_level, recommended_frequency, score_breakdown')
+                .from('customer_master')
+                .select(`
+                    customer_code,
+                    customer_name,
+                    customer_type,
+                    territory,
+                    area_name,
+                    city_name,
+                    total_visits,
+                    total_orders,
+                    total_order_value,
+                    avg_order_value,
+                    days_since_last_visit,
+                    days_since_last_order,
+                    total_priority_score,
+                    churn_risk_score,
+                    order_probability,
+                    predicted_order_value
+                `)
                 .eq('mr_name', mrName)
-                .order('tier_score', { ascending: false });
+                .eq('status', 'ACTIVE')
+                .not('total_priority_score', 'is', null)
+                .order('total_priority_score', { ascending: false })
+                .limit(100); // Reasonable limit for performance
 
             if (customersError) {
-                console.error('❌ Error fetching customers:');
-                console.error('Error code:', customersError.code);
-                console.error('Error message:', customersError.message);
-                console.error('Error details:', customersError.details);
-                console.error('Error hint:', customersError.hint);
-                console.error('Full error object:', JSON.stringify(customersError, null, 2));
+                console.error('❌ Error fetching customers:', customersError);
                 this.errorCount++;
                 throw new Error(`Customer data fetch failed: ${customersError.message || 'Unknown database error'}`);
             }
@@ -54,12 +70,150 @@ class AITourPlanGenerator {
                     territories: [],
                     context_meta: {
                         fetch_time_ms: Date.now() - startTime,
-                        data_sources: ['customer_tiers'],
+                        data_sources: ['customer_master_direct'],
                         mr_name: mrName,
-                        total_customers: 0
+                        total_customers: 0,
+                        optimization: 'direct_query_no_view'
                     }
                 };
             }
+
+            // Calculate tiers in JavaScript (fast, no database computation)
+            const enrichedCustomers = customers.map(customer => {
+                const priorityScore = customer.total_priority_score || 0;
+                const churnRisk = customer.churn_risk_score || 0;
+                const daysSinceVisit = customer.days_since_last_visit || 0;
+                
+                // Calculate tier based on priority score
+                let tierLevel = 'TIER_4_PROSPECT';
+                if (priorityScore >= 80) tierLevel = 'TIER_1_CHAMPION';
+                else if (priorityScore >= 60) tierLevel = 'TIER_2_PERFORMER';
+                else if (priorityScore >= 40) tierLevel = 'TIER_3_DEVELOPER';
+                
+                // Calculate urgency score
+                let urgencyScore = priorityScore * 0.6;
+                urgencyScore += churnRisk * 30;
+                if (daysSinceVisit > 60) urgencyScore += 20;
+                else if (daysSinceVisit > 45) urgencyScore += 15;
+                else if (daysSinceVisit > 30) urgencyScore += 10;
+                else if (daysSinceVisit > 14) urgencyScore += 5;
+                urgencyScore = Math.min(Math.max(urgencyScore, 10), 100);
+                
+                return {
+                    customer_code: customer.customer_code,
+                    customer_name: customer.customer_name,
+                    customer_type: customer.customer_type,
+                    territory: customer.territory,
+                    tier_score: priorityScore,
+                    tier_level: tierLevel,
+                    recommended_frequency: this.getTierFrequency(tierLevel),
+                    urgency_score: urgencyScore,
+                    score_breakdown: {
+                        total_score: priorityScore,
+                        tier_level: tierLevel,
+                        direct_sales_score: Math.min((customer.total_order_value || 0) / 20000 * 100, 100),
+                        churn_risk: churnRisk,
+                        days_since_visit: daysSinceVisit
+                    }
+                };
+            });
+
+            console.log(`✅ Processed ${enrichedCustomers.length} customers with tiers in JavaScript`);
+
+            // Get performance data (keep this part)
+            let performance = null;
+            let performanceSource = 'none';
+            try {
+                const performanceResult = await supabase
+                    .from('mr_visits')
+                    .select('"amountOfSale", "visitTime"')
+                    .eq('empName', mrName)
+                    .gte('dcrDate', this.getDateDaysAgo(30))
+                    .not('visitTime', 'is', null)
+                    .limit(100);
+                
+                if (performanceResult.data) {
+                    performance = performanceResult.data;
+                    performanceSource = 'mr_visits';
+                    console.log(`📊 Performance data loaded: ${performance.length} records`);
+                }
+            } catch (performanceError) {
+                console.warn('⚠️ Performance data error:', performanceError);
+                performanceSource = 'error';
+            }
+
+            const performanceMetrics = this.calculatePerformanceMetrics(performance || [], performanceSource);
+
+            // Get territory data
+            let territories = null;
+            let territorySource = 'none';
+            try {
+                const territoriesResult = await supabase
+                    .from('mr_visits')
+                    .select('"visitedArea", "amountOfSale", "areaName"')
+                    .eq('empName', mrName)
+                    .gte('dcrDate', this.getDateDaysAgo(30))
+                    .or('"visitedArea".not.is.null,"areaName".not.is.null')
+                    .limit(200);
+                
+                if (territoriesResult.data) {
+                    territories = territoriesResult.data;
+                    territorySource = 'mr_visits';
+                    console.log(`🗺️ Territory data loaded: ${territories.length} records`);
+                }
+            } catch (territoriesError) {
+                console.warn('⚠️ Territory data error:', territoriesError);
+                territorySource = 'error';
+            }
+
+            const territoryMetrics = this.processTerritoryData(territories || []);
+
+            const context = {
+                customers: enrichedCustomers,
+                performance: performanceMetrics,
+                territories: territoryMetrics,
+                context_meta: {
+                    fetch_time_ms: Date.now() - startTime,
+                    data_sources: ['customer_master_direct', performanceSource, territorySource],
+                    mr_name: mrName,
+                    total_customers: enrichedCustomers.length,
+                    performance_records: performance?.length || 0,
+                    territory_records: territories?.length || 0,
+                    cache_key: cacheKey,
+                    optimization: 'javascript_tier_calculation'
+                }
+            };
+
+            // Cache results
+            this.cache.set(cacheKey, {
+                data: context,
+                timestamp: Date.now(),
+                fetch_duration: Date.now() - startTime
+            });
+
+            this.successCount++;
+            console.log(`✅ Territory context loaded: ${enrichedCustomers.length} customers in ${Date.now() - startTime}ms`);
+            return context;
+
+        } catch (error) {
+            this.errorCount++;
+            console.error('❌ Error fetching territory context:', error);
+            throw new Error(`Territory context fetch failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Get tier frequency recommendation
+     */
+    getTierFrequency(tierLevel) {
+        switch (tierLevel) {
+            case 'TIER_1_CHAMPION': return 'Weekly (4-5 visits/month)';
+            case 'TIER_2_PERFORMER': return 'Bi-weekly (2-3 visits/month)';
+            case 'TIER_3_DEVELOPER': return 'Monthly (1-2 visits/month)';
+            case 'TIER_4_PROSPECT': return 'Quarterly';
+            default: return 'Monthly';
+        }
+    }
 
             // Get recent performance data with fallback handling
             let performance = null;
