@@ -530,55 +530,72 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                             <table className="min-w-full divide-y divide-gray-200">
                                                 <thead className="bg-gray-50">
                                                     <tr>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Urgency</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Churn Risk</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Travel</th>
-                                                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">#</th>
+                                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-48">Customer</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Type</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Priority</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Urgency</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Churn Risk</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Visit Time</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Travel</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Revenue</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="bg-white divide-y divide-gray-200">
                                                     {dailyRoute.route.map((customer, index) => (
                                                         <tr key={customer.customer_code} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                            <td className="px-4 py-4 text-center">
+                                                            <td className="px-3 py-4 text-center">
                                                                 <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 font-bold text-sm">
                                                                     {customer.route_position}
                                                                 </span>
                                                             </td>
                                                             <td className="px-4 py-4">
-                                                                <div className="font-medium text-gray-900">{customer.customer_name}</div>
-                                                                <div className="text-sm text-gray-500">{customer.area_name}, {customer.city_name}</div>
+                                                                <div className="font-medium text-gray-900 text-sm">{customer.customer_name}</div>
+                                                                <div className="text-xs text-gray-500">{customer.area_name}</div>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center">
+                                                            <td className="px-3 py-4 text-center">
                                                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                                                     {customer.customer_type}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center">
+                                                            <td className="px-3 py-4 text-center">
                                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold border ${getPriorityColor(customer.priority_score)}`}>
                                                                     {customer.priority_score}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center">
+                                                            <td className="px-3 py-4 text-center">
                                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold border ${getUrgencyColor(customer.urgency_score)}`}>
                                                                     {Math.round(customer.urgency_score)}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center">
+                                                            <td className="px-3 py-4 text-center">
                                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold border ${getChurnRiskColor(customer.churn_risk)}`}>
                                                                     {Math.round(customer.churn_risk * 100)}%
                                                                 </span>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center text-sm">
-                                                                <div>{formatDuration(customer.travel_time_from_previous || 0)}</div>
-                                                                <div className="text-xs text-gray-500">{formatDistance(customer.distance_from_previous || 0)}</div>
+                                                            <td className="px-3 py-4 text-center">
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {customer.visit_start_time} - {customer.visit_end_time}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    ({customer.estimated_visit_time}m visit)
+                                                                </div>
                                                             </td>
-                                                            <td className="px-4 py-4 text-center">
-                                                                <div className="font-semibold text-green-600">{formatCurrency(customer.expected_revenue || 0)}</div>
-                                                                <div className="text-xs text-gray-500">{Math.round((customer.order_probability || 0) * 100)}% prob</div>
+                                                            <td className="px-3 py-4 text-center">
+                                                                <div className="text-sm font-medium text-gray-900">
+                                                                    {formatDuration(customer.travel_time_from_previous || 0)}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {formatDistance(customer.distance_from_previous || 0)}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-3 py-4 text-center">
+                                                                <div className="font-semibold text-green-600 text-sm">
+                                                                    {formatCurrency(customer.expected_revenue || 0)}
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">
+                                                                    {Math.round((customer.order_probability || 0) * 100)}% prob
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}
