@@ -8,9 +8,6 @@ class AITourPlanGenerator {
         this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY;
     }
 
-    /**
-     * Get comprehensive territory context for AI planning
-     */
     async getTerritoryContext(mrName) {
         const cacheKey = `territory_context_${mrName}`;
         const cached = this.cache.get(cacheKey);
@@ -23,19 +20,9 @@ class AITourPlanGenerator {
         try {
             console.log(`🔍 Fetching territory context for MR: ${mrName}`);
             
-            // Get customer tiers
             const { data: customers, error: customersError } = await supabase
                 .from('customer_tiers')
-                .select(`
-                    customer_code,
-                    customer_name,
-                    customer_type,
-                    territory,
-                    tier_score,
-                    tier_level,
-                    recommended_frequency,
-                    score_breakdown
-                `)
+                .select('customer_code, customer_name, customer_type, territory, tier_score, tier_level, recommended_frequency, score_breakdown')
                 .eq('mr_name', mrName)
                 .order('tier_score', { ascending: false });
 
@@ -44,15 +31,11 @@ class AITourPlanGenerator {
                 throw customersError;
             }
 
-            // Get recent performance (last 30 days)
             let performance = null;
             try {
                 const performanceResult = await supabase
                     .from('real_time_visit_quality')
-                    .select(`
-                        quality_score,
-                        "amountOfSale"
-                    `)
+                    .select('quality_score, "amountOfSale"')
                     .eq('empName', mrName)
                     .gte('dcrDate', this.getDateDaysAgo(30))
                     .not('quality_score', 'is', null);
@@ -61,18 +44,13 @@ class AITourPlanGenerator {
                 console.warn('⚠️ Performance data error:', performanceError);
             }
 
-            // Calculate performance metrics
             const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
 
-            // Get territory efficiency from mr_visits
             let territories = null;
             try {
                 const territoriesResult = await supabase
                     .from('mr_visits')
-                    .select(`
-                        "visitedArea",
-                        "amountOfSale"
-                    `)
+                    .select('"visitedArea", "amountOfSale"')
                     .eq('empName', mrName)
                     .gte('dcrDate', this.getDateDaysAgo(30))
                     .not('visitedArea', 'is', null);
@@ -81,7 +59,6 @@ class AITourPlanGenerator {
                 console.warn('⚠️ Territory data error:', territoriesError);
             }
 
-            // Process territory data
             const territoryMetrics = this.processTerritoryData(territories || []);
 
             const context = {
@@ -90,7 +67,6 @@ class AITourPlanGenerator {
                 territories: territoryMetrics
             };
 
-            // Cache results
             this.cache.set(cacheKey, {
                 data: context,
                 timestamp: Date.now()
@@ -105,68 +81,6 @@ class AITourPlanGenerator {
         }
     }
 
-            // Get recent performance (last 30 days) with timeout protection
-            const { data: performance, error: performanceError } = await supabase
-                .from('mr_visits')
-                .select(`
-                    "amountOfSale",
-                    "visitTime"
-                `)
-                .eq('empName', mrName)
-                .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('visitTime', 'is', null)
-                .limit(100); // Limit for performance
-
-            if (performanceError) {
-                console.warn('⚠️ Performance data error:', performanceError);
-            }
-
-            // Calculate performance metrics
-            const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
-
-            // Get territory efficiency from mr_visits with limits
-            const { data: territories, error: territoriesError } = await supabase
-                .from('mr_visits')
-                .select(`
-                    "areaName",
-                    "amountOfSale"
-                `)
-                .eq('empName', mrName)
-                .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('areaName', 'is', null)
-                .limit(200); // Limit for performance
-
-            if (territoriesError) {
-                console.warn('⚠️ Territory data error:', territoriesError);
-            }
-
-            // Process territory data
-            const territoryMetrics = this.processTerritoryData(territories || []);
-
-            const context = {
-                customers: enrichedCustomers,
-                performance: performanceMetrics,
-                territories: territoryMetrics
-            };
-
-            // Cache results
-            this.cache.set(cacheKey, {
-                data: context,
-                timestamp: Date.now()
-            });
-
-            console.log(`✅ Territory context loaded: ${enrichedCustomers?.length || 0} customers`);
-            return context;
-
-        } catch (error) {
-            console.error('❌ Error fetching territory context:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Calculate performance metrics from raw data
-     */
     calculatePerformanceMetrics(performance) {
         if (!performance || performance.length === 0) {
             return {
@@ -192,9 +106,6 @@ class AITourPlanGenerator {
         };
     }
 
-    /**
-     * Process territory data for efficiency metrics
-     */
     processTerritoryData(territories) {
         const territoryMap = {};
         
@@ -213,12 +124,9 @@ class AITourPlanGenerator {
 
         return Object.values(territoryMap)
             .sort((a, b) => b.sales - a.sales)
-            .slice(0, 10); // Top 10 areas
+            .slice(0, 10);
     }
 
-    /**
-     * Generate AI prompt for tour planning
-     */
     generateAIPrompt(mrName, context, date) {
         const customersSummary = `Total customers: ${context.customers.length}\n`;
         const tierSummary = {};
@@ -297,9 +205,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
         return prompt;
     }
 
-    /**
-     * Call OpenAI API to generate tour plan
-     */
     async callOpenAI(prompt) {
         if (!this.openaiApiKey) {
             throw new Error('OpenAI API key not configured');
@@ -343,9 +248,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
         }
     }
 
-    /**
-     * Generate AI-powered tour plan
-     */
     async generateTourPlan(mrName, date = null) {
         if (!date) {
             const tomorrow = new Date();
@@ -356,7 +258,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
         try {
             console.log(`🤖 Generating AI tour plan for ${mrName} on ${date}`);
 
-            // Get territory context
             const context = await this.getTerritoryContext(mrName);
             
             if (!context.customers || context.customers.length === 0) {
@@ -366,22 +267,14 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
                 };
             }
 
-            // Generate AI prompt
             const prompt = this.generateAIPrompt(mrName, context, date);
-
-            // Call OpenAI API
             const aiResponse = await this.callOpenAI(prompt);
 
-            // Parse JSON response
             let planJson;
             try {
-                // Clean response (remove markdown if present)
                 const cleanResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
                 planJson = JSON.parse(cleanResponse);
-                
-                // Validate plan structure
                 this.validatePlanStructure(planJson);
-
             } catch (parseError) {
                 console.error('❌ Failed to parse AI response:', parseError);
                 return {
@@ -391,7 +284,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
                 };
             }
 
-            // Save to database
             await this.saveTourPlan(mrName, date, planJson);
 
             return {
@@ -407,7 +299,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
 
         } catch (error) {
             console.error('❌ Tour plan generation failed:', error);
-            
             return {
                 success: false,
                 error: error.message
@@ -415,11 +306,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
         }
     }
 
-
-
-    /**
-     * Validate plan structure
-     */
     validatePlanStructure(plan) {
         if (!plan.daily_plan || !Array.isArray(plan.daily_plan)) {
             throw new Error('Invalid plan structure: missing daily_plan array');
@@ -429,7 +315,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
             throw new Error('Invalid plan structure: missing plan_summary object');
         }
 
-        // Validate each visit in daily_plan
         plan.daily_plan.forEach((visit, index) => {
             if (!visit.time_slot || !visit.customer_name) {
                 throw new Error(`Invalid visit structure at index ${index}`);
@@ -437,9 +322,6 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
         });
     }
 
-    /**
-     * Save generated tour plan to database
-     */
     async saveTourPlan(mrName, date, plan) {
         try {
             const { error } = await supabase
@@ -463,13 +345,9 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
 
         } catch (error) {
             console.error('❌ Failed to save tour plan:', error);
-            // Don't throw error here, as the plan was generated successfully
         }
     }
 
-    /**
-     * Get saved tour plans for MR
-     */
     async getSavedTourPlans(mrName, startDate, endDate) {
         try {
             const { data, error } = await supabase
@@ -493,24 +371,24 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
         }
     }
 
-    /**
-     * Utility: Get date N days ago
-     */
     getDateDaysAgo(days) {
         const date = new Date();
         date.setDate(date.getDate() - days);
         return date.toISOString().split('T')[0];
     }
 
-    /**
-     * Clear cache
-     */
     clearCache() {
         this.cache.clear();
         console.log('🗑️ AI Tour Plan cache cleared');
     }
+
+    getCacheStats() {
+        return {
+            cached_items: this.cache.size,
+            cache_expiry_minutes: this.cacheExpiry / (60 * 1000)
+        };
+    }
 }
 
-// Export singleton instance
 export const aiTourPlanGenerator = new AITourPlanGenerator();
 export default AITourPlanGenerator;
