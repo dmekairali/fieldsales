@@ -23,8 +23,8 @@ class AITourPlanGenerator {
         try {
             console.log(`🔍 Fetching territory context for MR: ${mrName}`);
             
-            // Get customer tiers with timeout handling
-            const customersPromise = supabase
+            // Get customer tiers
+            const { data: customers, error: customersError } = await supabase
                 .from('customer_tiers')
                 .select(`
                     customer_code,
@@ -39,56 +39,47 @@ class AITourPlanGenerator {
                 .eq('mr_name', mrName)
                 .order('tier_score', { ascending: false });
 
-            const { data: customers, error: customersError } = await Promise.race([
-                customersPromise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Customer query timeout')), 60000))
-            ]);
-
             if (customersError) {
                 console.error('❌ Error fetching customers:', customersError);
                 throw customersError;
             }
 
             // Get recent performance (last 30 days)
-            const performancePromise = supabase
-                .from('real_time_visit_quality')
-                .select(`
-                    quality_score,
-                    "amountOfSale"
-                `)
-                .eq('empName', mrName)
-                .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('quality_score', 'is', null);
-
-            const { data: performance, error: performanceError } = await Promise.race([
-                performancePromise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Performance query timeout')), 30000))
-            ]).catch(error => {
-                console.warn('⚠️ Performance data error:', error);
-                return { data: null, error: error };
-            });
+            let performance = null;
+            try {
+                const performanceResult = await supabase
+                    .from('real_time_visit_quality')
+                    .select(`
+                        quality_score,
+                        "amountOfSale"
+                    `)
+                    .eq('empName', mrName)
+                    .gte('dcrDate', this.getDateDaysAgo(30))
+                    .not('quality_score', 'is', null);
+                performance = performanceResult.data;
+            } catch (performanceError) {
+                console.warn('⚠️ Performance data error:', performanceError);
+            }
 
             // Calculate performance metrics
             const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
 
             // Get territory efficiency from mr_visits
-            const territoriesPromise = supabase
-                .from('mr_visits')
-                .select(`
-                    "visitedArea",
-                    "amountOfSale"
-                `)
-                .eq('empName', mrName)
-                .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('visitedArea', 'is', null);
-
-            const { data: territories, error: territoriesError } = await Promise.race([
-                territoriesPromise,
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Territory query timeout')), 30000))
-            ]).catch(error => {
-                console.warn('⚠️ Territory data error:', error);
-                return { data: null, error: error };
-            });
+            let territories = null;
+            try {
+                const territoriesResult = await supabase
+                    .from('mr_visits')
+                    .select(`
+                        "visitedArea",
+                        "amountOfSale"
+                    `)
+                    .eq('empName', mrName)
+                    .gte('dcrDate', this.getDateDaysAgo(30))
+                    .not('visitedArea', 'is', null);
+                territories = territoriesResult.data;
+            } catch (territoriesError) {
+                console.warn('⚠️ Territory data error:', territoriesError);
+            }
 
             // Process territory data
             const territoryMetrics = this.processTerritoryData(territories || []);
