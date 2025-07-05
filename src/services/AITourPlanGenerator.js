@@ -23,7 +23,7 @@ class AITourPlanGenerator {
         try {
             console.log(`🔍 Fetching territory context for MR: ${mrName}`);
             
-            // Get customer tiers
+            // Get customer tiers with extended timeout
             const { data: customers, error: customersError } = await supabase
                 .from('customer_tiers')
                 .select(`
@@ -37,7 +37,8 @@ class AITourPlanGenerator {
                     score_breakdown
                 `)
                 .eq('mr_name', mrName)
-                .order('tier_score', { ascending: false });
+                .order('tier_score', { ascending: false })
+                .abortSignal(AbortSignal.timeout(60000)); // 60 second timeout
 
             if (customersError) {
                 console.error('❌ Error fetching customers:', customersError);
@@ -53,7 +54,8 @@ class AITourPlanGenerator {
                 `)
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('quality_score', 'is', null);
+                .not('quality_score', 'is', null)
+                .abortSignal(AbortSignal.timeout(30000)); // 30 second timeout
 
             if (performanceError) {
                 console.warn('⚠️ Performance data error:', performanceError);
@@ -71,7 +73,8 @@ class AITourPlanGenerator {
                 `)
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('visitedArea', 'is', null);
+                .not('visitedArea', 'is', null)
+                .abortSignal(AbortSignal.timeout(30000)); // 30 second timeout
 
             if (territoriesError) {
                 console.warn('⚠️ Territory data error:', territoriesError);
@@ -93,6 +96,65 @@ class AITourPlanGenerator {
             });
 
             console.log(`✅ Territory context loaded: ${customers?.length || 0} customers`);
+            return context;
+
+        } catch (error) {
+            console.error('❌ Error fetching territory context:', error);
+            throw error;
+        }
+    }
+
+            // Get recent performance (last 30 days) with timeout protection
+            const { data: performance, error: performanceError } = await supabase
+                .from('mr_visits')
+                .select(`
+                    "amountOfSale",
+                    "visitTime"
+                `)
+                .eq('empName', mrName)
+                .gte('dcrDate', this.getDateDaysAgo(30))
+                .not('visitTime', 'is', null)
+                .limit(100); // Limit for performance
+
+            if (performanceError) {
+                console.warn('⚠️ Performance data error:', performanceError);
+            }
+
+            // Calculate performance metrics
+            const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
+
+            // Get territory efficiency from mr_visits with limits
+            const { data: territories, error: territoriesError } = await supabase
+                .from('mr_visits')
+                .select(`
+                    "areaName",
+                    "amountOfSale"
+                `)
+                .eq('empName', mrName)
+                .gte('dcrDate', this.getDateDaysAgo(30))
+                .not('areaName', 'is', null)
+                .limit(200); // Limit for performance
+
+            if (territoriesError) {
+                console.warn('⚠️ Territory data error:', territoriesError);
+            }
+
+            // Process territory data
+            const territoryMetrics = this.processTerritoryData(territories || []);
+
+            const context = {
+                customers: enrichedCustomers,
+                performance: performanceMetrics,
+                territories: territoryMetrics
+            };
+
+            // Cache results
+            this.cache.set(cacheKey, {
+                data: context,
+                timestamp: Date.now()
+            });
+
+            console.log(`✅ Territory context loaded: ${enrichedCustomers?.length || 0} customers`);
             return context;
 
         } catch (error) {
