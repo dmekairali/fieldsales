@@ -36,13 +36,13 @@ class AITourPlanGenerator {
                 
                 // Fallback to direct table query
                 const directResult = await supabase
-                    .from('customers')
+                    .from('customer_master')
                     .select('customer_code, customer_name, customer_type, territory, tier_score, tier_level, recommended_frequency, recommended_visit_duration, days_since_last_visit, conversion_rate_90d, total_sales_90d, score_breakdown')
                     .eq('assigned_mr', mrName)
                     .eq('is_active', true)
                     .not('tier_score', 'is', null)
                     .order('tier_score', { ascending: false })
-                    .limit(100);
+                    .limit(1000);
                 
                 if (directResult.error) {
                     this.errorCount++;
@@ -89,7 +89,7 @@ class AITourPlanGenerator {
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
                 .not('visitTime', 'is', null)
-                .limit(200);
+                .limit(5000);
             
             if (!performanceResult.error && performanceResult.data) {
                 performance = performanceResult.data;
@@ -105,7 +105,7 @@ class AITourPlanGenerator {
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
                 .or('"visitedArea".not.is.null,"areaName".not.is.null')
-                .limit(300);
+                .limit(5000);
             
             if (!territoryResult.error && territoryResult.data) {
                 territories = territoryResult.data;
