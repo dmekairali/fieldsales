@@ -257,59 +257,6 @@ const NBDPerformanceDashboard = ({ mrName, dateRange: propDateRange, performance
                     </div>
                 )}
 
-                {/* Filters */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Filters & Controls</h3>
-                    <div className="flex flex-wrap gap-4">
-                        <div className="flex-1 min-w-64">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by MR Name</label>
-                            <select 
-                                value={mrFilter}
-                                onChange={(e) => setMrFilter(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-sm"
-                                disabled={!!mrName} // Disable when MR is selected from header
-                            >
-                                <option value="">All MRs ({allMRs.length})</option>
-                                {allMRs.map((mrNameOption, index) => (
-                                    <option key={index} value={mrNameOption}>
-                                        {mrNameOption} {mrNameOption === mrName ? '(Selected)' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                            {mrName && (
-                                <p className="text-xs text-blue-600 mt-1">
-                                    🔒 Filtered by selected MR from header
-                                </p>
-                            )}
-                        </div>
-                        <div className="min-w-48">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-                            <select 
-                                value={dateRange} 
-                                onChange={(e) => setDateRange(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-sm"
-                            >
-                                <option value={7}>Last 7 days</option>
-                                <option value={30}>Last 30 days</option>
-                                <option value={90}>Last 90 days</option>
-                            </select>
-                        </div>
-                        <div className="min-w-48">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Performance Filter</label>
-                            <select 
-                                value={selectedFilter} 
-                                onChange={(e) => setSelectedFilter(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white text-sm"
-                            >
-                                <option value="all">All Performance</option>
-                                <option value="good">Good Performers</option>
-                                <option value="insufficient">Insufficient Focus</option>
-                                <option value="poor">Poor Conversion</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Summary Statistics */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                     <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-sm p-6">
