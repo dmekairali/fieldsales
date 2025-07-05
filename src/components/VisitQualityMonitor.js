@@ -9,14 +9,6 @@ const VisitQualityMonitor = ({ mrName }) => {
     const [error, setError] = useState(null);
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [dateRange, setDateRange] = useState('today');
-    const [mrNameFilter, setMrNameFilter] = useState('');
-
-    // Update mrNameFilter when mrName prop changes
-    useEffect(() => {
-        if (mrName && mrName !== mrNameFilter) {
-            setMrNameFilter(mrName);
-        }
-    }, [mrName]);
 
     useEffect(() => {
         fetchQualityData();
@@ -24,7 +16,7 @@ const VisitQualityMonitor = ({ mrName }) => {
         // Auto-refresh every 30 minutes
         const interval = setInterval(fetchQualityData, 1800000);
         return () => clearInterval(interval);
-    }, [mrName, dateRange, mrNameFilter]);
+    }, [mrName, dateRange]);
 
     const fetchQualityData = async () => {
         try {
@@ -53,7 +45,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                 .select('*')
                 .eq('dcrDate', new Date().toISOString().split('T')[0])
                 .lt('quality_score', 30)
-                .ilike('empName', mrNameFilter ? `%${mrNameFilter}%` : '%')
+                .ilike('empName', mrName ? `%${mrName}%` : '%')
                 .order('quality_score', { ascending: true });
 
             if (!alertsError && alerts) {
@@ -84,7 +76,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                     "dcrDate"
                 `)
                 .eq('dcrDate', new Date().toISOString().split('T')[0])
-                .ilike('empName', mrNameFilter ? `%${mrNameFilter}%` : '%')
+                .ilike('empName', mrName ? `%${mrName}%` : '%')
                 .not('visitTime', 'is', null);
 
             if (!error && data) {
@@ -117,7 +109,8 @@ const VisitQualityMonitor = ({ mrName }) => {
                     quality_grade,
                     "amountOfSale"
                 `)
-                .eq('dcrDate', new Date().toISOString().split('T')[0]);
+                .eq('dcrDate', new Date().toISOString().split('T')[0])
+                .ilike('empName', mrName ? `%${mrName}%` : '%');
 
             if (!perfError && performance) {
                 processPerformanceData(performance);
@@ -143,6 +136,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                     "sampleValue"
                 `)
                 .eq('dcrDate', new Date().toISOString().split('T')[0])
+                .ilike('empName', mrName ? `%${mrName}%` : '%')
                 .not('visitTime', 'is', null);
 
             if (!error && data) {
@@ -172,6 +166,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                 .select('*')
                 .gte('dcrDate', new Date().toISOString().split('T')[0])
                 .neq('quality_flag', 'NORMAL')
+                .ilike('empName', mrName ? `%${mrName}%` : '%')
                 .order('visit_seconds');
 
             if (!visitsError && visits) {
@@ -201,6 +196,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                     "dcrDate"
                 `)
                 .eq('dcrDate', new Date().toISOString().split('T')[0])
+                .ilike('empName', mrName ? `%${mrName}%` : '%')
                 .not('visitTime', 'is', null);
 
             if (!error && data) {
@@ -341,7 +337,9 @@ const VisitQualityMonitor = ({ mrName }) => {
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
                     <p className="text-gray-600 text-lg font-medium">Loading visit quality data...</p>
-                    <p className="text-gray-500 text-sm mt-2">Analyzing visit patterns and quality metrics</p>
+                    <p className="text-gray-500 text-sm mt-2">
+                        {mrName ? `Analyzing visit patterns for ${mrName}` : 'Analyzing visit patterns across all MRs'}
+                    </p>
                 </div>
             </div>
         );
@@ -380,14 +378,27 @@ const VisitQualityMonitor = ({ mrName }) => {
                                 {mrName && (
                                     <span className="text-lg font-normal text-purple-600">- {mrName}</span>
                                 )}
+                                {!mrName && (
+                                    <span className="text-lg font-normal text-blue-600">- All MRs</span>
+                                )}
                             </h1>
                             <p className="text-gray-600 mt-2">
                                 Real-time visit quality analysis and performance tracking
-                                {mrName && <span className="font-medium"> for {mrName}</span>}
+                                {mrName ? <span className="font-medium"> for {mrName}</span> : <span className="font-medium"> across all MRs</span>}
                             </p>
-                            <div className="mt-3 inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-semibold">
-                                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                                Live Quality Monitoring • Last Updated: {new Date().toLocaleTimeString()}
+                            <div className="mt-3 flex items-center gap-4">
+                                <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-semibold">
+                                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                                    Live Quality Monitoring • Last Updated: {new Date().toLocaleTimeString()}
+                                </div>
+                                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                                    <span>📊</span>
+                                    Using Quality Analytics
+                                </div>
+                                <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                                    <span>📅</span>
+                                    {dateRange === 'today' ? 'Today' : dateRange === 'yesterday' ? 'Yesterday' : 'This Week'}
+                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -500,14 +511,19 @@ const VisitQualityMonitor = ({ mrName }) => {
                         <h2 className="text-xl font-bold flex items-center gap-3">
                             ⚡ Quality Alerts ({filteredAlerts.length})
                         </h2>
-                        <p className="text-purple-100 mt-2">Visits with quality scores below acceptable thresholds</p>
+                        <p className="text-purple-100 mt-2">
+                            Visits with quality scores below acceptable thresholds
+                            {mrName && <span> for {mrName}</span>}
+                        </p>
                     </div>
                     <div className="p-6">
                         {filteredAlerts.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <div className="text-4xl mb-4">✨</div>
                                 <p className="text-lg">No quality alerts found!</p>
-                                <p className="text-sm mt-2">All visits meet quality standards for the selected filter.</p>
+                                <p className="text-sm mt-2">
+                                    {mrName ? `${mrName} meets quality standards` : 'All visits meet quality standards for the selected filter.'}
+                                </p>
                             </div>
                         ) : (
                             <div className="grid gap-4 max-h-96 overflow-y-auto">
@@ -572,7 +588,10 @@ const VisitQualityMonitor = ({ mrName }) => {
                         <h2 className="text-xl font-bold flex items-center gap-3">
                             🏆 MR Quality Performance Today
                         </h2>
-                        <p className="text-green-100 mt-2">Daily quality rankings and performance metrics</p>
+                        <p className="text-green-100 mt-2">
+                            Daily quality rankings and performance metrics
+                            {mrName && <span> - Showing data for {mrName}</span>}
+                        </p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
@@ -593,6 +612,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                                         <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                                             <div className="text-4xl mb-4">📊</div>
                                             <p>No performance data available for today.</p>
+                                            {mrName && <p className="text-sm mt-2">No visits found for {mrName} today.</p>}
                                         </td>
                                     </tr>
                                 ) : (
@@ -649,14 +669,19 @@ const VisitQualityMonitor = ({ mrName }) => {
                         <h2 className="text-xl font-bold flex items-center gap-3">
                             🔍 Suspicious Visits Today ({suspiciousVisits.length})
                         </h2>
-                        <p className="text-orange-100 mt-2">Visits flagged for unusual patterns or timing issues</p>
+                        <p className="text-orange-100 mt-2">
+                            Visits flagged for unusual patterns or timing issues
+                            {mrName && <span> for {mrName}</span>}
+                        </p>
                     </div>
                     <div className="p-6">
                         {suspiciousVisits.length === 0 ? (
                             <div className="text-center py-12 text-gray-500">
                                 <div className="text-4xl mb-4">✅</div>
                                 <p className="text-lg">No suspicious visits detected today!</p>
-                                <p className="text-sm mt-2">All visits appear normal and follow expected patterns.</p>
+                                <p className="text-sm mt-2">
+                                    {mrName ? `${mrName}'s visits appear normal and follow expected patterns.` : 'All visits appear normal and follow expected patterns.'}
+                                </p>
                             </div>
                         ) : (
                             <div className="grid gap-4 max-h-96 overflow-y-auto">
