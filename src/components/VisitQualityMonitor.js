@@ -9,6 +9,14 @@ const VisitQualityMonitor = ({ mrName }) => {
     const [error, setError] = useState(null);
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [dateRange, setDateRange] = useState('today');
+    const [mrNameFilter, setMrNameFilter] = useState('');
+
+    // Update mrNameFilter when mrName prop changes
+    useEffect(() => {
+        if (mrName && mrName !== mrNameFilter) {
+            setMrNameFilter(mrName);
+        }
+    }, [mrName]);
 
     useEffect(() => {
         fetchQualityData();
@@ -16,7 +24,7 @@ const VisitQualityMonitor = ({ mrName }) => {
         // Auto-refresh every 30 minutes
         const interval = setInterval(fetchQualityData, 1800000);
         return () => clearInterval(interval);
-    }, [mrName, dateRange]);
+    }, [mrName, dateRange, mrNameFilter]);
 
     const fetchQualityData = async () => {
         try {
@@ -45,6 +53,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                 .select('*')
                 .eq('dcrDate', new Date().toISOString().split('T')[0])
                 .lt('quality_score', 30)
+                .ilike('empName', mrNameFilter ? `%${mrNameFilter}%` : '%')
                 .order('quality_score', { ascending: true });
 
             if (!alertsError && alerts) {
@@ -75,6 +84,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                     "dcrDate"
                 `)
                 .eq('dcrDate', new Date().toISOString().split('T')[0])
+                .ilike('empName', mrNameFilter ? `%${mrNameFilter}%` : '%')
                 .not('visitTime', 'is', null);
 
             if (!error && data) {
@@ -367,8 +377,14 @@ const VisitQualityMonitor = ({ mrName }) => {
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
                                 📊 Visit Quality Monitor
+                                {mrName && (
+                                    <span className="text-lg font-normal text-purple-600">- {mrName}</span>
+                                )}
                             </h1>
-                            <p className="text-gray-600 mt-2">Real-time visit quality analysis and performance tracking</p>
+                            <p className="text-gray-600 mt-2">
+                                Real-time visit quality analysis and performance tracking
+                                {mrName && <span className="font-medium"> for {mrName}</span>}
+                            </p>
                             <div className="mt-3 inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-semibold">
                                 <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
                                 Live Quality Monitoring • Last Updated: {new Date().toLocaleTimeString()}
