@@ -10,6 +10,9 @@ import './index.css';
 function App() {
   const [activeTab, setActiveTab] = useState('emergency');
   const [selectedMR, setSelectedMR] = useState(null);
+  const [selectedMRName, setSelectedMRName] = useState('ALL_MRS'); // Add state for MR name filter
+  const [nbdDateRange, setNbdDateRange] = useState(30); // NBD specific filters
+  const [nbdPerformanceFilter, setNbdPerformanceFilter] = useState('all');
 
   const { 
     mrList, 
@@ -101,9 +104,15 @@ function App() {
   };
 
   const handleMRChange = (e) => {
-    const selectedMRName = e.target.value;
-    const mrData = getMRByName(selectedMRName);
-    setSelectedMR(mrData);
+    const selectedValue = e.target.value;
+    setSelectedMRName(selectedValue);
+    
+    if (selectedValue === 'ALL_MRS') {
+      setSelectedMR(null);
+    } else {
+      const mrData = getMRByName(selectedValue);
+      setSelectedMR(mrData);
+    }
   };
 
   const renderTabContent = () => {
@@ -111,9 +120,13 @@ function App() {
       case 'emergency':
         return <EmergencyDashboard />;
       case 'quality':
-        return <VisitQualityMonitor mrName={selectedMR?.name} />;
+        return <VisitQualityMonitor mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} />;
       case 'nbd':
-        return <NBDPerformanceDashboard mrName={selectedMR?.name} />;
+        return <NBDPerformanceDashboard 
+          mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
+          dateRange={nbdDateRange}
+          performanceFilter={nbdPerformanceFilter}
+        />;
       case 'routes':
         return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'geocoding':
@@ -390,11 +403,12 @@ function App() {
               <div className="flex items-center gap-3">
                 <label className="text-blue-100 font-medium text-sm">Active MR:</label>
                 <select 
-                  value={selectedMR?.name || ''} 
+                  value={selectedMRName} 
                   onChange={handleMRChange}
                   className="bg-white text-gray-800 px-4 py-2 rounded-lg border-0 font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-48 text-sm"
                   disabled={mrList.length === 0}
                 >
+                  <option value="ALL_MRS">All MRs ({totalMRs})</option>
                   {mrList.length === 0 ? (
                     <option value="">No MRs Available</option>
                   ) : (
@@ -407,6 +421,37 @@ function App() {
                 </select>
               </div>
               
+              {/* NBD Specific Filters - Show only when NBD tab is active */}
+              {activeTab === 'nbd' && (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-blue-100 font-medium text-sm">Date Range:</label>
+                    <select 
+                      value={nbdDateRange} 
+                      onChange={(e) => setNbdDateRange(e.target.value)}
+                      className="bg-white text-gray-800 px-3 py-2 rounded-lg border-0 font-medium shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                    >
+                      <option value={7}>Last 7 days</option>
+                      <option value={30}>Last 30 days</option>
+                      <option value={90}>Last 90 days</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-blue-100 font-medium text-sm">Performance:</label>
+                    <select 
+                      value={nbdPerformanceFilter} 
+                      onChange={(e) => setNbdPerformanceFilter(e.target.value)}
+                      className="bg-white text-gray-800 px-3 py-2 rounded-lg border-0 font-medium shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+                    >
+                      <option value="all">All Performance</option>
+                      <option value="good">Good Performers</option>
+                      <option value="insufficient">Insufficient Focus</option>
+                      <option value="poor">Poor Conversion</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              
               {/* Stats */}
               <div className="text-right">
                 <div className="text-sm text-blue-100">Total Active MRs</div>
@@ -416,7 +461,7 @@ function App() {
           </div>
           
           {/* MR Details */}
-          {selectedMR && (
+          {selectedMR && selectedMRName !== 'ALL_MRS' && (
             <div className="mt-4 flex items-center gap-6 text-sm">
               <div className="bg-blue-500 bg-opacity-30 px-3 py-1 rounded-full border border-blue-400">
                 <span className="text-blue-100">Territory: </span>
@@ -437,6 +482,20 @@ function App() {
                 <span className="font-semibold text-white">
                   {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}
                 </span>
+              </div>
+            </div>
+          )}
+          
+          {/* All MRs Summary */}
+          {selectedMRName === 'ALL_MRS' && (
+            <div className="mt-4 flex items-center gap-6 text-sm">
+              <div className="bg-blue-500 bg-opacity-30 px-3 py-1 rounded-full border border-blue-400">
+                <span className="text-blue-100">Viewing: </span>
+                <span className="font-semibold text-white">All {totalMRs} Active MRs</span>
+              </div>
+              <div className="bg-green-500 bg-opacity-30 px-3 py-1 rounded-full border border-green-400">
+                <span className="text-green-100">Mode: </span>
+                <span className="font-semibold text-white">Comprehensive Analysis</span>
               </div>
             </div>
           )}
@@ -488,9 +547,14 @@ function App() {
               <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
               Connected to Live Database
             </span>
-            {selectedMR && (
+            {selectedMRName !== 'ALL_MRS' && selectedMR && (
               <span className="hidden md:block text-slate-300">
                 Active MR: {selectedMR.name} ({selectedMR.employee_id})
+              </span>
+            )}
+            {selectedMRName === 'ALL_MRS' && (
+              <span className="hidden md:block text-slate-300">
+                Viewing: All {totalMRs} Active MRs
               </span>
             )}
             <span className="text-slate-400">Last Updated: {new Date().toLocaleTimeString()}</span>
