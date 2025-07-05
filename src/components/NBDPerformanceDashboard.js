@@ -1,27 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const NBDPerformanceDashboard = ({ mrName }) => {
+const NBDPerformanceDashboard = ({ mrName, dateRange: propDateRange, performanceFilter: propPerformanceFilter }) => {
     const [nbdData, setNbdData] = useState([]);
     const [allMRs, setAllMRs] = useState([]);
-    const [mrFilter, setMrFilter] = useState('');
-    const [dateRange, setDateRange] = useState(30);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [selectedFilter, setSelectedFilter] = useState('all');
     const [retryCount, setRetryCount] = useState(0);
     const [isRetrying, setIsRetrying] = useState(false);
+
+    // Use props or defaults
+    const dateRange = propDateRange || 30;
+    const selectedFilter = propPerformanceFilter || 'all';
 
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 2000; // 2 seconds
     const REQUEST_TIMEOUT = 10000; // 10 seconds
-
-    // Update mrFilter when mrName prop changes
-    useEffect(() => {
-        if (mrName && mrName !== mrFilter) {
-            setMrFilter(mrName);
-        }
-    }, [mrName]);
 
     useEffect(() => {
         fetchNBDPerformance();
@@ -29,7 +23,7 @@ const NBDPerformanceDashboard = ({ mrName }) => {
         // Auto-refresh every 30 minutes
         const interval = setInterval(fetchNBDPerformance, 1800000);
         return () => clearInterval(interval);
-    }, [mrFilter, dateRange]);
+    }, [mrName, dateRange, selectedFilter]);
 
     const fetchNBDPerformance = async () => {
         setRetryCount(0);
@@ -51,7 +45,7 @@ const NBDPerformanceDashboard = ({ mrName }) => {
             const { data, error: nbdError } = await supabase
                 .from('nbd_performance_analytics')
                 .select('*')
-                .ilike('mr_name', mrFilter ? `%${mrFilter}%` : '%')
+                .ilike('mr_name', mrName ? `%${mrName}%` : '%')
                 .order('nbd_conversion_rate', { ascending: false })
                 .abortSignal(controller.signal);
 
@@ -205,12 +199,15 @@ const NBDPerformanceDashboard = ({ mrName }) => {
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
                                 📈 NBD Performance Analytics
                                 {mrName && (
-                                    <span className="text-lg font-normal text-blue-600">- {mrName}</span>
+                                    <span className="text-lg font-normal text-green-600">- {mrName}</span>
+                                )}
+                                {!mrName && (
+                                    <span className="text-lg font-normal text-blue-600">- All MRs</span>
                                 )}
                             </h1>
                             <p className="text-gray-600 mt-2">
                                 New Business Development tracking and conversion metrics
-                                {mrName && <span className="font-medium"> for {mrName}</span>}
+                                {mrName ? <span className="font-medium"> for {mrName}</span> : <span className="font-medium"> across all MRs</span>}
                             </p>
                             <div className="mt-3 flex items-center gap-4">
                                 <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
@@ -220,6 +217,16 @@ const NBDPerformanceDashboard = ({ mrName }) => {
                                 <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
                                     <span>📊</span>
                                     Using NBD Analytics View
+                                </div>
+                                <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm">
+                                    <span>📅</span>
+                                    Last {dateRange} days
+                                </div>
+                                <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
+                                    <span>🎯</span>
+                                    {selectedFilter === 'all' ? 'All Performance' : 
+                                     selectedFilter === 'good' ? 'Good Performers' :
+                                     selectedFilter === 'insufficient' ? 'Insufficient Focus' : 'Poor Conversion'}
                                 </div>
                             </div>
                         </div>
