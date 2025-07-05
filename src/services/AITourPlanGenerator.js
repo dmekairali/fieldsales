@@ -447,13 +447,49 @@ class AITourPlanGenerator {
         const topCustomers = context.customers.slice(0, 15).map((customer, index) => {
             const tierScore = customer.tier_score?.toFixed(1) || 'N/A';
             const tierLevel = customer.tier_level || 'TIER_4_PROSPECT';
-            return `${index + 1}. ${customer.customer_name} (${tierLevel}) - Score: ${tierScore}`;
+            const urgencyScore = customer.urgency_score?.toFixed(1) || 'N/A';
+            const daysSince = customer.days_since_last_visit || 'Unknown';
+            return `${index + 1}. ${customer.customer_name} (${tierLevel}) - Score: ${tierScore}, Urgency: ${urgencyScore}, Days since visit: ${daysSince}`;
         }).join('\n');
 
-        // Territory insights
-        const topTerritories = context.territories.slice(0, 5).map(territory => 
-            `${territory.area_name}: ${territory.visits} visits, ₹${territory.sales.toLocaleString()} sales (${territory.conversion_rate.toFixed(1)}% conversion)`
-        ).join('\n');
+        // Territory insights from pre-calculated data
+        const territoryInsights = context.customers
+            .filter(c => c.territory)
+            .reduce((acc, customer) => {
+                const territory = customer.territory;
+                if (!acc[territory]) {
+                    acc[territory] = { count: 0, totalScore: 0, totalSales: 0 };
+                }
+                acc[territory].count++;
+                acc[territory].totalScore += customer.tier_score || 0;
+                acc[territory].totalSales += customer.total_sales_90d || 0;
+                return acc;
+            }, {});
+
+        const topTerritories = Object.entries(territoryInsights)
+            .map(([territory, data]) => ({
+                territory,
+                ...data,
+                avgScore: data.totalScore / data.count
+            }))
+            .sort((a, b) => b.avgScore - a.avgScore)
+            .slice(0, 5)
+            .map(t => `${t.territory}: ${t.count} customers, Avg Score: ${t.avgScore.toFixed(1)}, Total Sales: ₹${t.totalSales.toLocaleString()}`)
+            .join('\n');
+
+        // Enhanced performance context
+        const performanceContext = `
+Recent Performance (Last 30 days):
+- Average visit quality: ${context.performance.avg_quality?.toFixed(1) || 'N/A'} (${context.performance.quality_grade || 'N/A'})
+- Total visits: ${context.performance.total_visits || 0}
+- Total sales: ₹${context.performance.total_sales?.toLocaleString() || 0}
+- Conversion rate: ${context.performance.conversion_rate?.toFixed(1) || 0}%
+- Average sales per visit: ₹${context.performance.avg_sales_per_visit || 0}
+
+Tier-Based Performance:
+- Average tier score: ${(context.customers.reduce((sum, c) => sum + (c.tier_score || 0), 0) / context.customers.length).toFixed(1)}
+- High-value customers (Tier 1+2): ${(tierSummary['TIER_1_CHAMPION'] || 0) + (tierSummary['TIER_2_PERFORMER'] || 0)}
+- Development opportunities (Tier 3+4): ${(tierSummary['TIER_3_DEVELOPER'] || 0) + (tierSummary['TIER_4_PROSPECT'] || 0)}`;
 
         const prompt = `You are an AI Tour Planning Assistant for Kairali Ayurvedic products. Generate an optimal daily tour plan for ${mrName} on ${date}.
 
@@ -461,28 +497,30 @@ TERRITORY CONTEXT:
 ${customersSummary}
 ${tierBreakdown}
 
-Recent Performance (Last 30 days):
-- Average visit quality: ${context.performance.avg_quality?.toFixed(1) || 'N/A'} (${context.performance.quality_grade})
-- Total visits: ${context.performance.total_visits || 0}
-- Total sales: ₹${context.performance.total_sales?.toLocaleString() || 0}
-- Conversion rate: ${context.performance.conversion_rate?.toFixed(1) || 0}%
-- Average sales per visit: ₹${context.performance.avg_sales_per_visit || 0}
+${performanceContext}
 
 TOP PERFORMING TERRITORIES:
 ${topTerritories || 'No territory data available'}
 
-CUSTOMER PRIORITIES (Top 15):
+CUSTOMER PRIORITIES (Top 15 with Intelligence):
 ${topCustomers}
 
-CONSTRAINTS:
-- Minimum 11 visits per day
-- Maximum 15 visits per day  
-- At least 40% visits should be NBD-focused (new customers or prospects)
-- Visit duration: Tier 1 (30+ min), Tier 2 (20+ min), Tier 3 (15+ min), Tier 4 (10+ min)
+ADVANCED CONSTRAINTS & INTELLIGENCE:
+- Minimum 11 visits per day, Maximum 15 visits per day
+- At least 40% visits should be NBD-focused (TIER_3_DEVELOPER and TIER_4_PROSPECT customers)
+- Visit duration based on tier: Tier 1 (30+ min), Tier 2 (20+ min), Tier 3 (15+ min), Tier 4 (10+ min)
 - Maximum travel time: 30% of working day
-- Prioritize high churn risk customers
-- Group geographically close customers
-- Consider territory performance data for area selection
+- Prioritize customers with high urgency scores (>75)
+- Prioritize customers not visited in 30+ days
+- Group geographically close customers (same territory/area)
+- Balance high-value retention (Tier 1+2) with business development (Tier 3+4)
+- Consider conversion rates and sales potential from historical data
+
+TIER-BASED VISIT STRATEGY:
+- TIER_1_CHAMPION: Relationship maintenance, upselling, retention focus
+- TIER_2_PERFORMER: Order generation, loyalty building, growth opportunities  
+- TIER_3_DEVELOPER: Development focus, education, sample distribution, conversion
+- TIER_4_PROSPECT: New business development, introduction, market penetration
 
 OUTPUT FORMAT (JSON only, no markdown):
 {
@@ -490,11 +528,12 @@ OUTPUT FORMAT (JSON only, no markdown):
         {
             "time_slot": "09:00-09:30",
             "customer_name": "Customer Name",
-            "customer_type": "Doctor/Retailer",
+            "customer_type": "Doctor/Retailer/Stockist",
             "tier_level": "TIER_1_CHAMPION",
-            "visit_purpose": "Relationship building/Order generation/Sample distribution",
+            "visit_purpose": "Relationship building/Order generation/Sample distribution/Market development",
             "expected_duration": 30,
-            "priority_reason": "High churn risk / High value / New customer"
+            "priority_reason": "High tier score/High urgency/Long overdue/New business opportunity",
+            "expected_outcome": "Order/Relationship/Education/Introduction"
         }
     ],
     "plan_summary": {
@@ -505,16 +544,20 @@ OUTPUT FORMAT (JSON only, no markdown):
         "tier_4_customers": 2,
         "nbd_focused_visits": 5,
         "estimated_revenue": 25000,
-        "route_efficiency": "High"
+        "route_efficiency": "High",
+        "avg_tier_score": 65.5,
+        "high_urgency_visits": 4
     },
     "key_objectives": [
-        "Focus on high-value customers",
-        "Address churn risks",
-        "Geographic optimization"
+        "Focus on high-value tier 1 customers for retention",
+        "Address high urgency customers to prevent churn", 
+        "Develop tier 3 customers for growth",
+        "Penetrate new markets with tier 4 prospects",
+        "Geographic optimization for efficiency"
     ]
 }
 
-Generate the optimal tour plan considering all constraints and objectives. Return only valid JSON.`;
+Generate the optimal tour plan considering all constraints, tier intelligence, and objectives. Return only valid JSON.`;
 
         return prompt;
     }
@@ -875,7 +918,7 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
     }
 
     /**
-     * Clear cache with optional selective clearing
+     * Clear cache with optional selective clearing by MR name
      */
     clearCache(pattern = null) {
         if (!pattern) {
@@ -894,7 +937,7 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
     }
 
     /**
-     * Get cache statistics
+     * Get comprehensive cache statistics
      */
     getCacheStats() {
         const entries = Array.from(this.cache.entries());
@@ -906,9 +949,127 @@ Generate the optimal tour plan considering all constraints and objectives. Retur
             expired_entries: entries.filter(([_, value]) => now - value.timestamp > this.cacheExpiry).length,
             memory_usage_estimate: JSON.stringify(entries).length,
             oldest_entry: entries.length > 0 ? Math.min(...entries.map(([_, value]) => value.timestamp)) : null,
-            newest_entry: entries.length > 0 ? Math.max(...entries.map(([_, value]) => value.timestamp)) : null
+            newest_entry: entries.length > 0 ? Math.max(...entries.map(([_, value]) => value.timestamp)) : null,
+            mr_specific_entries: entries.filter(([key]) => key.includes('territory_context_')).length
         };
     }
+
+    /**
+     * Initialize or refresh tier system for the application
+     */
+    async initializeTierSystem() {
+        try {
+            console.log('🚀 Initializing tier system...');
+            
+            // Check if system needs initialization
+            const health = await this.checkSystemHealth();
+            
+            if (health.system_health === 'needs_tier_calculation') {
+                console.log('⚙️ Tier system needs initialization, triggering global refresh...');
+                
+                const { data, error } = await supabase.rpc('refresh_all_customer_tiers');
+                
+                if (error) {
+                    console.error('❌ Failed to initialize tier system:', error);
+                    return {
+                        success: false,
+                        error: error.message,
+                        recommendation: 'Run tier calculation manually in database'
+                    };
+                }
+                
+                console.log(`✅ Initialized tiers for ${data[0]?.total_updated || 0} customers`);
+                
+                // Clear all cache after initialization
+                this.clearCache();
+                
+                return {
+                    success: true,
+                    customers_updated: data[0]?.total_updated || 0,
+                    processing_time: data[0]?.processing_time,
+                    message: 'Tier system initialized successfully'
+                };
+            } else {
+                console.log('✅ Tier system already initialized and healthy');
+                return {
+                    success: true,
+                    message: 'Tier system already initialized',
+                    health: health
+                };
+            }
+        } catch (error) {
+            console.error('❌ Tier system initialization failed:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Get diagnostic information for troubleshooting
+     */
+    async getDiagnostics(mrName = null) {
+        try {
+            const diagnostics = {
+                timestamp: new Date().toISOString(),
+                service_info: {
+                    openai_configured: !!this.openaiApiKey,
+                    cache_size: this.cache.size,
+                    request_stats: this.getServiceStats()
+                }
+            };
+
+            // System health check
+            diagnostics.system_health = await this.checkSystemHealth();
+
+            // MR-specific diagnostics
+            if (mrName) {
+                try {
+                    // Test customer data fetch
+                    const customerTest = await supabase.rpc('get_mr_customers_for_ai', { p_mr_name: mrName });
+                    diagnostics.mr_test = {
+                        mr_name: mrName,
+                        customers_found: customerTest.data?.length || 0,
+                        rpc_success: !customerTest.error,
+                        error: customerTest.error?.message || null
+                    };
+
+                    // Get MR summary
+                    const summaryTest = await supabase.rpc('get_mr_tier_summary', { p_mr_name: mrName });
+                    diagnostics.mr_summary = summaryTest.data?.[0] || null;
+                } catch (mrError) {
+                    diagnostics.mr_test = {
+                        mr_name: mrName,
+                        error: mrError.message
+                    };
+                }
+            }
+
+            // Database connectivity test
+            try {
+                const dbTest = await supabase.from('customers').select('count').limit(1);
+                diagnostics.database = {
+                    connected: !dbTest.error,
+                    error: dbTest.error?.message || null
+                };
+            } catch (dbError) {
+                diagnostics.database = {
+                    connected: false,
+                    error: dbError.message
+                };
+            }
+
+            return diagnostics;
+        } catch (error) {
+            return {
+                timestamp: new Date().toISOString(),
+                error: error.message,
+                system_health: 'error'
+            };
+        }
+    }
+}
 }
 
 // Export singleton instance
