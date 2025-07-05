@@ -575,10 +575,16 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                                             </td>
                                                             <td className="px-3 py-4 text-center">
                                                                 <div className="text-sm font-medium text-gray-900">
-                                                                    {customer.visit_start_time} - {customer.visit_end_time}
+                                                                    {customer.visit_start_time && customer.visit_end_time ? (
+                                                                        <>
+                                                                            {customer.visit_start_time} - {customer.visit_end_time}
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-gray-400">-</span>
+                                                                    )}
                                                                 </div>
                                                                 <div className="text-xs text-gray-500">
-                                                                    ({customer.estimated_visit_time}m visit)
+                                                                    ({customer.estimated_visit_time || 35}m visit)
                                                                 </div>
                                                             </td>
                                                             <td className="px-3 py-4 text-center">
