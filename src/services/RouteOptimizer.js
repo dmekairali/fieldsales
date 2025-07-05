@@ -1,10 +1,141 @@
-// src/services/RouteOptimizer.js - Clean production version
+// src/services/RouteOptimizer.js - Updated with Strict Validation
 import { supabase } from '../supabaseClient';
 
 class RouteOptimizer {
     constructor() {
         this.cache = new Map();
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
+    }
+
+    // STRICT DATA VALIDATION - No fallbacks, clear errors
+    validateCustomerData(customer, mrName) {
+        const errors = [];
+        
+        // Check for required fields
+        if (!customer.customer_code) errors.push('Missing customer_code');
+        if (!customer.customer_name) errors.push('Missing customer_name');
+        
+        // Check coordinates - must be valid numbers
+        if (customer.latitude === null || customer.latitude === undefined) {
+            errors.push('latitude is null/undefined');
+        } else {
+            const lat = parseFloat(customer.latitude);
+            if (isNaN(lat) || lat === 0) errors.push(`Invalid latitude: ${customer.latitude}`);
+            if (lat < -90 || lat > 90) errors.push(`Latitude out of range: ${lat}`);
+        }
+        
+        if (customer.longitude === null || customer.longitude === undefined) {
+            errors.push('longitude is null/undefined');
+        } else {
+            const lng = parseFloat(customer.longitude);
+            if (isNaN(lng) || lng === 0) errors.push(`Invalid longitude: ${customer.longitude}`);
+            if (lng < -180 || lng > 180) errors.push(`Longitude out of range: ${lng}`);
+        }
+        
+        // Check performance metrics - must be valid numbers
+        if (customer.total_priority_score === null || customer.total_priority_score === undefined) {
+            errors.push('total_priority_score is null/undefined');
+        } else {
+            const priority = parseFloat(customer.total_priority_score);
+            if (isNaN(priority)) errors.push(`Invalid total_priority_score: ${customer.total_priority_score}`);
+            if (priority < 0 || priority > 100) errors.push(`Priority score out of range: ${priority}`);
+        }
+        
+        if (customer.churn_risk_score === null || customer.churn_risk_score === undefined) {
+            errors.push('churn_risk_score is null/undefined');
+        } else {
+            const churn = parseFloat(customer.churn_risk_score);
+            if (isNaN(churn)) errors.push(`Invalid churn_risk_score: ${customer.churn_risk_score}`);
+            if (churn < 0 || churn > 1) errors.push(`Churn risk out of range: ${churn}`);
+        }
+        
+        if (customer.order_probability === null || customer.order_probability === undefined) {
+            errors.push('order_probability is null/undefined');
+        } else {
+            const prob = parseFloat(customer.order_probability);
+            if (isNaN(prob)) errors.push(`Invalid order_probability: ${customer.order_probability}`);
+            if (prob < 0 || prob > 1) errors.push(`Order probability out of range: ${prob}`);
+        }
+        
+        if (customer.predicted_order_value === null || customer.predicted_order_value === undefined) {
+            errors.push('predicted_order_value is null/undefined');
+        } else {
+            const value = parseFloat(customer.predicted_order_value);
+            if (isNaN(value)) errors.push(`Invalid predicted_order_value: ${customer.predicted_order_value}`);
+            if (value < 0) errors.push(`Negative predicted value: ${value}`);
+        }
+        
+        // Check visit data
+        if (customer.days_since_last_visit === null || customer.days_since_last_visit === undefined) {
+            errors.push('days_since_last_visit is null/undefined');
+        } else {
+            const days = parseInt(customer.days_since_last_visit);
+            if (isNaN(days)) errors.push(`Invalid days_since_last_visit: ${customer.days_since_last_visit}`);
+            if (days < 0) errors.push(`Negative days since visit: ${days}`);
+        }
+        
+        if (errors.length > 0) {
+            console.error(`❌ DATA VALIDATION FAILED for ${mrName} - Customer: ${customer.customer_name} (${customer.customer_code})`);
+            console.error(`🔍 Data Issues:`, errors);
+            console.error(`📊 Raw Data:`, {
+                latitude: customer.latitude,
+                longitude: customer.longitude,
+                total_priority_score: customer.total_priority_score,
+                churn_risk_score: customer.churn_risk_score,
+                order_probability: customer.order_probability,
+                predicted_order_value: customer.predicted_order_value,
+                days_since_last_visit: customer.days_since_last_visit
+            });
+            
+            throw new Error(`DATA VALIDATION FAILED for MR: ${mrName}, Customer: ${customer.customer_name}. Issues: ${errors.join(', ')}`);
+        }
+        
+        return true;
+    }
+
+    // Generate data quality report
+    generateDataQualityReport(customers, mrName) {
+        const report = {
+            mr_name: mrName,
+            total_customers: customers.length,
+            data_issues: [],
+            summary: {}
+        };
+        
+        let validCustomers = 0;
+        let coordinateIssues = 0;
+        let performanceIssues = 0;
+        
+        customers.forEach(customer => {
+            try {
+                this.validateCustomerData(customer, mrName);
+                validCustomers++;
+            } catch (error) {
+                const issue = {
+                    customer_code: customer.customer_code,
+                    customer_name: customer.customer_name,
+                    error: error.message
+                };
+                
+                if (error.message.includes('latitude') || error.message.includes('longitude')) {
+                    coordinateIssues++;
+                } else {
+                    performanceIssues++;
+                }
+                
+                report.data_issues.push(issue);
+            }
+        });
+        
+        report.summary = {
+            valid_customers: validCustomers,
+            coordinate_issues: coordinateIssues,
+            performance_metric_issues: performanceIssues,
+            data_quality_percentage: ((validCustomers / customers.length) * 100).toFixed(2)
+        };
+        
+        console.log(`📊 DATA QUALITY REPORT for ${mrName}:`, report);
+        return report;
     }
 
     // Get customers with performance metrics from customer_master table
@@ -51,8 +182,8 @@ class RouteOptimizer {
                 .not('total_priority_score', 'is', null);
 
             if (error) {
-                console.error('❌ Error fetching customers:', error);
-                return [];
+                console.error('❌ Database error:', error);
+                throw new Error(`Database error: ${error.message}`);
             }
 
             if (!customers || customers.length === 0) {
@@ -60,21 +191,49 @@ class RouteOptimizer {
                 return [];
             }
 
-            // Enrich with calculated urgency scores
+            // Generate data quality report
+            const qualityReport = this.generateDataQualityReport(customers, mrName);
+            
+            // If data quality is below 95%, throw error
+            if (qualityReport.summary.data_quality_percentage < 95) {
+                throw new Error(`DATA QUALITY TOO LOW for ${mrName}: ${qualityReport.summary.data_quality_percentage}% valid. Fix database first.`);
+            }
+
+            // Enrich with calculated urgency scores - STRICT VALIDATION
             const enrichedCustomers = customers.map(customer => {
-                const urgencyScore = this.calculateUrgencyScore(
-                    customer.total_priority_score,
-                    customer.churn_risk_score,
-                    customer.days_since_last_visit
-                );
+                // STRICT VALIDATION - No fallbacks, fail fast
+                this.validateCustomerData(customer, mrName);
+                
+                // Convert to numbers - throw error if conversion fails
+                const priorityScore = parseFloat(customer.total_priority_score);
+                const churnRisk = parseFloat(customer.churn_risk_score);
+                const orderProbability = parseFloat(customer.order_probability);
+                const predictedValue = parseFloat(customer.predicted_order_value);
+                const daysSinceVisit = parseInt(customer.days_since_last_visit);
+                const latitude = parseFloat(customer.latitude);
+                const longitude = parseFloat(customer.longitude);
+                
+                // Double-check conversions succeeded
+                if (isNaN(priorityScore) || isNaN(churnRisk) || isNaN(orderProbability) || 
+                    isNaN(predictedValue) || isNaN(daysSinceVisit) || isNaN(latitude) || isNaN(longitude)) {
+                    throw new Error(`CONVERSION FAILED for ${customer.customer_name}: Some values could not be converted to numbers`);
+                }
+                
+                const urgencyScore = this.calculateUrgencyScore(priorityScore, churnRisk, daysSinceVisit);
+                
+                console.log(`✅ Validated ${customer.customer_name}: P=${priorityScore}, C=${churnRisk}, U=${urgencyScore}`);
 
                 return {
                     ...customer,
-                    priority_score: customer.total_priority_score,
-                    churn_risk: customer.churn_risk_score,
-                    order_probability: customer.order_probability,
-                    predicted_value: customer.predicted_order_value,
+                    priority_score: priorityScore,
+                    churn_risk: churnRisk,
+                    order_probability: orderProbability,
+                    predicted_value: predictedValue,
+                    predicted_order_value: predictedValue,
                     urgency_score: urgencyScore,
+                    latitude: latitude,
+                    longitude: longitude,
+                    days_since_last_visit: daysSinceVisit,
                     route_position: null,
                     visited_in_route: false
                 };
@@ -86,17 +245,28 @@ class RouteOptimizer {
                 timestamp: Date.now()
             });
 
-            console.log(`✅ Loaded ${enrichedCustomers.length} customers for ${mrName}`);
+            console.log(`✅ Loaded ${enrichedCustomers.length} VALIDATED customers for ${mrName}`);
             return enrichedCustomers;
 
         } catch (error) {
-            console.error('❌ Database error:', error);
-            return [];
+            console.error('❌ STRICT VALIDATION FAILED:', error);
+            throw error; // Re-throw to force fixing the issue
         }
     }
 
-    // Calculate urgency score
+    // Calculate urgency score - STRICT VERSION
     calculateUrgencyScore(priorityScore, churnRisk, daysSinceVisit) {
+        // No fallbacks - values must be valid numbers
+        if (typeof priorityScore !== 'number' || isNaN(priorityScore)) {
+            throw new Error(`Invalid priorityScore for urgency calculation: ${priorityScore}`);
+        }
+        if (typeof churnRisk !== 'number' || isNaN(churnRisk)) {
+            throw new Error(`Invalid churnRisk for urgency calculation: ${churnRisk}`);
+        }
+        if (typeof daysSinceVisit !== 'number' || isNaN(daysSinceVisit)) {
+            throw new Error(`Invalid daysSinceVisit for urgency calculation: ${daysSinceVisit}`);
+        }
+        
         let urgency = priorityScore * 0.6;
         urgency += churnRisk * 30;
         
@@ -105,7 +275,8 @@ class RouteOptimizer {
         else if (daysSinceVisit > 30) urgency += 10;
         else if (daysSinceVisit > 14) urgency += 5;
         
-        return Math.min(Math.max(urgency, 10), 100);
+        const finalScore = Math.min(Math.max(urgency, 10), 100);
+        return finalScore;
     }
 
     // Distance calculation using Haversine formula
@@ -146,7 +317,7 @@ class RouteOptimizer {
             return this.createEmptyRoute();
         }
 
-        // Validate customers
+        // Validate customers have required fields for routing
         const validCustomers = customers.filter(c => 
             c.latitude && c.longitude && 
             c.priority_score !== undefined &&
@@ -154,7 +325,10 @@ class RouteOptimizer {
             !isNaN(parseFloat(c.latitude)) && !isNaN(parseFloat(c.longitude))
         );
 
+        console.log(`📊 Valid customers for routing: ${validCustomers.length}/${customers.length}`);
+
         if (validCustomers.length === 0) {
+            console.warn(`⚠️ No valid customers found for routing`);
             return this.createEmptyRoute();
         }
 
@@ -162,6 +336,7 @@ class RouteOptimizer {
         const selectedCustomers = this.selectOptimalCustomers(validCustomers, maxVisits);
         
         if (selectedCustomers.length === 0) {
+            console.warn(`⚠️ No customers selected after optimization`);
             return this.createEmptyRoute();
         }
 
@@ -179,32 +354,66 @@ class RouteOptimizer {
         };
     }
 
-    // Select optimal customers using performance metrics
+    // Select optimal customers using performance metrics - WITH DETAILED LOGGING
     selectOptimalCustomers(customers, maxVisits) {
-        const highPriority = customers.filter(c => c.priority_score >= 80)
-            .sort((a, b) => b.urgency_score - a.urgency_score);
+        console.log(`🔍 Selecting customers from ${customers.length} available`);
         
-        const mediumUrgent = customers.filter(c => 
-            c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score >= 70
-        ).sort((a, b) => b.urgency_score - a.urgency_score);
+        const highPriority = customers.filter(c => {
+            const passes = c.priority_score >= 80;
+            if (passes) console.log(`✅ ${c.customer_name} in HIGH PRIORITY: ${c.priority_score}`);
+            return passes;
+        });
         
-        const highChurnRisk = customers.filter(c => 
-            c.churn_risk > 0.7 && c.priority_score >= 40
-        ).sort((a, b) => b.urgency_score - a.urgency_score);
+        const mediumUrgent = customers.filter(c => {
+            const passes = c.priority_score >= 60 && c.priority_score < 80 && c.urgency_score >= 70;
+            if (c.priority_score >= 60 && c.priority_score < 80) {
+                if (passes) {
+                    console.log(`✅ ${c.customer_name} in MEDIUM URGENT: P=${c.priority_score}, U=${c.urgency_score}`);
+                } else {
+                    console.log(`❌ ${c.customer_name} failed medium urgent: urgency=${c.urgency_score} < 70`);
+                }
+            }
+            return passes;
+        });
         
-        const highRevenue = customers.filter(c => 
-            c.predicted_value > 10000 && c.order_probability > 0.2
-        ).sort((a, b) => (b.predicted_value * b.order_probability) - (a.predicted_value * a.order_probability));
+        const highChurnRisk = customers.filter(c => {
+            const passes = c.churn_risk > 0.7 && c.priority_score >= 40;
+            if (passes) console.log(`✅ ${c.customer_name} in HIGH CHURN: ${c.churn_risk}`);
+            return passes;
+        });
+        
+        const highRevenue = customers.filter(c => {
+            const passes = c.predicted_value > 10000 && c.order_probability > 0.2;
+            if (passes) console.log(`✅ ${c.customer_name} in HIGH REVENUE: ₹${c.predicted_value}, ${c.order_probability}`);
+            return passes;
+        });
+
+        console.log(`📊 Customer categories:`, {
+            total: customers.length,
+            highPriority: highPriority.length,
+            mediumUrgent: mediumUrgent.length,
+            highChurnRisk: highChurnRisk.length,
+            highRevenue: highRevenue.length
+        });
 
         const selected = [];
         const selectedCodes = new Set();
 
-        // Add customers by priority
-        [highPriority, mediumUrgent, highChurnRisk, highRevenue].forEach(group => {
-            group.forEach(customer => {
+        // Add customers by priority with detailed logging
+        const groups = [
+            { name: 'HIGH_PRIORITY', customers: highPriority },
+            { name: 'MEDIUM_URGENT', customers: mediumUrgent },
+            { name: 'HIGH_CHURN_RISK', customers: highChurnRisk },
+            { name: 'HIGH_REVENUE', customers: highRevenue }
+        ];
+
+        groups.forEach(group => {
+            console.log(`🎯 Processing ${group.name}: ${group.customers.length} customers`);
+            group.customers.forEach(customer => {
                 if (selected.length < maxVisits && !selectedCodes.has(customer.customer_code)) {
                     selected.push(customer);
                     selectedCodes.add(customer.customer_code);
+                    console.log(`✅ Added ${customer.customer_name} from ${group.name}`);
                 }
             });
         });
@@ -214,14 +423,18 @@ class RouteOptimizer {
             const remaining = customers.filter(c => !selectedCodes.has(c.customer_code))
                 .sort((a, b) => b.urgency_score - a.urgency_score);
             
+            console.log(`🔄 Filling remaining slots: ${remaining.length} candidates available`);
+            
             remaining.forEach(customer => {
                 if (selected.length < maxVisits) {
                     selected.push(customer);
                     selectedCodes.add(customer.customer_code);
+                    console.log(`✅ Added ${customer.customer_name} by urgency: ${customer.urgency_score}`);
                 }
             });
         }
 
+        console.log(`🎯 Final selection: ${selected.length} customers chosen`);
         return selected;
     }
 
@@ -337,7 +550,7 @@ class RouteOptimizer {
 
         return {
             total_customers: route.length,
-            total_distance: Math.round(totalDistance * 100) / 100, // Round to 2 decimal places
+            total_distance: Math.round(totalDistance * 100) / 100,
             total_travel_time: Math.round(totalTravelTime),
             total_visit_time: totalVisitTime,
             total_day_time: Math.round(totalTravelTime + totalVisitTime),
