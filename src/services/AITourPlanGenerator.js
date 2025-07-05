@@ -23,8 +23,8 @@ class AITourPlanGenerator {
         try {
             console.log(`🔍 Fetching territory context for MR: ${mrName}`);
             
-            // Get customer tiers with extended timeout
-            const { data: customers, error: customersError } = await supabase
+            // Get customer tiers with timeout handling
+            const customersPromise = supabase
                 .from('customer_tiers')
                 .select(`
                     customer_code,
@@ -37,8 +37,12 @@ class AITourPlanGenerator {
                     score_breakdown
                 `)
                 .eq('mr_name', mrName)
-                .order('tier_score', { ascending: false })
-                .abortSignal(AbortSignal.timeout(60000)); // 60 second timeout
+                .order('tier_score', { ascending: false });
+
+            const { data: customers, error: customersError } = await Promise.race([
+                customersPromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Customer query timeout')), 60000))
+            ]);
 
             if (customersError) {
                 console.error('❌ Error fetching customers:', customersError);
@@ -46,7 +50,7 @@ class AITourPlanGenerator {
             }
 
             // Get recent performance (last 30 days)
-            const { data: performance, error: performanceError } = await supabase
+            const performancePromise = supabase
                 .from('real_time_visit_quality')
                 .select(`
                     quality_score,
@@ -54,18 +58,21 @@ class AITourPlanGenerator {
                 `)
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('quality_score', 'is', null)
-                .abortSignal(AbortSignal.timeout(30000)); // 30 second timeout
+                .not('quality_score', 'is', null);
 
-            if (performanceError) {
-                console.warn('⚠️ Performance data error:', performanceError);
-            }
+            const { data: performance, error: performanceError } = await Promise.race([
+                performancePromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Performance query timeout')), 30000))
+            ]).catch(error => {
+                console.warn('⚠️ Performance data error:', error);
+                return { data: null, error: error };
+            });
 
             // Calculate performance metrics
             const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
 
             // Get territory efficiency from mr_visits
-            const { data: territories, error: territoriesError } = await supabase
+            const territoriesPromise = supabase
                 .from('mr_visits')
                 .select(`
                     "visitedArea",
@@ -73,12 +80,15 @@ class AITourPlanGenerator {
                 `)
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('visitedArea', 'is', null)
-                .abortSignal(AbortSignal.timeout(30000)); // 30 second timeout
+                .not('visitedArea', 'is', null);
 
-            if (territoriesError) {
-                console.warn('⚠️ Territory data error:', territoriesError);
-            }
+            const { data: territories, error: territoriesError } = await Promise.race([
+                territoriesPromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Territory query timeout')), 30000))
+            ]).catch(error => {
+                console.warn('⚠️ Territory data error:', error);
+                return { data: null, error: error };
+            });
 
             // Process territory data
             const territoryMetrics = this.processTerritoryData(territories || []);
