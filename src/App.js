@@ -6,6 +6,8 @@ import RouteOptimizationDashboard from './components/RouteOptimizationDashboard'
 import GeocodingDashboard from './components/GeocodingDashboard';
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
+import AITourPlanDashboard from './components/AITourPlanDashboard';
+
 
 function App() {
   const [activeTab, setActiveTab] = useState('emergency');
@@ -61,6 +63,14 @@ function App() {
       description: 'AI-powered route planning',
       color: 'blue',
       gradient: 'from-blue-500 to-blue-600'
+    },
+    {
+      id: 'ai-tour',
+      name: 'AI Tour Plans',
+      icon: '🤖',
+      description: 'AI-generated daily tours',
+      color: 'indigo',
+      gradient: 'from-indigo-500 to-indigo-600'
     },
     {
       id: 'analytics',
@@ -129,6 +139,8 @@ function App() {
         />;
       case 'routes':
         return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'ai-tour':
+        return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'geocoding':
         return <GeocodingDashboard />;
       case 'analytics':
