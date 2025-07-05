@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-
 import { routeOptimizer } from '../services/RouteOptimizer';
 
 const RouteOptimizationDashboard = ({ mrName, mrData }) => {
@@ -537,7 +536,6 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Priority</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Urgency</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Churn Risk</th>
-                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Visit History</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Visit Time</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Travel</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Revenue</th>
@@ -553,7 +551,26 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                                             </td>
                                                             <td className="px-4 py-4">
                                                                 <div className="font-medium text-gray-900 text-sm">{customer.customer_name}</div>
-                                                                <div className="text-xs text-gray-500">{customer.area_name}</div>
+                                                                <div className="text-xs text-gray-500 space-y-1">
+                                                                    <div>{customer.area_name}</div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span>Visits: {customer.total_visits || 0}</span>
+                                                                        <span>Orders: {customer.total_orders || 0}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        {customer.last_visit_date ? (
+                                                                            <span>Last Visit: {new Date(customer.last_visit_date).toLocaleDateString()}</span>
+                                                                        ) : (
+                                                                            <span className="text-orange-600">Prospect</span>
+                                                                        )}
+                                                                    </div>
+                                                                    {customer.last_order_date && (
+                                                                        <div>Last Order: {new Date(customer.last_order_date).toLocaleDateString()}</div>
+                                                                    )}
+                                                                    {customer.avg_order_value > 0 && (
+                                                                        <div>Avg Order: {formatCurrency(customer.avg_order_value)}</div>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                             <td className="px-3 py-4 text-center">
                                                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -601,11 +618,9 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                                                 <div className="font-semibold text-green-600 text-sm">
                                                                     {formatCurrency(customer.expected_revenue || 0)}
                                                                 </div>
-                                                                <div className="text-xs text-gray-500">
-                                                                    {Math.round((customer.order_probability || 0) * 100)}% prob
-                                                                </div>
-                                                                <div className="text-xs text-gray-400">
-                                                                    Pred: {formatCurrency(customer.predicted_order_value || customer.predicted_value || 0)}
+                                                                <div className="text-xs text-gray-500 space-y-1">
+                                                                    <div>{Math.round((customer.order_probability || 0) * 100)}% prob</div>
+                                                                    <div>Potential: {formatCurrency(customer.predicted_order_value || customer.predicted_value || 0)}</div>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -637,14 +652,18 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                         <div className="flex-1 min-w-0">
                                             <div className="font-medium text-gray-900 text-sm truncate">{customer.customer_name}</div>
                                             <div className="text-xs text-gray-500 truncate">{customer.customer_type} • {customer.area_name}</div>
+                                            <div className="text-xs text-gray-400 mt-1">
+                                                {customer.total_visits || 0} visits • {customer.total_orders || 0} orders
+                                            </div>
                                         </div>
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ml-2 ${customer.customer_segment === 'VIP' ? 'bg-purple-100 text-purple-700 border-purple-200' : 
                                             customer.customer_segment === 'HIGH_VALUE' ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                            customer.customer_segment === 'MEDIUM_VALUE' ? 'bg-green-100 text-green-700 border-green-200' :
                                             'bg-gray-100 text-gray-700 border-gray-200'}`}>
                                             {customer.customer_segment}
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                                         <div className="flex items-center justify-between">
                                             <span className="text-gray-500">Priority:</span>
                                             <span className={`px-1.5 py-0.5 rounded font-medium ${getPriorityColor(customer.priority_score)}`}>
@@ -658,8 +677,8 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-between">
-                                            <span className="text-gray-500">Revenue:</span>
-                                            <span className="font-medium text-green-600">{formatCurrency(customer.predicted_value)}</span>
+                                            <span className="text-gray-500">Potential:</span>
+                                            <span className="font-medium text-green-600">{formatCurrency(customer.predicted_order_value || customer.predicted_value || 0)}</span>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-gray-500">Risk:</span>
@@ -668,12 +687,19 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="mt-2 pt-2 border-t border-gray-100">
-                                        <div className="text-xs text-gray-500">
-                                            Last visit: {customer.days_since_last_visit < 999 
-                                                ? `${customer.days_since_last_visit} days ago`
-                                                : 'Never visited'
-                                            }
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <div className="text-xs text-gray-500 space-y-1">
+                                            {customer.last_visit_date ? (
+                                                <div>Last visit: {new Date(customer.last_visit_date).toLocaleDateString()}</div>
+                                            ) : (
+                                                <div className="text-orange-600 font-medium">Prospect customer</div>
+                                            )}
+                                            {customer.last_order_date && (
+                                                <div>Last order: {new Date(customer.last_order_date).toLocaleDateString()}</div>
+                                            )}
+                                            {customer.avg_order_value > 0 && (
+                                                <div>Avg order: {formatCurrency(customer.avg_order_value)}</div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
