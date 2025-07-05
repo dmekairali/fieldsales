@@ -286,7 +286,7 @@ class RouteOptimizer {
         return route;
     }
 
-    // Calculate route metrics
+    // Calculate route metrics with proper distance summation and debugging
     calculateRouteMetrics(route, startLocation, includeReturnTime) {
         if (!route || route.length === 0) {
             return this.createEmptyRoute();
@@ -295,32 +295,49 @@ class RouteOptimizer {
         let totalTravelTime = 0;
         let totalRevenue = 0;
         let totalDistance = 0;
+        let totalVisitTime = 0;
 
-        route.forEach(customer => {
-            totalDistance += customer.distance_from_previous || 0;
-            totalTravelTime += customer.travel_time_from_previous || 0;
+        console.log('🔍 Calculating route metrics:');
+        
+        // Sum up the actual travel distances and times from the route
+        route.forEach((customer, index) => {
+            const distance = customer.distance_from_previous || 0;
+            const travelTime = customer.travel_time_from_previous || 0;
+            const visitTime = customer.estimated_visit_time || 35;
+            
+            console.log(`  Customer ${index + 1}: ${distance.toFixed(2)}km, ${travelTime.toFixed(0)}min`);
+            
+            totalDistance += distance;
+            totalTravelTime += travelTime;
             totalRevenue += customer.expected_revenue || 0;
+            totalVisitTime += visitTime;
         });
 
+        // Add return journey if requested
+        let returnDistance = 0;
+        let returnTime = 0;
         if (includeReturnTime && startLocation && route.length > 0) {
             const lastCustomer = route[route.length - 1];
-            const returnDistance = this.calculateDistance(
+            returnDistance = this.calculateDistance(
                 lastCustomer.latitude, lastCustomer.longitude,
                 startLocation.latitude, startLocation.longitude
             );
+            returnTime = this.calculateTravelTime(returnDistance);
             totalDistance += returnDistance;
-            totalTravelTime += this.calculateTravelTime(returnDistance);
+            totalTravelTime += returnTime;
+            console.log(`  Return journey: ${returnDistance.toFixed(2)}km, ${returnTime.toFixed(0)}min`);
         }
+
+        console.log(`📊 Total calculated: ${totalDistance.toFixed(2)}km, ${totalTravelTime.toFixed(0)}min`);
 
         const avgPriority = route.reduce((sum, c) => sum + c.priority_score, 0) / route.length;
         const avgUrgency = route.reduce((sum, c) => sum + c.urgency_score, 0) / route.length;
         const avgChurnRisk = route.reduce((sum, c) => sum + c.churn_risk, 0) / route.length;
         const avgOrderProb = route.reduce((sum, c) => sum + c.order_probability, 0) / route.length;
-        const totalVisitTime = route.length * 35;
 
         return {
             total_customers: route.length,
-            total_distance: Math.round(totalDistance * 100) / 100,
+            total_distance: Math.round(totalDistance * 100) / 100, // Round to 2 decimal places
             total_travel_time: Math.round(totalTravelTime),
             total_visit_time: totalVisitTime,
             total_day_time: Math.round(totalTravelTime + totalVisitTime),
@@ -331,6 +348,8 @@ class RouteOptimizer {
             avg_order_probability: Math.round(avgOrderProb * 100) / 100,
             route_efficiency: route.length / Math.max(totalTravelTime / 60, 0.1),
             revenue_per_hour: Math.round(totalRevenue / Math.max((totalTravelTime + totalVisitTime) / 60, 0.1)),
+            return_distance: returnDistance,
+            return_time: returnTime,
             route: route
         };
     }
