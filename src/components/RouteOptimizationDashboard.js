@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { routeOptimizer } from '../services/RouteOptimizer';
 
 const RouteOptimizationDashboard = ({ mrName, mrData }) => {
@@ -536,6 +535,7 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Priority</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Urgency</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Churn Risk</th>
+                                                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Visit History</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Visit Time</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Travel</th>
                                                         <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Revenue</th>
@@ -601,6 +601,9 @@ const RouteOptimizationDashboard = ({ mrName, mrData }) => {
                                                                 </div>
                                                                 <div className="text-xs text-gray-500">
                                                                     {Math.round((customer.order_probability || 0) * 100)}% prob
+                                                                </div>
+                                                                <div className="text-xs text-gray-400">
+                                                                    Pred: {formatCurrency(customer.predicted_order_value || customer.predicted_value || 0)}
                                                                 </div>
                                                             </td>
                                                         </tr>
