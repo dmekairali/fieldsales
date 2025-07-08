@@ -6,13 +6,12 @@ class AITourPlanGenerator {
         this.cache = new Map();
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
         this.openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY;
-        this.requestCount = 0;
-        this.successCount = 0;
-        this.errorCount = 0;
     }
 
+    /**
+     * Get comprehensive territory context for AI planning
+     */
     async getTerritoryContext(mrName) {
-        const startTime = Date.now();
         const cacheKey = `territory_context_${mrName}`;
         const cached = this.cache.get(cacheKey);
         
@@ -23,228 +22,180 @@ class AITourPlanGenerator {
 
         try {
             console.log(`🔍 Fetching territory context for MR: ${mrName}`);
-            this.requestCount++;
             
-            // Get customers from pre-calculated tier system
-            let customers = [];
-            
-            // Try RPC function first
-            const rpcResult = await supabase.rpc('get_mr_customers_for_ai', { p_mr_name: mrName });
-            
-            if (rpcResult.error) {
-                console.warn('⚠️ RPC failed, using direct query:', rpcResult.error.message);
-                
-                // Fallback to direct table query
-                const directResult = await supabase
-                    .from('customer_master')
-                    .select('customer_code, customer_name, customer_type, territory, tier_score, tier_level, recommended_frequency, recommended_visit_duration, days_since_last_visit, conversion_rate_90d, total_sales_90d, score_breakdown')
-                    .eq('assigned_mr', mrName)
-                    .eq('is_active', true)
-                    .not('tier_score', 'is', null)
-                    .order('tier_score', { ascending: false })
-                    .limit(1000);
-                
-                if (directResult.error) {
-                    this.errorCount++;
-                    throw new Error('Failed to fetch customer data: ' + directResult.error.message);
-                }
-                
-                customers = directResult.data || [];
-                
-                // Add urgency scores for direct query results
-                customers = customers.map(customer => {
-                    const urgencyScore = this.calculateUrgencyScore(
-                        customer.tier_score || 0,
-                        0,
-                        customer.days_since_last_visit || 0
-                    );
-                    return Object.assign({}, customer, { urgency_score: urgencyScore });
-                });
-            } else {
-                customers = rpcResult.data || [];
+            // Get customer tiers from materialized view with auto-calculated metrics
+            const { data: customers, error: customersError } = await supabase
+                .from('customer_tier_metrics')
+                .select(`
+                    customer_code,
+                    customer_name,
+                    customer_type,
+                    territory,
+                    mr_name,
+                    area_name,
+                    city_name,
+                    pin_code,
+                    full_address,
+                    tier_score_calc,
+                    tier_level_calc,
+                    direct_sales_score_calc,
+                    visit_efficiency_score_calc,
+                    prescription_influence_score_calc,
+                    market_potential_score_calc,
+                    recommended_frequency_calc,
+                    recommended_visit_duration,
+                    total_orders_90d_calc,
+                    total_sales_90d_calc,
+                    conversion_rate_90d_calc,
+                    last_tier_calculation_calc,
+                    first_visit_date,
+                    last_visit_date,
+                    days_since_last_visit,
+                    customer_segment,
+                    status
+                `)
+                .eq('mr_name', mrName)
+                .eq('status', 'ACTIVE')
+                .order('tier_score_calc', { ascending: false });
+
+            if (customersError) {
+                console.error('❌ Error fetching customers:', customersError);
+                throw customersError;
             }
 
-            if (!customers || customers.length === 0) {
-                console.warn('⚠️ No customers found for MR:', mrName);
-                return {
-                    customers: [],
-                    performance: this.getDefaultPerformanceMetrics(),
-                    territories: [],
-                    context_meta: {
-                        fetch_time_ms: Date.now() - startTime,
-                        data_sources: ['customers_table_empty'],
-                        mr_name: mrName,
-                        total_customers: 0
-                    }
-                };
-            }
-
-            console.log(`✅ Loaded ${customers.length} customers with pre-calculated tiers`);
-
-            // Get performance data
-            let performance = [];
-            const performanceResult = await supabase
-                .from('mr_visits')
-                .select('"amountOfSale", "visitTime", "dcrDate"')
+            // Get recent performance (last 30 days)
+            const { data: performance, error: performanceError } = await supabase
+                .from('real_time_visit_quality')
+                .select(`
+                    quality_score,
+                    "amountOfSale"
+                `)
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('visitTime', 'is', null)
-                .limit(5000);
-            
-            if (!performanceResult.error && performanceResult.data) {
-                performance = performanceResult.data;
+                .not('quality_score', 'is', null);
+
+            if (performanceError) {
+                console.warn('⚠️ Performance data error:', performanceError);
             }
 
-            const performanceMetrics = this.calculatePerformanceMetrics(performance);
+            // Calculate performance metrics
+            const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
 
-            // Get territory data
-            let territories = [];
-            const territoryResult = await supabase
+            // Get territory efficiency from mr_visits
+            const { data: territories, error: territoriesError } = await supabase
                 .from('mr_visits')
-                .select('"visitedArea", "amountOfSale", "areaName"')
+                .select(`
+                    "visitedArea",
+                    "amountOfSale"
+                `)
                 .eq('empName', mrName)
                 .gte('dcrDate', this.getDateDaysAgo(30))
-                .or('"visitedArea".not.is.null,"areaName".not.is.null')
-                .limit(5000);
-            
-            if (!territoryResult.error && territoryResult.data) {
-                territories = territoryResult.data;
+                .not('visitedArea', 'is', null);
+
+            if (territoriesError) {
+                console.warn('⚠️ Territory data error:', territoriesError);
             }
 
-            const territoryMetrics = this.processTerritoryData(territories);
+            // Process territory data
+            const territoryMetrics = this.processTerritoryData(territories || []);
 
             const context = {
-                customers: customers,
+                customers: customers || [],
                 performance: performanceMetrics,
-                territories: territoryMetrics,
-                context_meta: {
-                    fetch_time_ms: Date.now() - startTime,
-                    data_sources: ['customers_pre_calculated', 'mr_visits'],
-                    mr_name: mrName,
-                    total_customers: customers.length
-                }
+                territories: territoryMetrics
             };
 
             // Cache results
             this.cache.set(cacheKey, {
                 data: context,
-                timestamp: Date.now(),
-                fetch_duration: Date.now() - startTime
+                timestamp: Date.now()
             });
 
-            this.successCount++;
-            console.log(`✅ Territory context loaded: ${customers.length} customers in ${Date.now() - startTime}ms`);
+            console.log(`✅ Territory context loaded: ${customers?.length || 0} customers`);
+            console.log(`📊 Tier distribution:`, this.getTierDistribution(customers || []));
+            
             return context;
 
         } catch (error) {
-            this.errorCount++;
             console.error('❌ Error fetching territory context:', error);
-            throw new Error('Territory context fetch failed: ' + error.message);
+            throw error;
         }
     }
 
-    calculateUrgencyScore(tierScore, churnRisk, daysSinceVisit) {
-        let urgency = (tierScore || 0) * 0.6;
-        urgency += (churnRisk || 0) * 30;
-        
-        if (daysSinceVisit > 60) urgency += 20;
-        else if (daysSinceVisit > 45) urgency += 15;
-        else if (daysSinceVisit > 30) urgency += 10;
-        else if (daysSinceVisit > 14) urgency += 5;
-        
-        return Math.min(Math.max(urgency, 10), 100);
+    /**
+     * Get tier distribution for logging
+     */
+    getTierDistribution(customers) {
+        const distribution = {};
+        customers.forEach(customer => {
+            const tier = customer.tier_level_calc || 'UNKNOWN';
+            distribution[tier] = (distribution[tier] || 0) + 1;
+        });
+        return distribution;
     }
 
+    /**
+     * Calculate performance metrics from raw data
+     */
     calculatePerformanceMetrics(performance) {
         if (!performance || performance.length === 0) {
-            return this.getDefaultPerformanceMetrics();
+            return {
+                avg_quality: 0,
+                total_visits: 0,
+                total_sales: 0,
+                converting_visits: 0,
+                conversion_rate: 0
+            };
         }
 
         const totalVisits = performance.length;
         const totalSales = performance.reduce((sum, visit) => sum + (parseFloat(visit.amountOfSale) || 0), 0);
         const convertingVisits = performance.filter(visit => (parseFloat(visit.amountOfSale) || 0) > 0).length;
-        
-        // Calculate quality based on visit duration
-        const avgQuality = performance.reduce((sum, visit) => {
-            const visitTime = visit.visitTime || '00:30:00';
-            const parts = visitTime.split(':');
-            const totalMinutes = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
-            const qualityScore = Math.min(Math.max((totalMinutes / 30) * 50, 20), 90);
-            return sum + qualityScore;
-        }, 0) / totalVisits;
+        const avgQuality = performance.reduce((sum, visit) => sum + (visit.quality_score || 0), 0) / totalVisits;
 
         return {
-            avg_quality: Math.round(avgQuality * 10) / 10,
+            avg_quality: avgQuality,
             total_visits: totalVisits,
-            total_sales: Math.round(totalSales),
+            total_sales: totalSales,
             converting_visits: convertingVisits,
-            conversion_rate: Math.round((convertingVisits / totalVisits) * 100 * 10) / 10,
-            avg_sales_per_visit: totalVisits > 0 ? Math.round(totalSales / totalVisits) : 0,
-            quality_grade: this.getQualityGrade(avgQuality)
+            conversion_rate: totalVisits > 0 ? (convertingVisits / totalVisits) * 100 : 0
         };
     }
 
-    getDefaultPerformanceMetrics() {
-        return {
-            avg_quality: 0,
-            total_visits: 0,
-            total_sales: 0,
-            converting_visits: 0,
-            conversion_rate: 0,
-            avg_sales_per_visit: 0,
-            quality_grade: 'NO_DATA'
-        };
-    }
-
-    getQualityGrade(score) {
-        if (score >= 80) return 'EXCELLENT';
-        if (score >= 60) return 'GOOD';
-        if (score >= 40) return 'AVERAGE';
-        if (score >= 20) return 'POOR';
-        return 'VERY_POOR';
-    }
-
+    /**
+     * Process territory data for efficiency metrics
+     */
     processTerritoryData(territories) {
         const territoryMap = {};
         
         territories.forEach(visit => {
-            const area = visit.visitedArea || visit.areaName;
-            if (!area) return;
-            
+            const area = visit.visitedArea;
             if (!territoryMap[area]) {
                 territoryMap[area] = {
-                    area_name: area,
+                    visitedArea: area,
                     visits: 0,
-                    sales: 0,
-                    converting_visits: 0
+                    sales: 0
                 };
             }
-            
-            const saleAmount = parseFloat(visit.amountOfSale) || 0;
             territoryMap[area].visits++;
-            territoryMap[area].sales += saleAmount;
-            
-            if (saleAmount > 0) {
-                territoryMap[area].converting_visits++;
-            }
+            territoryMap[area].sales += parseFloat(visit.amountOfSale) || 0;
         });
 
         return Object.values(territoryMap)
-            .map(territory => {
-                territory.conversion_rate = territory.visits > 0 ? (territory.converting_visits / territory.visits) * 100 : 0;
-                territory.avg_sale = territory.visits > 0 ? territory.sales / territory.visits : 0;
-                return territory;
-            })
             .sort((a, b) => b.sales - a.sales)
-            .slice(0, 15);
+            .slice(0, 10); // Top 10 areas
     }
 
+    /**
+     * Generate AI prompt for tour planning with materialized view data
+     */
     generateAIPrompt(mrName, context, date) {
-        const customersSummary = `Total customers: ${context.customers.length}`;
+        const customers = context.customers;
+        const customersSummary = `Total active customers: ${customers.length}\n`;
         const tierSummary = {};
         
-        context.customers.forEach(customer => {
-            const tier = customer.tier_level || 'TIER_4_PROSPECT';
+        customers.forEach(customer => {
+            const tier = customer.tier_level_calc || 'TIER_4_PROSPECT';
             tierSummary[tier] = (tierSummary[tier] || 0) + 1;
         });
 
@@ -253,37 +204,66 @@ class AITourPlanGenerator {
             tierBreakdown += `- ${tier}: ${count} customers\n`;
         });
 
-        const topCustomers = context.customers.slice(0, 15).map((customer, index) => {
-            const tierScore = customer.tier_score ? customer.tier_score.toFixed(1) : 'N/A';
-            const tierLevel = customer.tier_level || 'TIER_4_PROSPECT';
-            const urgencyScore = customer.urgency_score ? customer.urgency_score.toFixed(1) : 'N/A';
-            const daysSince = customer.days_since_last_visit || 'Unknown';
-            return `${index + 1}. ${customer.customer_name} (${tierLevel}) - Score: ${tierScore}, Urgency: ${urgencyScore}, Days since visit: ${daysSince}`;
+        // Calculate aggregate metrics from materialized view
+        const totalSales90d = customers.reduce((sum, c) => sum + (parseFloat(c.total_sales_90d_calc) || 0), 0);
+        const totalOrders90d = customers.reduce((sum, c) => sum + (parseInt(c.total_orders_90d_calc) || 0), 0);
+        const avgConversionRate = customers.length > 0 
+            ? customers.reduce((sum, c) => sum + (parseFloat(c.conversion_rate_90d_calc) || 0), 0) / customers.length 
+            : 0;
+
+        // Identify high-priority customers
+        const highValueCustomers = customers.filter(c => parseFloat(c.tier_score_calc || 0) >= 60);
+        const recentlyInactiveCustomers = customers.filter(c => (parseInt(c.days_since_last_visit) || 0) > 30);
+        const highConversionCustomers = customers.filter(c => parseFloat(c.conversion_rate_90d_calc || 0) > 70);
+
+        const topCustomers = customers.slice(0, 15).map((customer, index) => {
+            const tierScore = parseFloat(customer.tier_score_calc) || 0;
+            const salesAmount = parseFloat(customer.total_sales_90d_calc) || 0;
+            const conversionRate = parseFloat(customer.conversion_rate_90d_calc) || 0;
+            const daysSinceVisit = parseInt(customer.days_since_last_visit) || 0;
+            
+            return `${index + 1}. ${customer.customer_name} (${customer.tier_level_calc || 'TIER_4'}) - Score: ${tierScore.toFixed(1)}, Sales: ₹${salesAmount.toLocaleString()}, Conversion: ${conversionRate.toFixed(1)}%, Days since visit: ${daysSinceVisit}`;
         }).join('\n');
 
-        const prompt = `You are an AI Tour Planning Assistant for Kairali Ayurvedic products. Generate an optimal daily tour plan for ${mrName} on ${date}.
+        const prompt = `
+You are an AI Tour Planning Assistant for Kairali Ayurvedic products. Generate an optimal daily tour plan for ${mrName} on ${date}.
 
 TERRITORY CONTEXT:
 ${customersSummary}
 ${tierBreakdown}
 
-Recent Performance (Last 30 days):
-- Average visit quality: ${context.performance.avg_quality || 'N/A'} (${context.performance.quality_grade || 'N/A'})
-- Total visits: ${context.performance.total_visits || 0}
-- Total sales: ₹${(context.performance.total_sales || 0).toLocaleString()}
-- Conversion rate: ${context.performance.conversion_rate || 0}%
+Territory Performance (Last 90 days from materialized view):
+- Total territory sales: ₹${totalSales90d.toLocaleString()}
+- Total orders: ${totalOrders90d}
+- Average conversion rate: ${avgConversionRate.toFixed(1)}%
+- High-value customers (Score ≥60): ${highValueCustomers.length}
+- Recently inactive (>30 days): ${recentlyInactiveCustomers.length}
+- High-conversion customers (>70%): ${highConversionCustomers.length}
 
-CUSTOMER PRIORITIES (Top 15):
+Recent Performance (Last 30 days):
+- Average visit quality: ${context.performance.avg_quality?.toFixed(1) || 'N/A'}
+- Total visits: ${context.performance.total_visits || 0}
+- Total sales: ₹${context.performance.total_sales?.toLocaleString() || 0}
+- Conversion rate: ${context.performance.conversion_rate?.toFixed(1) || 0}%
+
+CUSTOMER PRIORITIES (Top 15 by tier score):
 ${topCustomers}
 
-CONSTRAINTS:
-- Minimum 11 visits per day, Maximum 15 visits per day
-- At least 40% visits should be NBD-focused (TIER_3_DEVELOPER and TIER_4_PROSPECT customers)
+PLANNING CONSTRAINTS:
+- Minimum 11 visits per day
+- Maximum 15 visits per day  
+- At least 40% visits should be NBD-focused (new customers or prospects)
 - Visit duration based on tier: Tier 1 (30+ min), Tier 2 (20+ min), Tier 3 (15+ min), Tier 4 (10+ min)
 - Maximum travel time: 30% of working day
-- Prioritize customers with high urgency scores (>75)
-- Group geographically close customers
-- Balance high-value retention with business development
+- Prioritize customers with high churn risk (>30 days since last visit)
+- Group geographically close customers (same area_name)
+- Focus on high-conversion customers for sales targets
+
+SPECIAL PRIORITIES:
+1. Customers with >30 days since last visit (churn prevention)
+2. High-value customers (tier_score ≥ 60) for relationship maintenance
+3. High-conversion customers (>70% conversion rate) for sales opportunities
+4. New prospects for business development
 
 OUTPUT FORMAT (JSON only, no markdown):
 {
@@ -291,11 +271,16 @@ OUTPUT FORMAT (JSON only, no markdown):
         {
             "time_slot": "09:00-09:30",
             "customer_name": "Customer Name",
-            "customer_type": "Doctor/Retailer/Stockist",
+            "customer_code": "1234567890",
+            "customer_type": "Doctor/Retailer",
             "tier_level": "TIER_1_CHAMPION",
+            "tier_score": 72.5,
+            "area_name": "Area Name",
             "visit_purpose": "Relationship building/Order generation/Sample distribution",
             "expected_duration": 30,
-            "priority_reason": "High tier score/High urgency/Long overdue"
+            "priority_reason": "High churn risk / High value / New customer",
+            "last_visit_days": 45,
+            "conversion_rate": 85.5
         }
     ],
     "plan_summary": {
@@ -305,21 +290,27 @@ OUTPUT FORMAT (JSON only, no markdown):
         "tier_3_customers": 3,
         "tier_4_customers": 2,
         "nbd_focused_visits": 5,
+        "churn_prevention_visits": 3,
         "estimated_revenue": 25000,
-        "route_efficiency": "High"
+        "route_efficiency": "High",
+        "geographic_clusters": ["Area 1", "Area 2"]
     },
     "key_objectives": [
         "Focus on high-value customers",
-        "Address urgent customers",
-        "Geographic optimization"
+        "Address churn risks",
+        "Geographic optimization",
+        "NBD development"
     ]
 }
 
-Generate the optimal tour plan. Return only valid JSON.`;
+Generate the optimal tour plan considering all constraints and auto-calculated tier metrics. Return only valid JSON.`;
 
         return prompt;
     }
 
+    /**
+     * Call OpenAI API to generate tour plan
+     */
     async callOpenAI(prompt) {
         if (!this.openaiApiKey) {
             throw new Error('OpenAI API key not configured');
@@ -337,14 +328,14 @@ Generate the optimal tour plan. Return only valid JSON.`;
                     messages: [
                         {
                             role: 'system', 
-                            content: 'You are an expert pharmaceutical territory planning AI assistant. Always return valid JSON responses only.'
+                            content: 'You are an expert pharmaceutical territory planning AI assistant specializing in Ayurvedic products and Indian market dynamics. You have access to real-time customer tier calculations including direct sales scores, visit efficiency, and conversion rates. Always return valid JSON responses only.'
                         },
                         {
                             role: 'user', 
                             content: prompt
                         }
                     ],
-                    max_tokens: 2000,
+                    max_tokens: 3000,
                     temperature: 0.3
                 })
             });
@@ -363,9 +354,10 @@ Generate the optimal tour plan. Return only valid JSON.`;
         }
     }
 
+    /**
+     * Generate AI-powered tour plan using materialized view
+     */
     async generateTourPlan(mrName, date = null) {
-        const startTime = Date.now();
-        
         if (!date) {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -375,83 +367,116 @@ Generate the optimal tour plan. Return only valid JSON.`;
         try {
             console.log(`🤖 Generating AI tour plan for ${mrName} on ${date}`);
 
-            if (!mrName || mrName.trim() === '') {
-                return {
-                    success: false,
-                    error: 'MR name is required'
-                };
-            }
+            // Refresh materialized view to get latest data
+            await this.refreshMaterializedView();
 
+            // Get territory context
             const context = await this.getTerritoryContext(mrName);
             
             if (!context.customers || context.customers.length === 0) {
                 return {
                     success: false,
-                    error: `No customers found for MR "${mrName}". Please ensure customer data is available.`
+                    error: 'No active customers found for this MR. Please ensure customer data is available and materialized view is up to date.'
                 };
             }
 
+            // Generate AI prompt with materialized view data
             const prompt = this.generateAIPrompt(mrName, context, date);
+
+            // Call OpenAI API
             const aiResponse = await this.callOpenAI(prompt);
 
+            // Parse JSON response
             let planJson;
             try {
+                // Clean response (remove markdown if present)
                 const cleanResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
                 planJson = JSON.parse(cleanResponse);
+                
+                // Validate plan structure
                 this.validatePlanStructure(planJson);
+
             } catch (parseError) {
                 console.error('❌ Failed to parse AI response:', parseError);
                 return {
                     success: false,
                     error: 'AI response format error. Please try again.',
-                    raw_response: aiResponse.substring(0, 500)
+                    raw_response: aiResponse
                 };
             }
 
+            // Save to database
             await this.saveTourPlan(mrName, date, planJson);
 
             return {
                 success: true,
                 plan: planJson,
                 generated_at: new Date().toISOString(),
-                generation_time_ms: Date.now() - startTime,
                 context_summary: {
                     total_customers: context.customers.length,
+                    materialized_view_used: true,
                     performance_score: context.performance.avg_quality,
-                    conversion_rate: context.performance.conversion_rate
+                    conversion_rate: context.performance.conversion_rate,
+                    tier_distribution: this.getTierDistribution(context.customers)
                 }
             };
 
         } catch (error) {
             console.error('❌ Tour plan generation failed:', error);
+            
             return {
                 success: false,
-                error: error.message,
-                generation_time_ms: Date.now() - startTime
+                error: error.message
             };
         }
     }
 
-    validatePlanStructure(plan) {
-        if (!plan || typeof plan !== 'object') {
-            throw new Error('Plan must be a valid object');
+    /**
+     * Refresh materialized view to get latest tier calculations
+     */
+    async refreshMaterializedView() {
+        try {
+            console.log('🔄 Refreshing customer tier metrics...');
+            
+            // Execute refresh command via Supabase RPC
+            const { error } = await supabase.rpc('refresh_customer_tier_metrics');
+            
+            if (error) {
+                console.warn('⚠️ Could not refresh materialized view:', error);
+                // Don't throw error, continue with existing data
+            } else {
+                console.log('✅ Customer tier metrics refreshed');
+            }
+            
+        } catch (error) {
+            console.warn('⚠️ Materialized view refresh failed:', error);
+            // Continue execution with existing data
         }
+    }
 
+    /**
+     * Validate plan structure
+     */
+    validatePlanStructure(plan) {
         if (!plan.daily_plan || !Array.isArray(plan.daily_plan)) {
-            throw new Error('Plan must contain a daily_plan array');
+            throw new Error('Invalid plan structure: missing daily_plan array');
         }
         
         if (!plan.plan_summary || typeof plan.plan_summary !== 'object') {
-            throw new Error('Plan must contain a plan_summary object');
+            throw new Error('Invalid plan structure: missing plan_summary object');
         }
 
+        // Validate each visit in daily_plan
         plan.daily_plan.forEach((visit, index) => {
             if (!visit.time_slot || !visit.customer_name) {
-                throw new Error(`Visit ${index + 1}: missing required fields`);
+                throw new Error(`Invalid visit structure at index ${index}`);
             }
         });
     }
 
+    /**
+     * Save generated tour plan to database
+     */
     async saveTourPlan(mrName, date, plan) {
         try {
             const { error } = await supabase
@@ -461,21 +486,28 @@ Generate the optimal tour plan. Return only valid JSON.`;
                     plan_date: date,
                     plan_json: plan,
                     created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    plan_version: 'materialized_view_v1'
                 }, {
                     onConflict: 'mr_name,plan_date'
                 });
 
             if (error) {
                 console.error('❌ Error saving tour plan:', error);
-            } else {
-                console.log(`✅ Tour plan saved for ${mrName} on ${date}`);
+                throw error;
             }
+
+            console.log(`✅ Tour plan saved for ${mrName} on ${date}`);
+
         } catch (error) {
             console.error('❌ Failed to save tour plan:', error);
+            // Don't throw error here, as the plan was generated successfully
         }
     }
 
+    /**
+     * Get saved tour plans for MR
+     */
     async getSavedTourPlans(mrName, startDate, endDate) {
         try {
             const { data, error } = await supabase
@@ -484,7 +516,7 @@ Generate the optimal tour plan. Return only valid JSON.`;
                 .eq('mr_name', mrName)
                 .gte('plan_date', startDate)
                 .lte('plan_date', endDate)
-                .order('plan_date', { ascending: false });
+                .order('plan_date', { ascending: true });
 
             if (error) {
                 console.error('❌ Error fetching saved plans:', error);
@@ -492,59 +524,31 @@ Generate the optimal tour plan. Return only valid JSON.`;
             }
 
             return data || [];
+
         } catch (error) {
             console.error('❌ Failed to fetch saved plans:', error);
             return [];
         }
     }
 
-    getServiceStats() {
-        return {
-            requests: {
-                total: this.requestCount,
-                successful: this.successCount,
-                failed: this.errorCount,
-                success_rate: this.requestCount > 0 ? (this.successCount / this.requestCount) * 100 : 0
-            },
-            cache: {
-                items: this.cache.size,
-                expiry_minutes: this.cacheExpiry / (60 * 1000)
-            },
-            openai: {
-                configured: !!this.openaiApiKey
-            }
-        };
-    }
-
+    /**
+     * Utility: Get date N days ago
+     */
     getDateDaysAgo(days) {
         const date = new Date();
         date.setDate(date.getDate() - days);
         return date.toISOString().split('T')[0];
     }
 
-    clearCache(pattern = null) {
-        if (!pattern) {
-            this.cache.clear();
-            console.log('🗑️ All cache cleared');
-        } else {
-            let cleared = 0;
-            for (const [key] of this.cache) {
-                if (key.includes(pattern)) {
-                    this.cache.delete(key);
-                    cleared++;
-                }
-            }
-            console.log(`🗑️ Cleared ${cleared} cache entries`);
-        }
-    }
-
-    getCacheStats() {
-        return {
-            total_entries: this.cache.size,
-            cache_expiry_minutes: this.cacheExpiry / (60 * 1000)
-        };
+    /**
+     * Clear cache
+     */
+    clearCache() {
+        this.cache.clear();
+        console.log('🗑️ AI Tour Plan cache cleared');
     }
 }
 
+// Export singleton instance
 export const aiTourPlanGenerator = new AITourPlanGenerator();
 export default AITourPlanGenerator;
