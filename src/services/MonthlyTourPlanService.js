@@ -642,6 +642,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
      */
     async saveMonthlyPlan(mrName, month, year, plan) {
         try {
+                    console.log('🚀 Executing upsert with data:', plan);
             const { data, error } = await supabase
                 .from('monthly_tour_plans')
                 .upsert({
@@ -655,7 +656,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }, {
-                    onConflict: 'mr_name,plan_month,plan_year'
+                    onConflict: 'mr_name,plan_month,plan_year,status'
                 })
                 .select()
                 .single();
