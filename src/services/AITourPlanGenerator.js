@@ -11,117 +11,116 @@ class AITourPlanGenerator {
     /**
      * Get comprehensive territory context for AI planning
      */
-    async getTerritoryContext(mrName) {
-        const cacheKey = `territory_context_${mrName}`;
-        const cached = this.cache.get(cacheKey);
-        
-        if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
-            console.log('📋 Using cached territory context');
-            return cached.data;
-        }
-
-        try {
-            console.log(`🔍 Fetching territory context for MR: ${mrName}`);
-            
-            // Get customer tiers from materialized view with auto-calculated metrics
-            const { data: customers, error: customersError } = await supabase
-                .from('customer_tier_metrics')
-                .select(`
-                    customer_code,
-                    customer_name,
-                    customer_type,
-                    territory,
-                    mr_name,
-                    area_name,
-                    city_name,
-                    pin_code,
-                    full_address,
-                    tier_score_calc,
-                    tier_level_calc,
-                    direct_sales_score_calc,
-                    visit_efficiency_score_calc,
-                    prescription_influence_score_calc,
-                    market_potential_score_calc,
-                    recommended_frequency_calc,
-                    recommended_visit_duration,
-                    total_orders_90d_calc,
-                    total_sales_90d_calc,
-                    conversion_rate_90d_calc,
-                    last_tier_calculation_calc,
-                    first_visit_date,
-                    last_visit_date,
-                    days_since_last_visit,
-                    customer_segment,
-                    status
-                `)
-                .eq('mr_name', mrName)
-                .eq('status', 'ACTIVE')
-                .order('tier_score_calc', { ascending: false });
-
-            if (customersError) {
-                console.error('❌ Error fetching customers:', customersError);
-                throw customersError;
-            }
-
-            // Get recent performance (last 30 days)
-            const { data: performance, error: performanceError } = await supabase
-                .from('real_time_visit_quality')
-                .select(`
-                    quality_score,
-                    "amountOfSale"
-                `)
-                .eq('empName', mrName)
-                .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('quality_score', 'is', null);
-
-            if (performanceError) {
-                console.warn('⚠️ Performance data error:', performanceError);
-            }
-
-            // Calculate performance metrics
-            const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
-
-            // Get territory efficiency from mr_visits
-            const { data: territories, error: territoriesError } = await supabase
-                .from('mr_visits')
-                .select(`
-                    "visitedArea",
-                    "amountOfSale"
-                `)
-                .eq('empName', mrName)
-                .gte('dcrDate', this.getDateDaysAgo(30))
-                .not('visitedArea', 'is', null);
-
-            if (territoriesError) {
-                console.warn('⚠️ Territory data error:', territoriesError);
-            }
-
-            // Process territory data
-            const territoryMetrics = this.processTerritoryData(territories || []);
-
-            const context = {
-                customers: customers || [],
-                performance: performanceMetrics,
-                territories: territoryMetrics
-            };
-
-            // Cache results
-            this.cache.set(cacheKey, {
-                data: context,
-                timestamp: Date.now()
-            });
-
-            console.log(`✅ Territory context loaded: ${customers?.length || 0} customers`);
-            console.log(`📊 Tier distribution:`, this.getTierDistribution(customers || []));
-            
-            return context;
-
-        } catch (error) {
-            console.error('❌ Error fetching territory context:', error);
-            throw error;
-        }
+   // Update your AITourPlanGenerator.js to use the customer_tiers view
+async getTerritoryContext(mrName) {
+    const cacheKey = `territory_context_${mrName}`;
+    const cached = this.cache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+        console.log('📋 Using cached territory context');
+        return cached.data;
     }
 
+    try {
+        console.log(`🔍 Fetching territory context for MR: ${mrName}`);
+        
+        // Get customer tiers from the optimized view - NOW WITH REAL DATA!
+        const { data: customers, error: customersError } = await supabase
+            .from('customer_tiers')
+            .select(`
+                customer_code,
+                customer_name,
+                customer_type,
+                territory,
+                mr_name,
+                area_name,
+                city_name,
+                tier_score,
+                tier_level,
+                direct_sales_score,
+                visit_efficiency_score,
+                prescription_influence_score,
+                market_potential_score,
+                recommended_frequency,
+                recommended_visit_duration,
+                total_orders_90d,
+                total_sales_90d,
+                total_visits_90d,
+                converting_visits_90d,
+                conversion_rate_90d,
+                days_since_last_order,
+                days_since_last_visit,
+                last_visit_date,
+                recent_brands,
+                recent_categories,
+                recent_products,
+                score_breakdown
+            `)
+            .eq('mr_name', mrName)
+            .order('tier_score', { ascending: false });
+
+        if (customersError) {
+            console.error('❌ Error fetching customers:', customersError);
+            throw customersError;
+        }
+
+        // Get recent performance (last 30 days)
+        const { data: performance, error: performanceError } = await supabase
+            .from('mr_visits')
+            .select(`
+                "amountOfSale",
+                "dcrDate"
+            `)
+            .eq('empName', mrName)
+            .gte('dcrDate', this.getDateDaysAgo(30));
+
+        if (performanceError) {
+            console.warn('⚠️ Performance data error:', performanceError);
+        }
+
+        // Calculate performance metrics
+        const performanceMetrics = this.calculatePerformanceMetrics(performance || []);
+
+        // Get territory efficiency from mr_visits
+        const { data: territories, error: territoriesError } = await supabase
+            .from('mr_visits')
+            .select(`
+                "visitedArea",
+                "amountOfSale"
+            `)
+            .eq('empName', mrName)
+            .gte('dcrDate', this.getDateDaysAgo(30))
+            .not('visitedArea', 'is', null);
+
+        if (territoriesError) {
+            console.warn('⚠️ Territory data error:', territoriesError);
+        }
+
+        // Process territory data
+        const territoryMetrics = this.processTerritoryData(territories || []);
+
+        const context = {
+            customers: customers || [],
+            performance: performanceMetrics,
+            territories: territoryMetrics
+        };
+
+        // Cache results
+        this.cache.set(cacheKey, {
+            data: context,
+            timestamp: Date.now()
+        });
+
+        console.log(`✅ Territory context loaded: ${customers?.length || 0} customers`);
+        console.log(`📊 Tier distribution:`, this.getTierDistribution(customers || []));
+        
+        return context;
+
+    } catch (error) {
+        console.error('❌ Error fetching territory context:', error);
+        throw error;
+    }
+}
     /**
      * Get tier distribution for logging
      */
@@ -189,56 +188,59 @@ class AITourPlanGenerator {
     /**
      * Generate AI prompt for tour planning with materialized view data
      */
-    generateAIPrompt(mrName, context, date) {
-        const customers = context.customers;
-        const customersSummary = `Total active customers: ${customers.length}\n`;
-        const tierSummary = {};
+   generateAIPrompt(mrName, context, date) {
+    const customers = context.customers;
+    const customersSummary = `Total active customers: ${customers.length}\n`;
+    const tierSummary = {};
+    
+    customers.forEach(customer => {
+        const tier = customer.tier_level || 'TIER_4_PROSPECT';
+        tierSummary[tier] = (tierSummary[tier] || 0) + 1;
+    });
+
+    let tierBreakdown = '';
+    Object.entries(tierSummary).forEach(([tier, count]) => {
+        tierBreakdown += `- ${tier}: ${count} customers\n`;
+    });
+
+    // Calculate aggregate metrics from the real tier data
+    const totalSales90d = customers.reduce((sum, c) => sum + (parseFloat(c.total_sales_90d) || 0), 0);
+    const totalOrders90d = customers.reduce((sum, c) => sum + (parseInt(c.total_orders_90d) || 0), 0);
+    const avgConversionRate = customers.length > 0 
+        ? customers.reduce((sum, c) => sum + (parseFloat(c.conversion_rate_90d) || 0), 0) / customers.length 
+        : 0;
+
+    // Identify high-priority customers based on real data
+    const highValueCustomers = customers.filter(c => parseFloat(c.tier_score || 0) >= 60);
+    const recentlyInactiveCustomers = customers.filter(c => (parseInt(c.days_since_last_order) || 0) > 45);
+    const highConversionCustomers = customers.filter(c => parseFloat(c.conversion_rate_90d || 0) > 70);
+    const recentBuyers = customers.filter(c => (parseInt(c.days_since_last_order) || 999) <= 30);
+
+    const topCustomers = customers.slice(0, 15).map((customer, index) => {
+        const tierScore = parseFloat(customer.tier_score) || 0;
+        const salesAmount = parseFloat(customer.total_sales_90d) || 0;
+        const conversionRate = parseFloat(customer.conversion_rate_90d) || 0;
+        const daysSinceOrder = parseInt(customer.days_since_last_order) || 999;
+        const daysSinceVisit = parseInt(customer.days_since_last_visit) || 999;
         
-        customers.forEach(customer => {
-            const tier = customer.tier_level_calc || 'TIER_4_PROSPECT';
-            tierSummary[tier] = (tierSummary[tier] || 0) + 1;
-        });
+        return `${index + 1}. ${customer.customer_name} (${customer.tier_level || 'TIER_4'}) - Score: ${tierScore.toFixed(1)}, Sales: ₹${salesAmount.toLocaleString()}, Conversion: ${conversionRate.toFixed(1)}%, Days since order: ${daysSinceOrder}, Days since visit: ${daysSinceVisit}`;
+    }).join('\n');
 
-        let tierBreakdown = '';
-        Object.entries(tierSummary).forEach(([tier, count]) => {
-            tierBreakdown += `- ${tier}: ${count} customers\n`;
-        });
-
-        // Calculate aggregate metrics from materialized view
-        const totalSales90d = customers.reduce((sum, c) => sum + (parseFloat(c.total_sales_90d_calc) || 0), 0);
-        const totalOrders90d = customers.reduce((sum, c) => sum + (parseInt(c.total_orders_90d_calc) || 0), 0);
-        const avgConversionRate = customers.length > 0 
-            ? customers.reduce((sum, c) => sum + (parseFloat(c.conversion_rate_90d_calc) || 0), 0) / customers.length 
-            : 0;
-
-        // Identify high-priority customers
-        const highValueCustomers = customers.filter(c => parseFloat(c.tier_score_calc || 0) >= 60);
-        const recentlyInactiveCustomers = customers.filter(c => (parseInt(c.days_since_last_visit) || 0) > 30);
-        const highConversionCustomers = customers.filter(c => parseFloat(c.conversion_rate_90d_calc || 0) > 70);
-
-        const topCustomers = customers.slice(0, 15).map((customer, index) => {
-            const tierScore = parseFloat(customer.tier_score_calc) || 0;
-            const salesAmount = parseFloat(customer.total_sales_90d_calc) || 0;
-            const conversionRate = parseFloat(customer.conversion_rate_90d_calc) || 0;
-            const daysSinceVisit = parseInt(customer.days_since_last_visit) || 0;
-            
-            return `${index + 1}. ${customer.customer_name} (${customer.tier_level_calc || 'TIER_4'}) - Score: ${tierScore.toFixed(1)}, Sales: ₹${salesAmount.toLocaleString()}, Conversion: ${conversionRate.toFixed(1)}%, Days since visit: ${daysSinceVisit}`;
-        }).join('\n');
-
-        const prompt = `
+    const prompt = `
 You are an AI Tour Planning Assistant for Kairali Ayurvedic products. Generate an optimal daily tour plan for ${mrName} on ${date}.
 
 TERRITORY CONTEXT:
 ${customersSummary}
 ${tierBreakdown}
 
-Territory Performance (Last 90 days from materialized view):
+Territory Performance (Last 90 days from REAL SALES DATA):
 - Total territory sales: ₹${totalSales90d.toLocaleString()}
 - Total orders: ${totalOrders90d}
 - Average conversion rate: ${avgConversionRate.toFixed(1)}%
 - High-value customers (Score ≥60): ${highValueCustomers.length}
-- Recently inactive (>30 days): ${recentlyInactiveCustomers.length}
+- Recently inactive (>45 days since order): ${recentlyInactiveCustomers.length}
 - High-conversion customers (>70%): ${highConversionCustomers.length}
+- Recent buyers (≤30 days): ${recentBuyers.length}
 
 Recent Performance (Last 30 days):
 - Average visit quality: ${context.performance.avg_quality?.toFixed(1) || 'N/A'}
@@ -246,7 +248,7 @@ Recent Performance (Last 30 days):
 - Total sales: ₹${context.performance.total_sales?.toLocaleString() || 0}
 - Conversion rate: ${context.performance.conversion_rate?.toFixed(1) || 0}%
 
-CUSTOMER PRIORITIES (Top 15 by tier score):
+CUSTOMER PRIORITIES (Top 15 by tier score with REAL DATA):
 ${topCustomers}
 
 PLANNING CONSTRAINTS:
@@ -255,15 +257,16 @@ PLANNING CONSTRAINTS:
 - At least 40% visits should be NBD-focused (new customers or prospects)
 - Visit duration based on tier: Tier 1 (30+ min), Tier 2 (20+ min), Tier 3 (15+ min), Tier 4 (10+ min)
 - Maximum travel time: 30% of working day
-- Prioritize customers with high churn risk (>30 days since last visit)
+- Prioritize customers with high churn risk (>45 days since last order)
 - Group geographically close customers (same area_name)
-- Focus on high-conversion customers for sales targets
+- Focus on high-conversion customers for sales opportunities
 
-SPECIAL PRIORITIES:
-1. Customers with >30 days since last visit (churn prevention)
-2. High-value customers (tier_score ≥ 60) for relationship maintenance
-3. High-conversion customers (>70% conversion rate) for sales opportunities
-4. New prospects for business development
+SPECIAL PRIORITIES (based on REAL sales data):
+1. Recent buyers (≤30 days since order) - relationship maintenance 
+2. High-value customers (tier_score ≥ 60) - revenue protection
+3. High-conversion customers (>70% conversion rate) - sales opportunities
+4. Recently inactive customers (>45 days since order) - churn prevention
+5. New prospects for business development
 
 OUTPUT FORMAT (JSON only, no markdown):
 {
@@ -278,35 +281,37 @@ OUTPUT FORMAT (JSON only, no markdown):
             "area_name": "Area Name",
             "visit_purpose": "Relationship building/Order generation/Sample distribution",
             "expected_duration": 30,
-            "priority_reason": "High churn risk / High value / New customer",
-            "last_visit_days": 45,
-            "conversion_rate": 85.5
+            "priority_reason": "High value customer with ₹25,000 sales in 90 days",
+            "days_since_last_order": 25,
+            "conversion_rate": 85.5,
+            "recent_categories": "Traditional Ayurveda, Proprietary Medicines"
         }
     ],
     "plan_summary": {
         "total_customers": 12,
-        "tier_1_customers": 3,
+        "tier_1_customers": 0,
         "tier_2_customers": 4,
-        "tier_3_customers": 3,
+        "tier_3_customers": 6,
         "tier_4_customers": 2,
-        "nbd_focused_visits": 5,
+        "high_value_visits": 4,
         "churn_prevention_visits": 3,
+        "recent_buyer_visits": 2,
         "estimated_revenue": 25000,
         "route_efficiency": "High",
         "geographic_clusters": ["Area 1", "Area 2"]
     },
     "key_objectives": [
-        "Focus on high-value customers",
-        "Address churn risks",
-        "Geographic optimization",
-        "NBD development"
+        "Focus on high-value Tier 2 performers",
+        "Address churn risks (>45 days inactive)",
+        "Leverage high-conversion customers",
+        "Geographic optimization for efficiency"
     ]
 }
 
-Generate the optimal tour plan considering all constraints and auto-calculated tier metrics. Return only valid JSON.`;
+Generate the optimal tour plan using REAL tier scores and sales data. Return only valid JSON.`;
 
-        return prompt;
-    }
+    return prompt;
+}
 
     /**
      * Call OpenAI API to generate tour plan
