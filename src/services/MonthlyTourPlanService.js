@@ -52,7 +52,7 @@ class MonthlyTourPlanService {
 
         // Get customer data from materialized view
         const { data: customers, error: customersError } = await supabase
-            .from('customer_tier_metrics')
+            .from('customer_tiers')
             .select(`
                 customer_code,
                 customer_name,
@@ -60,13 +60,13 @@ class MonthlyTourPlanService {
                 territory,
                 area_name,
                 city_name,
-                tier_score_calc,
-                tier_level_calc,
-                recommended_frequency_calc,
+                tier_score,
+                tier_level,
+                recommended_frequency,
                 recommended_visit_duration,
-                total_orders_90d_calc,
-                total_sales_90d_calc,
-                conversion_rate_90d_calc,
+                total_orders_90d,
+                total_sales_90d,
+                conversion_rate_90d,
                 last_visit_date,
                 days_since_last_visit,
                 customer_segment,
@@ -335,12 +335,12 @@ class MonthlyTourPlanService {
     async calculateTerritoryMetrics(mrName) {
         try {
             const { data: territoryData, error } = await supabase
-                .from('customer_tier_metrics')
+                .from('customer_tiers')
                 .select(`
                     area_name,
-                    tier_level_calc,
-                    total_sales_90d_calc,
-                    conversion_rate_90d_calc
+                    tier_level,
+                    total_sales_90d,
+                    conversion_rate_90d
                 `)
                 .eq('mr_name', mrName)
                 .eq('status', 'ACTIVE');
@@ -363,11 +363,11 @@ class MonthlyTourPlanService {
                 }
 
                 areaMetrics[area].customers++;
-                areaMetrics[area].total_sales += parseFloat(customer.total_sales_90d_calc) || 0;
+                areaMetrics[area].total_sales += parseFloat(customer.total_sales_90d) || 0;
                 
-                const tier = customer.tier_level_calc || 'TIER_4_PROSPECT';
+                const tier = customer.tier_level || 'TIER_4_PROSPECT';
                 areaMetrics[area].tier_distribution[tier] = (areaMetrics[area].tier_distribution[tier] || 0) + 1;
-                areaMetrics[area].avg_conversion += parseFloat(customer.conversion_rate_90d_calc) || 0;
+                areaMetrics[area].avg_conversion += parseFloat(customer.conversion_rate_90d) || 0;
             });
 
             // Calculate averages
@@ -461,7 +461,7 @@ class MonthlyTourPlanService {
         const customersSummary = `Total active customers: ${context.customers.length}`;
         const tierSummary = {};
         context.customers.forEach(customer => {
-            const tier = customer.tier_level_calc || 'TIER_4_PROSPECT';
+            const tier = customer.tier_level || 'TIER_4_PROSPECT';
             tierSummary[tier] = (tierSummary[tier] || 0) + 1;
         });
 
