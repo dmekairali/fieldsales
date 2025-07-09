@@ -7,7 +7,7 @@ import GeocodingDashboard from './components/GeocodingDashboard';
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
 import AITourPlanDashboard from './components/AITourPlanDashboard';
-import AITourPlanDashboard from './components/MonthlyTourPlanDashboard';
+import MonthlyTourPlanDashboard from './components/MonthlyTourPlanDashboard';
 
 function App() {
   const [activeTab, setActiveTab] = useState('emergency');
