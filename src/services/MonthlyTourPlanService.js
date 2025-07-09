@@ -721,29 +721,46 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     /**
      * Get monthly plan from database
      */
-    async getMonthlyPlan(mrName, month, year) {
-        try {
-            const { data, error } = await supabase
-                .from('ai_tour_plan.monthly_tour_plans')
-                .select('*')
-                .eq('mr_name', mrName)
-                .eq('plan_month', month)
-                .eq('plan_year', year)
-                .eq('status', 'ACTIVE')
-                .single();
+   /**
+ * Get monthly plan from database
+ */
+async getMonthlyPlan(mrName, month, year) {
+    try {
+        // Option 1: Set the search path first (recommended)
+        await supabase.rpc('set_config', {
+            parameter: 'search_path',
+            value: 'ai_tour_plan,public'
+        });
 
-            if (error) {
-                console.error('❌ Monthly plan fetch error:', error);
-                return null;
-            }
+        // Option 2: Or use the raw SQL query approach
+        // const { data, error } = await supabase.rpc('get_monthly_plan', {
+        //     mr_name: mrName,
+        //     month: month,
+        //     year: year
+        // });
 
-            return data;
+        // Then query without schema qualification
+        const { data, error } = await supabase
+            .from('monthly_tour_plans') // Just table name, no schema prefix
+            .select('*')
+            .eq('mr_name', mrName)
+            .eq('plan_month', month)
+            .eq('plan_year', year)
+            .eq('status', 'ACTIVE')
+            .single();
 
-        } catch (error) {
-            console.error('❌ Failed to get monthly plan:', error);
+        if (error) {
+            console.error('❌ Monthly plan fetch error:', error);
             return null;
         }
+
+        return data;
+
+    } catch (error) {
+        console.error('❌ Failed to get monthly plan:', error);
+        return null;
     }
+}
 
     /**
      * Analyze week performance vs planned targets
