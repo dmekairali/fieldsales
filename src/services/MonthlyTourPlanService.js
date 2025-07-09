@@ -726,18 +726,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
  */
 async getMonthlyPlan(mrName, month, year) {
     try {
-        // Option 1: Set the search path first (recommended)
-        await supabase.rpc('set_config', {
-            parameter: 'search_path',
-            value: 'ai_tour_plan,public'
-        });
-
-        // Option 2: Or use the raw SQL query approach
-        // const { data, error } = await supabase.rpc('get_monthly_plan', {
-        //     mr_name: mrName,
-        //     month: month,
-        //     year: year
-        // });
+       
 
         // Then query without schema qualification
         const { data, error } = await supabase
