@@ -186,43 +186,43 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50 p-2 sm:p-4">
+            <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
                 {/* Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex-grow">
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
                                 🤖 AI Tour Plan Generator
                             </h1>
-                            <div className="mt-3 flex items-center gap-6 text-sm">
+                            <div className="mt-2 sm:mt-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-xs sm:text-sm">
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
                                     <span className="font-medium text-gray-900">{mrName}</span>
                                 </div>
                                 {mrData?.territory && (
                                     <>
-                                        <div className="h-4 w-px bg-gray-300"></div>
+                                        <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
                                         <span className="text-gray-600">Territory: {mrData.territory}</span>
                                     </>
                                 )}
-                                <div className="h-4 w-px bg-gray-300"></div>
+                                <div className="h-4 w-px bg-gray-300 hidden sm:block"></div>
                                 <span className="text-gray-600">AI-Powered Planning</span>
                             </div>
                         </div>
                         
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
                             <input
                                 type="date"
                                 value={selectedDate}
                                 onChange={(e) => setSelectedDate(e.target.value)}
                                 min={new Date().toISOString().split('T')[0]}
-                                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                                className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-xs sm:text-sm w-full sm:w-auto"
                             />
                             <button
                                 onClick={generateTourPlan}
                                 disabled={loading || !selectedDate}
-                                className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 transition-colors shadow-sm"
+                                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 transition-colors shadow-sm text-xs sm:text-sm w-full sm:w-auto"
                             >
                                 {loading ? (
                                     <>
@@ -231,7 +231,7 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
                                     </>
                                 ) : (
                                     <>
-                                        🤖 Generate AI Plan
+                                        🤖 Generate Plan
                                     </>
                                 )}
                             </button>
@@ -241,22 +241,22 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
 
                 {/* Generation History */}
                 {generationHistory.length > 0 && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Generations</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Recent Generations</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                             {generationHistory.map((gen, index) => (
-                                <div key={index} className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="font-medium text-indigo-900">{gen.date}</span>
+                                <div key={index} className="bg-indigo-50 rounded-lg p-3 sm:p-4 border border-indigo-100">
+                                    <div className="flex items-center justify-between mb-1 sm:mb-2">
+                                        <span className="font-medium text-indigo-900 text-sm sm:text-base">{gen.date}</span>
                                         <span className="text-xs text-indigo-600">
-                                            {new Date(gen.generated_at).toLocaleTimeString()}
+                                            {new Date(gen.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </div>
                                     {gen.context_summary && (
-                                        <div className="text-xs text-indigo-700 space-y-1">
+                                        <div className="text-xs text-indigo-700 space-y-0.5">
                                             <div>Customers: {gen.context_summary.total_customers}</div>
-                                            <div>Quality Score: {gen.context_summary.performance_score?.toFixed(1) || 'N/A'}</div>
-                                            <div>Conversion: {gen.context_summary.conversion_rate?.toFixed(1) || 0}%</div>
+                                            <div>Quality: {gen.context_summary.performance_score?.toFixed(1) || 'N/A'}</div>
+                                            <div>Conv: {gen.context_summary.conversion_rate?.toFixed(1) || 0}%</div>
                                         </div>
                                     )}
                                 </div>
@@ -267,20 +267,20 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
 
                 {/* Saved Plans */}
                 {savedPlans.length > 0 && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Saved Plans</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Saved Plans</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                             {savedPlans.map((plan, index) => (
                                 <button
                                     key={index}
                                     onClick={() => loadExistingPlan(plan.plan_date)}
-                                    className="text-left bg-gray-50 hover:bg-gray-100 rounded-lg p-4 border border-gray-200 transition-colors"
+                                    className="text-left bg-gray-50 hover:bg-gray-100 rounded-lg p-3 sm:p-4 border border-gray-200 transition-colors"
                                 >
-                                    <div className="font-medium text-gray-900">{plan.plan_date}</div>
-                                    <div className="text-sm text-gray-600 mt-1">
-                                        {plan.plan_json?.plan_summary?.total_customers || 0} customers
+                                    <div className="font-medium text-gray-900 text-sm sm:text-base">{plan.plan_date}</div>
+                                    <div className="text-xs sm:text-sm text-gray-600 mt-1">
+                                        {plan.plan_json?.plan_summary?.total_customers || 0} cust.
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-2">
+                                    <div className="text-xs text-gray-500 mt-1 sm:mt-2">
                                         {new Date(plan.created_at).toLocaleDateString()}
                                     </div>
                                 </button>
@@ -291,12 +291,12 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
 
                 {/* Error Display */}
                 {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                            <div className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5">⚠️</div>
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
+                        <div className="flex items-start gap-2 sm:gap-3">
+                            <div className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 flex-shrink-0 mt-0.5">⚠️</div>
                             <div>
-                                <h3 className="text-sm font-medium text-red-800">Generation Error</h3>
-                                <p className="text-sm text-red-700 mt-1">{error}</p>
+                                <h3 className="text-xs sm:text-sm font-medium text-red-800">Generation Error</h3>
+                                <p className="text-xs sm:text-sm text-red-700 mt-1">{error}</p>
                             </div>
                         </div>
                     </div>
@@ -304,65 +304,65 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
 
                 {/* Tour Plan Display */}
                 {tourPlan && tourPlan.success && (
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                         {/* Plan Summary */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-semibold text-gray-900">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900">
                                     🎯 AI Tour Plan for {selectedDate}
                                 </h3>
-                                <div className="text-sm text-gray-500">
+                                <div className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-0">
                                     Generated: {new Date(tourPlan.generated_at).toLocaleString()}
                                 </div>
                             </div>
 
                             {/* Summary Metrics */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
-                                <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
-                                    <div className="text-2xl font-bold text-blue-600">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                                <div className="bg-blue-50 rounded-lg p-3 sm:p-4 text-center border border-blue-100">
+                                    <div className="text-xl sm:text-2xl font-bold text-blue-600">
                                         {tourPlan.plan?.plan_summary?.total_customers || 0}
                                     </div>
-                                    <div className="text-sm text-blue-600 font-medium">Total Visits</div>
+                                    <div className="text-xs sm:text-sm text-blue-600 font-medium">Total Visits</div>
                                 </div>
-                                <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-100">
-                                    <div className="text-2xl font-bold text-purple-600">
+                                <div className="bg-purple-50 rounded-lg p-3 sm:p-4 text-center border border-purple-100">
+                                    <div className="text-xl sm:text-2xl font-bold text-purple-600">
                                         {tourPlan.plan?.plan_summary?.tier_1_customers || 0}
                                     </div>
-                                    <div className="text-sm text-purple-600 font-medium">Tier 1</div>
+                                    <div className="text-xs sm:text-sm text-purple-600 font-medium">Tier 1</div>
                                 </div>
-                                <div className="bg-green-50 rounded-lg p-4 text-center border border-green-100">
-                                    <div className="text-2xl font-bold text-green-600">
+                                <div className="bg-green-50 rounded-lg p-3 sm:p-4 text-center border border-green-100">
+                                    <div className="text-xl sm:text-2xl font-bold text-green-600">
                                         {tourPlan.plan?.plan_summary?.nbd_focused_visits || 0}
                                     </div>
-                                    <div className="text-sm text-green-600 font-medium">NBD Focus</div>
+                                    <div className="text-xs sm:text-sm text-green-600 font-medium">NBD Focus</div>
                                 </div>
-                                <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-100">
-                                    <div className="text-2xl font-bold text-orange-600">
+                                <div className="bg-orange-50 rounded-lg p-3 sm:p-4 text-center border border-orange-100">
+                                    <div className="text-xl sm:text-2xl font-bold text-orange-600">
                                         ₹{(tourPlan.plan?.plan_summary?.estimated_revenue || 0).toLocaleString()}
                                     </div>
-                                    <div className="text-sm text-orange-600 font-medium">Est. Revenue</div>
+                                    <div className="text-xs sm:text-sm text-orange-600 font-medium">Est. Revenue</div>
                                 </div>
-                                <div className="bg-indigo-50 rounded-lg p-4 text-center border border-indigo-100">
-                                    <div className="text-2xl font-bold text-indigo-600">
+                                <div className="bg-indigo-50 rounded-lg p-3 sm:p-4 text-center border border-indigo-100">
+                                    <div className="text-xl sm:text-2xl font-bold text-indigo-600">
                                         {tourPlan.plan?.plan_summary?.route_efficiency || 'Medium'}
                                     </div>
-                                    <div className="text-sm text-indigo-600 font-medium">Efficiency</div>
+                                    <div className="text-xs sm:text-sm text-indigo-600 font-medium">Efficiency</div>
                                 </div>
-                                <div className="bg-pink-50 rounded-lg p-4 text-center border border-pink-100">
-                                    <div className="text-lg font-bold text-pink-600">
+                                <div className="bg-pink-50 rounded-lg p-3 sm:p-4 text-center border border-pink-100">
+                                    <div className="text-base sm:text-lg font-bold text-pink-600">
                                         {tourPlan.context_summary?.performance_score?.toFixed(1) || 'N/A'}
                                     </div>
-                                    <div className="text-sm text-pink-600 font-medium">Quality Score</div>
+                                    <div className="text-xs sm:text-sm text-pink-600 font-medium">Quality Score</div>
                                 </div>
                             </div>
 
                             {/* Key Objectives */}
                             {tourPlan.plan?.key_objectives && (
-                                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                    <h4 className="font-semibold text-gray-900 mb-3">🎯 Key Objectives</h4>
-                                    <div className="flex flex-wrap gap-2">
+                                <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200">
+                                    <h4 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-sm sm:text-base">🎯 Key Objectives</h4>
+                                    <div className="flex flex-wrap gap-1 sm:gap-2">
                                         {tourPlan.plan.key_objectives.map((objective, index) => (
-                                            <span key={index} className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm font-medium">
+                                            <span key={index} className="bg-indigo-100 text-indigo-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium">
                                                 {objective}
                                             </span>
                                         ))}
@@ -373,46 +373,46 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
 
                         {/* Daily Schedule */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                            <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white p-6 rounded-t-xl">
-                                <h3 className="text-xl font-bold">📅 Daily Visit Schedule</h3>
-                                <p className="text-indigo-100 mt-2">AI-optimized customer visit sequence</p>
+                            <div className="bg-gradient-to-r from-indigo-600 to-purple-700 text-white p-4 sm:p-6 rounded-t-xl">
+                                <h3 className="text-lg sm:text-xl font-bold">📅 Daily Visit Schedule</h3>
+                                <p className="text-indigo-100 mt-1 sm:mt-2 text-xs sm:text-sm">AI-optimized customer visit sequence</p>
                             </div>
                             
-                            <div className="p-6">
+                            <div className="p-4 sm:p-6">
                                 {tourPlan.plan?.daily_plan && tourPlan.plan.daily_plan.length > 0 ? (
-                                    <div className="space-y-4">
+                                    <div className="space-y-3 sm:space-y-4">
                                         {tourPlan.plan.daily_plan.map((visit, index) => (
-                                            <div key={index} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                                                <div className="flex items-start justify-between">
-                                                    <div className="flex items-start gap-4 flex-1">
-                                                        <div className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-lg font-bold text-sm min-w-24 text-center">
+                                            <div key={index} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
+                                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+                                                    <div className="flex items-start gap-3 sm:gap-4 flex-1">
+                                                        <div className="bg-indigo-100 text-indigo-800 px-2 sm:px-3 py-1 rounded-lg font-bold text-xs sm:text-sm min-w-[5rem] sm:min-w-24 text-center">
                                                             {formatTime(visit.time_slot)}
                                                         </div>
                                                         
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-3 mb-2">
-                                                                <span className="text-lg">{getPriorityIcon(visit.priority_reason)}</span>
-                                                                <h4 className="font-semibold text-gray-900 text-lg">{visit.customer_name}</h4>
-                                                                <span className="text-gray-400">•</span>
-                                                                <span className="text-gray-600 font-medium">{visit.customer_type}</span>
+                                                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-1 sm:mb-2">
+                                                                <span className="text-sm sm:text-lg">{getPriorityIcon(visit.priority_reason)}</span>
+                                                                <h4 className="font-semibold text-gray-900 text-sm sm:text-lg truncate">{visit.customer_name}</h4>
+                                                                <span className="text-gray-400 hidden sm:inline">•</span>
+                                                                <span className="text-gray-600 font-medium text-xs sm:text-base">{visit.customer_type}</span>
                                                             </div>
                                                             
-                                                            <div className="flex flex-wrap items-center gap-3 mb-3">
-                                                                <span className={`px-3 py-1 rounded-md text-xs font-bold border ${getTierColor(visit.tier_level)}`}>
+                                                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                                                <span className={`px-2 sm:px-3 py-1 rounded-md text-xs font-bold border ${getTierColor(visit.tier_level)}`}>
                                                                     {visit.tier_level?.replace('TIER_', 'T') || 'T2'}
                                                                 </span>
-                                                                <span className="text-sm text-gray-600">
+                                                                <span className="text-xs sm:text-sm text-gray-600">
                                                                     <span className="font-medium">Duration:</span> {visit.expected_duration || 30}min
                                                                 </span>
-                                                                <span className="text-sm text-gray-600">
+                                                                <span className="text-xs sm:text-sm text-gray-600">
                                                                     <span className="font-medium">Purpose:</span> {visit.visit_purpose}
                                                                 </span>
                                                             </div>
                                                             
-                                                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                                                                <div className="text-sm">
-                                                                    <span className="font-medium text-yellow-800">Priority Reason:</span>
-                                                                    <span className="text-yellow-700 ml-2">{visit.priority_reason}</span>
+                                                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3">
+                                                                <div className="text-xs sm:text-sm">
+                                                                    <span className="font-medium text-yellow-800">Priority:</span>
+                                                                    <span className="text-yellow-700 ml-1 sm:ml-2">{visit.priority_reason}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -423,8 +423,8 @@ const AITourPlanDashboard = ({ mrName, mrData }) => {
                                     </div>
                                 ) : (
                                     <div className="text-center py-8 text-gray-500">
-                                        <div className="text-4xl mb-4">📅</div>
-                                        <p>No visits planned for this date</p>
+                                        <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">📅</div>
+                                        <p className="text-sm sm:text-base">No visits planned for this date</p>
                                     </div>
                                 )}
                             </div>

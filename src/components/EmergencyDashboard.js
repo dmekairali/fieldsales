@@ -217,24 +217,24 @@ const EmergencyDashboard = () => {
     const filteredTerritories = getFilteredTerritories();
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50 p-2 sm:p-4">
+            <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
                 {/* Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex-grow">
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
                                 🚨 Emergency Territory Management
                             </h1>
-                            <p className="text-gray-600 mt-2">Critical territory performance monitoring and intervention system</p>
-                            <div className="mt-3 inline-flex items-center gap-2 bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold">
+                            <p className="text-gray-600 mt-1 sm:mt-2 text-xs sm:text-sm">Critical territory performance monitoring and intervention system</p>
+                            <div className="mt-2 sm:mt-3 inline-flex items-center gap-2 bg-red-100 text-red-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
                                 <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                Live Emergency Dashboard • Last Updated: {new Date().toLocaleTimeString()}
+                                Live Dashboard • Updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                         </div>
                         <button
                             onClick={fetchTerritoryData}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm self-start sm:self-center"
                         >
                             <span className={loading ? 'animate-spin' : ''}>🔄</span>
                             Refresh
@@ -243,85 +243,85 @@ const EmergencyDashboard = () => {
                 </div>
 
                 {/* Emergency Statistics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-                    <div className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl shadow-sm p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-6">
+                    <div className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-red-100 text-sm font-medium uppercase tracking-wide">Critical Territories</div>
-                                <div className="text-3xl font-bold mt-2">{territoryStats.zeroSalesTerritories || 0}</div>
-                                <div className="text-red-100 text-sm mt-1">Zero sales</div>
+                                <div className="text-red-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Critical Areas</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{territoryStats.zeroSalesTerritories || 0}</div>
+                                <div className="text-red-100 text-xs sm:text-sm mt-1">Zero sales</div>
                             </div>
-                            <div className="text-4xl opacity-80">🚨</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">🚨</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-orange-100 text-sm font-medium uppercase tracking-wide">Low Performing</div>
-                                <div className="text-3xl font-bold mt-2">{territoryStats.lowPerformingTerritories || 0}</div>
-                                <div className="text-orange-100 text-sm mt-1">Under ₹100/visit</div>
+                                <div className="text-orange-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Low Performing</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{territoryStats.lowPerformingTerritories || 0}</div>
+                                <div className="text-orange-100 text-xs sm:text-sm mt-1">&lt; ₹100/visit</div>
                             </div>
-                            <div className="text-4xl opacity-80">⚠️</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">⚠️</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-purple-100 text-sm font-medium uppercase tracking-wide">Total Flagged</div>
-                                <div className="text-3xl font-bold mt-2">{territoryStats.totalTerritories || 0}</div>
-                                <div className="text-purple-100 text-sm mt-1">Territories</div>
+                                <div className="text-purple-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Total Flagged</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{territoryStats.totalTerritories || 0}</div>
+                                <div className="text-purple-100 text-xs sm:text-sm mt-1">Territories</div>
                             </div>
-                            <div className="text-4xl opacity-80">🎯</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">🎯</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-blue-100 text-sm font-medium uppercase tracking-wide">Wasted Visits</div>
-                                <div className="text-3xl font-bold mt-2">{territoryStats.totalVisitsWasted || 0}</div>
-                                <div className="text-blue-100 text-sm mt-1">90 days</div>
+                                <div className="text-blue-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Wasted Visits</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{territoryStats.totalVisitsWasted || 0}</div>
+                                <div className="text-blue-100 text-xs sm:text-sm mt-1">90 days</div>
                             </div>
-                            <div className="text-4xl opacity-80">📊</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">📊</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-gray-600 to-gray-700 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-gray-600 to-gray-700 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-gray-100 text-sm font-medium uppercase tracking-wide">Revenue Impact</div>
-                                <div className="text-3xl font-bold mt-2">₹{((territoryStats.totalRevenueLost || 0) / 100000).toFixed(1)}L</div>
-                                <div className="text-gray-100 text-sm mt-1">Lost potential</div>
+                                <div className="text-gray-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Revenue Impact</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">₹{((territoryStats.totalRevenueLost || 0) / 100000).toFixed(1)}L</div>
+                                <div className="text-gray-100 text-xs sm:text-sm mt-1">Lost potential</div>
                             </div>
-                            <div className="text-4xl opacity-80">💰</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">💰</div>
                         </div>
                     </div>
                 </div>
 
                 {/* Filters and Controls */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-lg font-semibold text-gray-900">Territory Analysis & Controls</h2>
-                        <div className="flex items-center gap-3">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+                        <h2 className="text-base sm:text-lg font-semibold text-gray-900">Territory Analysis & Controls</h2>
+                        <div className="flex items-center gap-2 sm:gap-3 self-stretch sm:self-auto">
                             <button
                                 onClick={() => bulkAction('REASSIGN')}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium"
                             >
                                 Bulk Reassign
                             </button>
                             <button
                                 onClick={() => bulkAction('REMOVE')}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                                className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs sm:text-sm font-medium"
                             >
                                 Bulk Remove
                             </button>
                         </div>
                     </div>
                     
-                    <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex items-center gap-3">
-                            <label className="text-sm font-medium text-gray-700">Filter:</label>
+                    <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 sm:gap-4">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                            <label className="text-xs sm:text-sm font-medium text-gray-700">Filter:</label>
                             <button
                                 onClick={() => setSelectedFilter('all')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                                     selectedFilter === 'all' 
                                         ? 'bg-red-100 text-red-700 border border-red-200' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -331,7 +331,7 @@ const EmergencyDashboard = () => {
                             </button>
                             <button
                                 onClick={() => setSelectedFilter('zero_sales')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                                     selectedFilter === 'zero_sales' 
                                         ? 'bg-red-100 text-red-700 border border-red-200' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -341,28 +341,28 @@ const EmergencyDashboard = () => {
                             </button>
                             <button
                                 onClick={() => setSelectedFilter('low_performance')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                                     selectedFilter === 'low_performance' 
                                         ? 'bg-orange-100 text-orange-700 border border-orange-200' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
-                                Low Performance ({territoryStats.lowPerformingTerritories})
+                                Low Perf. ({territoryStats.lowPerformingTerritories})
                             </button>
                         </div>
                         
-                        <div className="h-6 w-px bg-gray-300"></div>
+                        <div className="h-6 w-px bg-gray-300 hidden sm:block"></div>
                         
-                        <div className="flex items-center gap-3">
-                            <label className="text-sm font-medium text-gray-700">Sort by:</label>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <label className="text-xs sm:text-sm font-medium text-gray-700">Sort by:</label>
                             <select 
                                 value={sortBy} 
                                 onChange={(e) => setSortBy(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                                className="px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-xs sm:text-sm"
                             >
-                                <option value="visits">Visit Count</option>
+                                <option value="visits">Visits</option>
                                 <option value="revenue">Revenue</option>
-                                <option value="conversion">Conversion Rate</option>
+                                <option value="conversion">Conversion</option>
                             </select>
                         </div>
                     </div>
@@ -370,32 +370,32 @@ const EmergencyDashboard = () => {
 
                 {/* Territory Table */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-xl">
-                        <h2 className="text-xl font-bold flex items-center gap-3">
+                    <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-4 sm:p-6 rounded-t-xl">
+                        <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 sm:gap-3">
                             🎯 Critical Territory Analysis ({filteredTerritories.length})
                         </h2>
-                        <p className="text-red-100 mt-2">Territories requiring immediate attention and intervention</p>
+                        <p className="text-red-100 mt-1 sm:mt-2 text-xs sm:text-sm">Territories requiring immediate attention and intervention</p>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Territory</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MR Name</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Visits (90d)</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue/Visit</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion %</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Territory</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">MR Name</th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Visits</th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sales</th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Rev/Visit</th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Conv %</th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredTerritories.length === 0 ? (
                                     <tr>
                                         <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                                            <div className="text-4xl mb-4">🎉</div>
-                                            <p className="text-lg">No critical territories found!</p>
-                                            <p className="text-sm mt-2">All territories are performing well for the selected filter.</p>
+                                            <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">🎉</div>
+                                            <p className="text-base sm:text-lg">No critical territories found!</p>
+                                            <p className="text-xs sm:text-sm mt-2">All territories are performing well for the selected filter.</p>
                                         </td>
                                     </tr>
                                 ) : (
@@ -405,22 +405,25 @@ const EmergencyDashboard = () => {
                                                 ? 'bg-red-50 border-l-4 border-red-500'
                                                 : 'bg-yellow-50 border-l-4 border-yellow-500'
                                         }`}>
-                                            <td className="px-6 py-3 text-sm font-semibold text-gray-900">
+                                            <td className="px-4 py-3 text-xs sm:text-sm font-semibold text-gray-900">
                                                 <div className="flex items-center">
-                                                    <div className={`w-3 h-3 rounded-full mr-3 ${
+                                                    <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full mr-2 sm:mr-3 ${
                                                         (territory.total_sales_90d || 0) === 0 ? 'bg-red-500' : 'bg-yellow-500'
                                                     }`}></div>
-                                                    {territory.territory || 'Unknown Territory'}
+                                                    <div>
+                                                        {territory.territory || 'Unknown Territory'}
+                                                        <div className="sm:hidden text-gray-500 font-normal text-xs">{territory.mr_name || 'Unknown MR'}</div>
+                                                    </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-3 text-sm text-gray-700 font-medium">{territory.mr_name || 'Unknown MR'}</td>
-                                            <td className="px-6 py-3 text-center">
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                                            <td className="px-4 py-3 text-xs sm:text-sm text-gray-700 font-medium hidden sm:table-cell">{territory.mr_name || 'Unknown MR'}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs sm:text-sm font-bold bg-blue-100 text-blue-800">
                                                     {territory.total_visits_90d || 0}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-3 text-center">
-                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-sm font-bold ${
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs sm:text-sm font-bold ${
                                                     (territory.total_sales_90d || 0) === 0 
                                                         ? 'bg-red-100 text-red-800' 
                                                         : 'bg-green-100 text-green-800'
@@ -428,10 +431,10 @@ const EmergencyDashboard = () => {
                                                     ₹{(territory.total_sales_90d || 0).toLocaleString()}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-3 text-center text-sm font-semibold text-gray-900">
+                                            <td className="px-4 py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden md:table-cell">
                                                 ₹{(territory.revenue_per_visit || 0).toFixed(2)}
                                             </td>
-                                            <td className="px-6 py-3 text-center">
+                                            <td className="px-4 py-3 text-center hidden md:table-cell">
                                                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${
                                                     (territory.conversion_rate || 0) === 0 
                                                         ? 'bg-red-100 text-red-800' 
@@ -442,19 +445,19 @@ const EmergencyDashboard = () => {
                                                     {(territory.conversion_rate || 0).toFixed(1)}%
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-3 text-center">
-                                                <div className="flex items-center gap-2 justify-center">
+                                            <td className="px-4 py-3 text-center">
+                                                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 justify-center">
                                                     <button 
                                                         onClick={() => flagTerritory(territory.territory, 'REASSIGN')}
-                                                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 sm:px-3 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm w-full sm:w-auto"
                                                     >
-                                                        📝 Reassign
+                                                        📝 <span className="hidden sm:inline">Reassign</span>
                                                     </button>
                                                     <button 
                                                         onClick={() => flagTerritory(territory.territory, 'REMOVE')}
-                                                        className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                                        className="bg-red-600 hover:bg-red-700 text-white px-2 sm:px-3 py-1 rounded-lg text-xs font-bold transition-colors shadow-sm w-full sm:w-auto"
                                                     >
-                                                        🗑️ Remove
+                                                        🗑️ <span className="hidden sm:inline">Remove</span>
                                                     </button>
                                                 </div>
                                             </td>
@@ -468,40 +471,40 @@ const EmergencyDashboard = () => {
 
                 {/* Action Summary */}
                 {filteredTerritories.length > 0 && (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">📋 Action Summary</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-red-50 rounded-lg p-4 border border-red-100">
-                                <h4 className="font-semibold text-red-800 mb-2">Immediate Action Required</h4>
-                                <p className="text-sm text-red-700 mb-3">
-                                    {territoryStats.zeroSalesTerritories} territories with zero sales need immediate intervention
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">📋 Action Summary</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                            <div className="bg-red-50 rounded-lg p-3 sm:p-4 border border-red-100">
+                                <h4 className="font-semibold text-red-800 mb-1 sm:mb-2 text-sm sm:text-base">Immediate Action</h4>
+                                <p className="text-xs sm:text-sm text-red-700 mb-2 sm:mb-3">
+                                    {territoryStats.zeroSalesTerritories} areas with zero sales need quick intervention.
                                 </p>
                                 <ul className="text-xs text-red-600 space-y-1">
-                                    <li>• Contact MRs for explanation</li>
-                                    <li>• Review territory boundaries</li>
+                                    <li>• Contact MRs</li>
+                                    <li>• Review boundaries</li>
                                     <li>• Consider reassignment</li>
                                 </ul>
                             </div>
-                            <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
-                                <h4 className="font-semibold text-orange-800 mb-2">Performance Review</h4>
-                                <p className="text-sm text-orange-700 mb-3">
-                                    {territoryStats.lowPerformingTerritories} territories underperforming but showing activity
+                            <div className="bg-orange-50 rounded-lg p-3 sm:p-4 border border-orange-100">
+                                <h4 className="font-semibold text-orange-800 mb-1 sm:mb-2 text-sm sm:text-base">Performance Review</h4>
+                                <p className="text-xs sm:text-sm text-orange-700 mb-2 sm:mb-3">
+                                    {territoryStats.lowPerformingTerritories} areas underperforming but active.
                                 </p>
                                 <ul className="text-xs text-orange-600 space-y-1">
-                                    <li>• Analyze customer potential</li>
-                                    <li>• Provide additional training</li>
-                                    <li>• Optimize visit frequency</li>
+                                    <li>• Analyze potential</li>
+                                    <li>• Provide training</li>
+                                    <li>• Optimize frequency</li>
                                 </ul>
                             </div>
-                            <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                                <h4 className="font-semibold text-blue-800 mb-2">Resource Optimization</h4>
-                                <p className="text-sm text-blue-700 mb-3">
-                                    {territoryStats.totalVisitsWasted} visits could be redirected to high-potential areas
+                            <div className="bg-blue-50 rounded-lg p-3 sm:p-4 border border-blue-100">
+                                <h4 className="font-semibold text-blue-800 mb-1 sm:mb-2 text-sm sm:text-base">Resource Optimization</h4>
+                                <p className="text-xs sm:text-sm text-blue-700 mb-2 sm:mb-3">
+                                    {territoryStats.totalVisitsWasted} visits could be better used.
                                 </p>
                                 <ul className="text-xs text-blue-600 space-y-1">
-                                    <li>• Redistribute high-performing MRs</li>
-                                    <li>• Focus on conversion optimization</li>
-                                    <li>• Implement territory restructuring</li>
+                                    <li>• Redistribute MRs</li>
+                                    <li>• Focus on conversion</li>
+                                    <li>• Restructure territories</li>
                                 </ul>
                             </div>
                         </div>

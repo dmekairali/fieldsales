@@ -367,45 +367,45 @@ const VisitQualityMonitor = ({ mrName }) => {
     const filteredAlerts = getFilteredAlerts();
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4">
-            <div className="max-w-7xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50 p-2 sm:p-4">
+            <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
                 {/* Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                                📊 Visit Quality Monitor
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex-grow">
+                            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span>📊 Visit Quality Monitor</span>
                                 {mrName && (
-                                    <span className="text-lg font-normal text-purple-600">- {mrName}</span>
+                                    <span className="text-base sm:text-lg font-normal text-purple-600">- {mrName}</span>
                                 )}
                                 {!mrName && (
-                                    <span className="text-lg font-normal text-blue-600">- All MRs</span>
+                                    <span className="text-base sm:text-lg font-normal text-blue-600">- All MRs</span>
                                 )}
                             </h1>
-                            <p className="text-gray-600 mt-2">
+                            <p className="text-gray-600 mt-1 sm:mt-2 text-xs sm:text-sm">
                                 Real-time visit quality analysis and performance tracking
-                                {mrName ? <span className="font-medium"> for {mrName}</span> : <span className="font-medium"> across all MRs</span>}
+                                {mrName ? <span className="font-medium"> for {mrName}</span> : <span className="font-medium hidden sm:inline"> across all MRs</span>}.
                             </p>
-                            <div className="mt-3 flex items-center gap-4">
-                                <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-semibold">
+                            <div className="mt-2 sm:mt-3 flex flex-wrap items-center gap-2 sm:gap-4">
+                                <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-2 sm:px-3 py-1 rounded-full text-xs font-semibold">
                                     <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                                    Live Quality Monitoring • Last Updated: {new Date().toLocaleTimeString()}
+                                    Live Quality • Updated: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                 </div>
-                                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                                <div className="hidden md:inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 rounded-full text-xs">
                                     <span>📊</span>
-                                    Using Quality Analytics
+                                    Quality Analytics
                                 </div>
-                                <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                                <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs">
                                     <span>📅</span>
                                     {dateRange === 'today' ? 'Today' : dateRange === 'yesterday' ? 'Yesterday' : 'This Week'}
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 self-start sm:self-auto">
                             <select 
                                 value={dateRange} 
                                 onChange={(e) => setDateRange(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xs sm:text-sm"
                             >
                                 <option value="today">Today</option>
                                 <option value="yesterday">Yesterday</option>
@@ -413,7 +413,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                             </select>
                             <button
                                 onClick={fetchQualityData}
-                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                                className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
                             >
                                 <span className={loading ? 'animate-spin' : ''}>🔄</span>
                                 Refresh
@@ -423,57 +423,57 @@ const VisitQualityMonitor = ({ mrName }) => {
                 </div>
 
                 {/* Quality Statistics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-sm p-6">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-purple-100 text-sm font-medium uppercase tracking-wide">Total Alerts</div>
-                                <div className="text-3xl font-bold mt-2">{stats.total}</div>
-                                <div className="text-purple-100 text-sm mt-1">Quality issues</div>
+                                <div className="text-purple-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Total Alerts</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{stats.total}</div>
+                                <div className="text-purple-100 text-xs sm:text-sm mt-1">Quality issues</div>
                             </div>
-                            <div className="text-4xl opacity-80">⚡</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">⚡</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-red-500 to-red-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-red-100 text-sm font-medium uppercase tracking-wide">Critical Issues</div>
-                                <div className="text-3xl font-bold mt-2">{stats.critical}</div>
-                                <div className="text-red-100 text-sm mt-1">Score &lt; 20</div>
+                                <div className="text-red-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Critical Issues</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{stats.critical}</div>
+                                <div className="text-red-100 text-xs sm:text-sm mt-1">Score &lt; 20</div>
                             </div>
-                            <div className="text-4xl opacity-80">🚨</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">🚨</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-orange-100 text-sm font-medium uppercase tracking-wide">Poor Quality</div>
-                                <div className="text-3xl font-bold mt-2">{stats.poor}</div>
-                                <div className="text-orange-100 text-sm mt-1">Score 20-30</div>
+                                <div className="text-orange-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Poor Quality</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{stats.poor}</div>
+                                <div className="text-orange-100 text-xs sm:text-sm mt-1">Score 20-30</div>
                             </div>
-                            <div className="text-4xl opacity-80">⚠️</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">⚠️</div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-sm p-6">
+                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-sm p-4 sm:p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className="text-blue-100 text-sm font-medium uppercase tracking-wide">Avg Quality</div>
-                                <div className="text-3xl font-bold mt-2">{stats.avgScore.toFixed(1)}</div>
-                                <div className="text-blue-100 text-sm mt-1">Overall score</div>
+                                <div className="text-blue-100 text-xs sm:text-sm font-medium uppercase tracking-wide">Avg Quality</div>
+                                <div className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">{stats.avgScore.toFixed(1)}</div>
+                                <div className="text-blue-100 text-xs sm:text-sm mt-1">Overall score</div>
                             </div>
-                            <div className="text-4xl opacity-80">📈</div>
+                            <div className="text-3xl sm:text-4xl opacity-80">📈</div>
                         </div>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-semibold text-gray-900">Quality Alert Filters</h2>
-                        <div className="flex items-center gap-3">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <h2 className="text-base sm:text-lg font-semibold text-gray-900">Quality Alert Filters</h2>
+                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                             <button
                                 onClick={() => setSelectedFilter('all')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                                     selectedFilter === 'all' 
                                         ? 'bg-purple-100 text-purple-700 border border-purple-200' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -483,7 +483,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                             </button>
                             <button
                                 onClick={() => setSelectedFilter('critical')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                                     selectedFilter === 'critical' 
                                         ? 'bg-red-100 text-red-700 border border-red-200' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -493,7 +493,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                             </button>
                             <button
                                 onClick={() => setSelectedFilter('poor')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                                     selectedFilter === 'poor' 
                                         ? 'bg-orange-100 text-orange-700 border border-orange-200' 
                                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -507,56 +507,56 @@ const VisitQualityMonitor = ({ mrName }) => {
 
                 {/* Quality Alerts */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-xl">
-                        <h2 className="text-xl font-bold flex items-center gap-3">
+                    <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-4 sm:p-6 rounded-t-xl">
+                        <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 sm:gap-3">
                             ⚡ Quality Alerts ({filteredAlerts.length})
                         </h2>
-                        <p className="text-purple-100 mt-2">
+                        <p className="text-purple-100 mt-1 sm:mt-2 text-xs sm:text-sm">
                             Visits with quality scores below acceptable thresholds
                             {mrName && <span> for {mrName}</span>}
                         </p>
                     </div>
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         {filteredAlerts.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
-                                <div className="text-4xl mb-4">✨</div>
-                                <p className="text-lg">No quality alerts found!</p>
-                                <p className="text-sm mt-2">
+                            <div className="text-center py-8 sm:py-12 text-gray-500">
+                                <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">✨</div>
+                                <p className="text-base sm:text-lg">No quality alerts found!</p>
+                                <p className="text-xs sm:text-sm mt-1 sm:mt-2">
                                     {mrName ? `${mrName} meets quality standards` : 'All visits meet quality standards for the selected filter.'}
                                 </p>
                             </div>
                         ) : (
-                            <div className="grid gap-4 max-h-96 overflow-y-auto">
+                            <div className="grid gap-3 sm:gap-4 max-h-96 overflow-y-auto">
                                 {filteredAlerts.map((alert, index) => (
                                     <div 
                                         key={index} 
-                                        className={`border-l-4 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
+                                        className={`border-l-4 rounded-lg p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${
                                             alert.quality_score < 20 ? 'border-red-500 bg-red-50 hover:bg-red-100' :
                                             'border-orange-500 bg-orange-50 hover:bg-orange-100'
                                         }`} 
                                         onClick={() => investigateQualityAlert(alert)}
                                     >
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                             <div className="flex-1">
-                                                <div className="flex items-center gap-4 mb-2">
-                                                    <span className="font-bold text-gray-900">{alert.empName}</span>
-                                                    <span className="text-gray-400">→</span>
-                                                    <span className="text-gray-700">{alert.clientName}</span>
+                                                <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 mb-1 sm:mb-2">
+                                                    <span className="font-bold text-gray-900 text-sm sm:text-base">{alert.empName}</span>
+                                                    <span className="text-gray-400 hidden sm:inline">→</span>
+                                                    <span className="text-gray-700 text-xs sm:text-sm">{alert.clientName}</span>
                                                 </div>
-                                                <div className="grid grid-cols-4 gap-4 text-sm">
-                                                    <div className="flex items-center gap-2">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">📍</span>
-                                                        <span className="text-gray-600">{alert.areaName}</span>
+                                                        <span className="text-gray-600 truncate">{alert.areaName}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">⏱️</span>
                                                         <span className="text-gray-600">{alert.visitTime}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">💰</span>
                                                         <span className="text-gray-600">₹{alert.amountOfSale || 0}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">📊</span>
                                                         <span className={`font-semibold ${alert.quality_score < 20 ? 'text-red-600' : 'text-orange-600'}`}>
                                                             {Math.round(alert.quality_score || 0)}/100
@@ -564,13 +564,13 @@ const VisitQualityMonitor = ({ mrName }) => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className={`px-3 py-1 text-xs font-bold rounded-lg ${
+                                            <div className="flex items-center gap-2 sm:gap-3 mt-2 sm:mt-0 self-start sm:self-center">
+                                                <span className={`px-2 sm:px-3 py-1 text-xs font-bold rounded-lg ${
                                                     alert.quality_score < 20 ? 'bg-red-200 text-red-800' : 'bg-orange-200 text-orange-800'
                                                 }`}>
                                                     {alert.quality_grade}
                                                 </span>
-                                                <button className="text-gray-400 hover:text-gray-600 text-xl">
+                                                <button className="text-gray-400 hover:text-gray-600 text-lg sm:text-xl">
                                                     🔍
                                                 </button>
                                             </div>
@@ -584,11 +584,11 @@ const VisitQualityMonitor = ({ mrName }) => {
 
                 {/* MR Performance Ranking */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-xl">
-                        <h2 className="text-xl font-bold flex items-center gap-3">
+                    <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 sm:p-6 rounded-t-xl">
+                        <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 sm:gap-3">
                             🏆 MR Quality Performance Today
                         </h2>
-                        <p className="text-green-100 mt-2">
+                        <p className="text-green-100 mt-1 sm:mt-2 text-xs sm:text-sm">
                             Daily quality rankings and performance metrics
                             {mrName && <span> - Showing data for {mrName}</span>}
                         </p>
@@ -597,22 +597,22 @@ const VisitQualityMonitor = ({ mrName }) => {
                         <table className="w-full">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MR Name</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Visits</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quality</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Sales/Visit</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                                    <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MR Name</th>
+                                    <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Visits</th>
+                                    <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Quality</th>
+                                    <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Total Sales</th>
+                                    <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Sales/Visit</th>
+                                    <th className="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-gray-200 text-xs sm:text-sm">
                                 {mrPerformance.length === 0 ? (
                                     <tr>
                                         <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
-                                            <div className="text-4xl mb-4">📊</div>
-                                            <p>No performance data available for today.</p>
-                                            {mrName && <p className="text-sm mt-2">No visits found for {mrName} today.</p>}
+                                            <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">📊</div>
+                                            <p className="text-sm sm:text-base">No performance data available for today.</p>
+                                            {mrName && <p className="text-xs sm:text-sm mt-1 sm:mt-2">No visits found for {mrName} today.</p>}
                                         </td>
                                     </tr>
                                 ) : (
@@ -621,8 +621,8 @@ const VisitQualityMonitor = ({ mrName }) => {
                                             index < 3 ? 'bg-green-50' : 
                                             mr.qualityRating === 'POOR' ? 'bg-red-50' : 'bg-white'
                                         } hover:bg-gray-50 transition-colors`}>
-                                            <td className="px-6 py-3 text-center">
-                                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                                            <td className="px-3 sm:px-6 py-3 text-center">
+                                                <span className={`inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-bold ${
                                                     index === 0 ? 'bg-yellow-400 text-yellow-900' :
                                                     index === 1 ? 'bg-gray-300 text-gray-800' :
                                                     index === 2 ? 'bg-orange-400 text-orange-900' :
@@ -631,23 +631,23 @@ const VisitQualityMonitor = ({ mrName }) => {
                                                     {index + 1}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-3 font-semibold text-gray-900">{mr.name}</td>
-                                            <td className="px-6 py-3 text-center">
-                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                                            <td className="px-3 sm:px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">{mr.name}</td>
+                                            <td className="px-3 sm:px-6 py-3 text-center hidden sm:table-cell">
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-800">
                                                     {mr.totalVisits}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-3 text-center font-bold text-lg">
+                                            <td className="px-3 sm:px-6 py-3 text-center font-bold text-sm sm:text-lg">
                                                 {mr.avgQualityScore.toFixed(1)}
                                             </td>
-                                            <td className="px-6 py-3 text-center font-semibold">
+                                            <td className="px-3 sm:px-6 py-3 text-center font-semibold hidden md:table-cell">
                                                 ₹{mr.totalSales.toLocaleString()}
                                             </td>
-                                            <td className="px-6 py-3 text-center">
+                                            <td className="px-3 sm:px-6 py-3 text-center hidden md:table-cell">
                                                 ₹{mr.avgSalesPerVisit.toFixed(0)}
                                             </td>
-                                            <td className="px-6 py-3 text-center">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                            <td className="px-3 sm:px-6 py-3 text-center">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
                                                     mr.qualityRating === 'GOOD' ? 'bg-green-100 text-green-800' :
                                                     mr.qualityRating === 'AVERAGE' ? 'bg-yellow-100 text-yellow-800' :
                                                     'bg-red-100 text-red-800'
@@ -665,30 +665,30 @@ const VisitQualityMonitor = ({ mrName }) => {
 
                 {/* Suspicious Visits */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                    <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white p-6 rounded-t-xl">
-                        <h2 className="text-xl font-bold flex items-center gap-3">
+                    <div className="bg-gradient-to-r from-orange-600 to-orange-700 text-white p-4 sm:p-6 rounded-t-xl">
+                        <h2 className="text-lg sm:text-xl font-bold flex items-center gap-2 sm:gap-3">
                             🔍 Suspicious Visits Today ({suspiciousVisits.length})
                         </h2>
-                        <p className="text-orange-100 mt-2">
+                        <p className="text-orange-100 mt-1 sm:mt-2 text-xs sm:text-sm">
                             Visits flagged for unusual patterns or timing issues
                             {mrName && <span> for {mrName}</span>}
                         </p>
                     </div>
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         {suspiciousVisits.length === 0 ? (
-                            <div className="text-center py-12 text-gray-500">
-                                <div className="text-4xl mb-4">✅</div>
-                                <p className="text-lg">No suspicious visits detected today!</p>
-                                <p className="text-sm mt-2">
-                                    {mrName ? `${mrName}'s visits appear normal and follow expected patterns.` : 'All visits appear normal and follow expected patterns.'}
+                            <div className="text-center py-8 sm:py-12 text-gray-500">
+                                <div className="text-3xl sm:text-4xl mb-3 sm:mb-4">✅</div>
+                                <p className="text-base sm:text-lg">No suspicious visits detected today!</p>
+                                <p className="text-xs sm:text-sm mt-1 sm:mt-2">
+                                    {mrName ? `${mrName}'s visits appear normal.` : 'All visits appear normal.'}
                                 </p>
                             </div>
                         ) : (
-                            <div className="grid gap-4 max-h-96 overflow-y-auto">
+                            <div className="grid gap-3 sm:gap-4 max-h-96 overflow-y-auto">
                                 {suspiciousVisits.map((visit, index) => (
                                     <div 
                                         key={index} 
-                                        className={`border-l-4 rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
+                                        className={`border-l-4 rounded-lg p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${
                                             visit.quality_flag === 'FAKE_VISIT' ? 'border-red-500 bg-red-50 hover:bg-red-100' :
                                             visit.quality_flag === 'SUSPICIOUS_SHORT' ? 'border-orange-500 bg-orange-50 hover:bg-orange-100' :
                                             visit.quality_flag === 'SUSPICIOUS_LONG' ? 'border-purple-500 bg-purple-50 hover:bg-purple-100' :
@@ -696,45 +696,45 @@ const VisitQualityMonitor = ({ mrName }) => {
                                         }`} 
                                         onClick={() => investigateVisit(visit)}
                                     >
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                             <div className="flex-1">
-                                                <div className="flex items-center gap-4 mb-2">
-                                                    <div className={`w-3 h-3 rounded-full ${
+                                                <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 mb-1 sm:mb-2">
+                                                    <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${
                                                         visit.quality_flag === 'FAKE_VISIT' ? 'bg-red-500' :
                                                         visit.quality_flag === 'SUSPICIOUS_SHORT' ? 'bg-orange-500' :
                                                         visit.quality_flag === 'SUSPICIOUS_LONG' ? 'bg-purple-500' :
                                                         'bg-yellow-500'
                                                     }`}></div>
-                                                    <span className="font-bold text-gray-900">{visit.empName || 'Unknown MR'}</span>
-                                                    <span className="text-gray-400">→</span>
-                                                    <span className="text-gray-700">{visit.clientName || 'Unknown Client'}</span>
+                                                    <span className="font-bold text-gray-900 text-sm sm:text-base">{visit.empName || 'N/A'}</span>
+                                                    <span className="text-gray-400 hidden sm:inline">→</span>
+                                                    <span className="text-gray-700 text-xs sm:text-sm truncate">{visit.clientName || 'N/A'}</span>
                                                 </div>
-                                                <div className="grid grid-cols-4 gap-4 text-sm">
-                                                    <div className="flex items-center gap-2">
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">📍</span>
-                                                        <span className="text-gray-600">{visit.areaName || 'Unknown Location'}</span>
+                                                        <span className="text-gray-600 truncate">{visit.areaName || 'N/A'}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">⏱️</span>
                                                         <span className={`font-semibold ${
                                                             visit.quality_flag === 'FAKE_VISIT' || visit.quality_flag === 'SUSPICIOUS_SHORT' 
                                                                 ? 'text-red-600' : 'text-purple-600'
                                                         }`}>{visit.visitTime || '00:00:00'}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">💰</span>
                                                         <span className={`font-bold ${(visit.amountOfSale || 0) === 0 ? 'text-red-600' : 'text-green-600'}`}>
                                                             ₹{(visit.amountOfSale || 0).toLocaleString()}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 sm:gap-2">
                                                         <span className="text-gray-500">🚩</span>
-                                                        <span className="text-gray-600">{visit.quality_flag.replace('_', ' ')}</span>
+                                                        <span className="text-gray-600 whitespace-nowrap">{visit.quality_flag.replace('_', ' ')}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className={`px-3 py-1 text-xs font-bold rounded-lg ${
+                                            <div className="flex items-center gap-2 sm:gap-3 mt-2 sm:mt-0 self-start sm:self-center">
+                                                <span className={`px-2 sm:px-3 py-1 text-xs font-bold rounded-lg whitespace-nowrap ${
                                                     visit.quality_flag === 'FAKE_VISIT' ? 'bg-red-200 text-red-800' :
                                                     visit.quality_flag === 'SUSPICIOUS_SHORT' ? 'bg-orange-200 text-orange-800' :
                                                     visit.quality_flag === 'SUSPICIOUS_LONG' ? 'bg-purple-200 text-purple-800' :
@@ -742,7 +742,7 @@ const VisitQualityMonitor = ({ mrName }) => {
                                                 }`}>
                                                     {visit.quality_flag.replace('_', ' ')}
                                                 </span>
-                                                <button className="text-gray-400 hover:text-gray-600 text-xl">
+                                                <button className="text-gray-400 hover:text-gray-600 text-lg sm:text-xl">
                                                     🔍
                                                 </button>
                                             </div>

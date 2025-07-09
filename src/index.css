@@ -1,12 +1,81 @@
 @import 'https://cdn.tailwindcss.com';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+body {
+  @apply bg-slate-100;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 .App {
+  @apply min-h-screen flex flex-col;
   text-align: center;
 }
 
+/* Responsive container */
+.container {
+  @apply w-full px-4 mx-auto;
+}
+
+@screen sm {
+  .container {
+    @apply max-w-screen-sm;
+  }
+}
+@screen md {
+  .container {
+    @apply max-w-screen-md;
+  }
+}
+@screen lg {
+  .container {
+    @apply max-w-screen-lg;
+  }
+}
+@screen xl {
+  .container {
+    @apply max-w-screen-xl;
+  }
+}
+@screen 2xl {
+  .container {
+    @apply max-w-screen-2xl;
+  }
+}
+
+
+/* Ensure images and media are responsive */
+img, video, iframe {
+  @apply max-w-full h-auto;
+}
+
+/* Typography adjustments for smaller screens */
+h1 {
+  @apply text-3xl md:text-4xl;
+}
+
+h2 {
+  @apply text-2xl md:text-3xl;
+}
+
+h3 {
+  @apply text-xl md:text-2xl;
+}
+
+/* General responsive utilities */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* App specific adjustments */
 .App-logo {
   height: 40vmin;
   pointer-events: none;
@@ -35,4 +104,9 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Additional responsive helpers */
+.flex-wrap-reverse-sm {
+  @apply flex-wrap-reverse sm:flex-wrap;
 }
