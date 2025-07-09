@@ -730,7 +730,7 @@ async getMonthlyPlan(mrName, month, year) {
 
         // Then query without schema qualification
         const { data, error } = await supabase
-            .from('monthly_tour_plans') // Just table name, no schema prefix
+            .from('ai_tour_plan.monthly_tour_plans') // Just table name, no schema prefix
             .select('*')
             .eq('mr_name', mrName)
             .eq('plan_month', month)
