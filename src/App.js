@@ -73,6 +73,14 @@ function App() {
       gradient: 'from-indigo-500 to-indigo-600'
     },
     {
+  id: 'monthly-tour',
+  name: 'Monthly Planning',
+  icon: '📅',
+  description: 'AI monthly tour planning',
+  color: 'indigo',
+  gradient: 'from-indigo-500 to-indigo-600'
+},
+    {
       id: 'analytics',
       name: 'Analytics',
       icon: '📊',
@@ -141,6 +149,8 @@ function App() {
         return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'ai-tour':
         return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'monthly-tour':
+        return <MonthlyTourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'geocoding':
         return <GeocodingDashboard />;
       case 'analytics':
