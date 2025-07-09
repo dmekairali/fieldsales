@@ -643,7 +643,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async saveMonthlyPlan(mrName, month, year, plan) {
         try {
             const { data, error } = await supabase
-                .from('monthly_tour_plans')
+                .from('ai_tour_plan.monthly_tour_plans')
                 .upsert({
                     mr_name: mrName,
                     plan_month: month,
@@ -655,7 +655,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }, {
-                    onConflict: 'mr_name,plan_month,plan_year,status'
+                    onConflict: 'mr_name,plan_month,plan_year'
                 })
                 .select()
                 .single();
@@ -724,7 +724,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async getMonthlyPlan(mrName, month, year) {
         try {
             const { data, error } = await supabase
-                .from('monthly_tour_plans')
+                .from('ai_tour_plan.monthly_tour_plans')
                 .select('*')
                 .eq('mr_name', mrName)
                 .eq('plan_month', month)
@@ -1144,7 +1144,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async saveWeeklyRevision(monthlyPlanId, weekNumber, revisedPlan, analysis) {
         try {
             const { data, error } = await supabase
-                .from('weekly_plan_revisions')
+                .from('ai_tour_plan.weekly_plan_revisions')
                 .insert({
                     monthly_plan_id: monthlyPlanId,
                     week_number: weekNumber,
@@ -1178,7 +1178,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async updateCurrentPlan(planId, revisedPlan) {
         try {
             const { error } = await supabase
-                .from('monthly_tour_plans')
+                .from('ai_tour_plan.monthly_tour_plans')
                 .update({
                     current_plan_json: revisedPlan,
                     current_revision: revisedPlan.plan_metadata.revision_count,
@@ -1314,7 +1314,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async saveMonthlyReport(report) {
         try {
             const { data, error } = await supabase
-                .from('monthly_performance_reports')
+                .from('ai_tour_plan.monthly_performance_reports')
                 .insert({
                     monthly_plan_id: report.monthly_plan_id || null,
                     mr_name: report.mr_name,
