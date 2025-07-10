@@ -171,16 +171,35 @@ async function generateStrategicFramework(assistantId, threadId, mrName, month, 
     let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
     let attempts = 0;
     const maxAttempts = 60; // 2 minutes max
+    const pollingIntervalMs = 2000;
 
-    while ((runStatus.status === 'running' || runStatus.status === 'queued') && attempts < maxAttempts) {
-        console.log(`🔄 Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        console.log(`🔄 Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+
+        if (runStatus.status === 'completed') {
+            break;
+        }
+        if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
+            throw new Error(`Assistant run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+        }
+        // Continue polling if status is 'queued', 'running', or 'in_progress'
+        if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
+            // Handle unexpected statuses
+            console.warn(`Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
         attempts++;
     }
 
     if (runStatus.status !== 'completed') {
-        throw new Error(`Assistant run failed with status: ${runStatus.status}`);
+        if (attempts >= maxAttempts) {
+            throw new Error(`Assistant run polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+        }
+        // This case should ideally be caught by the checks inside the loop (failed, cancelled, expired)
+        // or if the loop exited for a reason other than completion or maxAttempts.
+        throw new Error(`Assistant run did not complete. Final status: ${runStatus.status}`);
     }
 
     console.log('✅ Assistant run completed');
@@ -222,13 +241,33 @@ async function reviseWeeklyPlan(assistantId, threadId, weekNumber, actualPerform
 
     // Wait for completion
     let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-    while (runStatus.status === 'running' || runStatus.status === 'queued') {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    let attempts = 0;
+    const maxAttempts = 60; // 2 minutes max
+    const pollingIntervalMs = 2000;
+
+    while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        console.log(`🔄 Weekly revision run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+
+        if (runStatus.status === 'completed') {
+            break;
+        }
+        if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
+            throw new Error(`Weekly revision run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+        }
+        if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
+            console.warn(`Weekly revision: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
+        attempts++;
     }
 
     if (runStatus.status !== 'completed') {
-        throw new Error(`Weekly revision failed with status: ${runStatus.status}`);
+        if (attempts >= maxAttempts) {
+            throw new Error(`Weekly revision polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+        }
+        throw new Error(`Weekly revision run did not complete. Final status: ${runStatus.status}`);
     }
 
     const messages = await openai.beta.threads.messages.list(threadId);
@@ -263,13 +302,33 @@ async function updateDailyPlan(assistantId, threadId, actualPerformance) {
 
     // Wait for completion
     let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-    while (runStatus.status === 'running' || runStatus.status === 'queued') {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    let attempts = 0;
+    const maxAttempts = 60; // 2 minutes max
+    const pollingIntervalMs = 2000;
+
+    while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        console.log(`🔄 Daily update run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+
+        if (runStatus.status === 'completed') {
+            break;
+        }
+        if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
+            throw new Error(`Daily update run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+        }
+        if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
+            console.warn(`Daily update: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
+        attempts++;
     }
 
     if (runStatus.status !== 'completed') {
-        throw new Error(`Daily update failed with status: ${runStatus.status}`);
+        if (attempts >= maxAttempts) {
+            throw new Error(`Daily update polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+        }
+        throw new Error(`Daily update run did not complete. Final status: ${runStatus.status}`);
     }
 
     const messages = await openai.beta.threads.messages.list(threadId);
@@ -303,13 +362,33 @@ async function monthlyReview(assistantId, threadId, monthlyPerformance) {
 
     // Wait for completion
     let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-    while (runStatus.status === 'running' || runStatus.status === 'queued') {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+    let attempts = 0;
+    const maxAttempts = 60; // 2 minutes max
+    const pollingIntervalMs = 2000;
+
+    while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        console.log(`🔄 Monthly review run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+
+        if (runStatus.status === 'completed') {
+            break;
+        }
+        if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
+            throw new Error(`Monthly review run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+        }
+        if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
+            console.warn(`Monthly review: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
+        attempts++;
     }
 
     if (runStatus.status !== 'completed') {
-        throw new Error(`Monthly review failed with status: ${runStatus.status}`);
+        if (attempts >= maxAttempts) {
+            throw new Error(`Monthly review polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+        }
+        throw new Error(`Monthly review run did not complete. Final status: ${runStatus.status}`);
     }
 
     const messages = await openai.beta.threads.messages.list(threadId);

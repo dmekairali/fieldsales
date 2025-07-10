@@ -441,7 +441,7 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                     {actionLoading === 'generating' ? (
                                         <>
                                             <span className="animate-spin">🔄</span>
-                                            <span className="font-medium">Generating...</span>
+                                            <span className="font-medium">Generating plan (up to 2 mins)...</span>
                                         </>
                                     ) : (
                                         <>
@@ -783,7 +783,7 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                         disabled={actionLoading === 'generating'}
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50"
                                     >
-                                        {actionLoading === 'generating' ? 'Generating...' : 'Generate Monthly Plan'}
+                                        {actionLoading === 'generating' ? 'Generating plan (up to 2 mins)...' : 'Generate Monthly Plan'}
                                     </button>
                                 </div>
                             </div>
