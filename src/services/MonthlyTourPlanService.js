@@ -75,9 +75,33 @@ class MonthlyTourPlanService {
             .eq('mr_name', mrName)
             .eq('status', 'ACTIVE');
 
-        if (customersError) {
-            throw new Error(`Customer data fetch failed: ${customersError.message}`);
-        }
+
+         // ADD THIS COMPREHENSIVE DEBUG BLOCK
+    console.log('🔍 DEBUG: Monthly Territory Context Results:', {
+        mrName: mrName,
+        error: customersError,
+        customerCount: customers?.length,
+        querySuccessful: !customersError && customers,
+        firstThreeCustomers: customers?.slice(0, 3).map(c => ({
+            code: c.customer_code,
+            name: c.customer_name,
+            area: c.area_name,
+            tier: c.tier_level,
+            score: c.tier_score,
+            status: c.status
+        })),
+        realAreas: [...new Set(customers?.slice(0, 10).map(c => c.area_name))],
+        tierDistribution: customers?.reduce((acc, c) => {
+            acc[c.tier_level] = (acc[c.tier_level] || 0) + 1;
+            return acc;
+        }, {}),
+        rawDataSample: customers?.[0] // Show the complete first customer object
+    });
+
+  if (customersError) {
+        console.error('❌ Customer data fetch error:', customersError);
+        throw new Error(`Customer data fetch failed: ${customersError.message}`);
+    }
 
         // Get previous month performance
         const previousMonth = month === 1 ? 12 : month - 1;
