@@ -8,6 +8,8 @@ import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
 import AITourPlanDashboard from './components/AITourPlanDashboard';
 import MonthlyTourPlanDashboard from './components/MonthlyTourPlanDashboard';
+import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
+
 
 function App() {
   const [activeTab, setActiveTab] = useState('emergency');
@@ -80,6 +82,14 @@ function App() {
   color: 'indigo',
   gradient: 'from-indigo-500 to-indigo-600'
 },
+  {
+    id: 'monthly-tour-v2',
+    name: 'Monthly Planning V2',
+    icon: '🚀',
+    description: 'Advanced AI monthly planning',
+    color: 'violet',
+    gradient: 'from-violet-500 to-violet-600'
+  },
     {
       id: 'analytics',
       name: 'Analytics',
@@ -151,6 +161,13 @@ function App() {
         return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'monthly-tour':
         return <MonthlyTourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'monthly-tour-v2': 
+        return (
+          <MonthlyPlanDashboardV2
+            selectedMR={selectedMR}
+            selectedMRName={selectedMRName}
+          />
+        );
       case 'geocoding':
         return <GeocodingDashboard />;
       case 'analytics':
