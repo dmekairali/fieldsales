@@ -205,20 +205,29 @@ async function generateCompletePlan(assistantId, threadId, mrName, month, year, 
     });
 
     // Wait for completion
-    let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-    let attempts = 0;
-    const maxAttempts = 60;
+    // Wait for completion with 2-minute timeout
+let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+let attempts = 0;
+const maxAttempts = 120; // 2 minutes
 
-    while ((runStatus.status === 'running' || runStatus.status === 'queued') && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-        attempts++;
-        console.log(`⏳ Waiting for completion... Status: ${runStatus.status} (${attempts}/${maxAttempts})`);
+while ((runStatus.status === 'running' || runStatus.status === 'queued' || runStatus.status === 'in_progress') && attempts < maxAttempts) {
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Check every second
+    runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    attempts++;
+    
+    // Log every 10 seconds
+    if (attempts % 10 === 0) {
+        console.log(`⏳ AI thinking... Status: ${runStatus.status} (${attempts}/120s)`);
     }
+}
 
-    if (runStatus.status !== 'completed') {
+if (runStatus.status !== 'completed') {
+    if (runStatus.status === 'in_progress') {
+        throw new Error(`AI is still processing after 2 minutes. Please try again in a few minutes.`);
+    } else {
         throw new Error(`Assistant run failed with status: ${runStatus.status}`);
     }
+}
 
     // Get response
     const messages = await openai.beta.threads.messages.list(threadId);
