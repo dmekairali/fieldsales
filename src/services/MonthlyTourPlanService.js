@@ -9,47 +9,89 @@ export class OpenAIAssistantService {
         if (!this.assistantId) {
             throw new Error('REACT_APP_OPENAI_ASSISTANT_ID environment variable is required');
         }
+        
+        console.log('🔧 Assistant ID configured:', this.assistantId?.substring(0, 10) + '...');
     }
 
     async generateMonthlyPlan(mrName, month, year, territoryContext) {
         try {
             console.log(`🤖 Calling API for monthly plan generation for ${mrName}`);
+            console.log('📍 API URL:', '/api/monthly-plan');
+            console.log('📊 Territory context summary:', {
+                customers: territoryContext.customers?.length || 0,
+                hasPerformanceData: !!territoryContext.previous_performance,
+                hasSeasonalData: !!territoryContext.seasonal_patterns,
+                hasTerritoryMetrics: !!territoryContext.territory_metrics
+            });
             
-            // Call your backend API instead of OpenAI directly
-            const response = await fetch('/api/monthly-plan', {
+            const requestBody = {
+                mrName,
+                month,
+                year,
+                territoryContext,
+                assistantId: this.assistantId
+            };
+            
+            console.log('📤 Request body size:', JSON.stringify(requestBody).length, 'characters');
+            
+            // Call your backend API
+            const response = await fetch('/api/openai/monthly-plan', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    mrName,
-                    month,
-                    year,
-                    territoryContext,
-                    assistantId: this.assistantId
-                })
+                body: JSON.stringify(requestBody)
             });
 
             console.log('📡 API response status:', response.status);
+            console.log('📡 API response headers:', Object.fromEntries(response.headers.entries()));
 
+            // Get response text first to debug what we're receiving
+            const responseText = await response.text();
+            console.log('📥 Raw response length:', responseText.length);
+            console.log('📥 Raw response preview (first 200 chars):', responseText.substring(0, 200));
+            
             if (!response.ok) {
-                const errorData = await response.json();
-                console.error('❌ API call failed:', errorData);
+                console.error('❌ API call failed with status:', response.status);
+                console.error('❌ Response text:', responseText);
+                
+                // Try to parse as JSON for structured error
+                let errorData;
+                try {
+                    errorData = JSON.parse(responseText);
+                    console.error('❌ Parsed error data:', errorData);
+                } catch (parseErr) {
+                    console.error('❌ Could not parse error response as JSON:', parseErr);
+                    // Return the raw text for debugging
+                    throw new Error(`API call failed (${response.status}): ${responseText.substring(0, 200)}...`);
+                }
+                
                 throw new Error(errorData.error || `API call failed: ${response.status}`);
             }
 
-            const result = await response.json();
+            // Try to parse the successful response
+            let result;
+            try {
+                result = JSON.parse(responseText);
+                console.log('✅ Successfully parsed API response');
+            } catch (parseErr) {
+                console.error('❌ Could not parse successful response as JSON:', parseErr);
+                console.error('❌ Response text that failed to parse:', responseText.substring(0, 500));
+                throw new Error(`Invalid JSON response from API: ${parseErr.message}`);
+            }
             
             if (!result.success) {
+                console.error('❌ API returned success=false:', result.error);
                 throw new Error(result.error || 'API call failed');
             }
 
             console.log('✅ API call successful');
             console.log('📊 Plan summary:', {
-                weeks: result.plan.weekly_plans?.length || 0,
-                customers: Object.keys(result.plan.customer_visit_frequency || {}).length,
-                areas: Object.keys(result.plan.area_coverage_plan || {}).length,
-                tokens_used: result.tokens_used
+                weeks: result.plan?.weekly_plans?.length || 0,
+                customers: Object.keys(result.plan?.customer_visit_frequency || {}).length,
+                areas: Object.keys(result.plan?.area_coverage_plan || {}).length,
+                tokens_used: result.tokens_used,
+                thread_id: result.thread_id
             });
 
             return {
@@ -61,10 +103,66 @@ export class OpenAIAssistantService {
 
         } catch (error) {
             console.error('❌ API call failed:', error);
+            console.error('❌ Error type:', error.constructor.name);
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Full error:', error);
+            
             throw new Error(`API planning failed: ${error.message}`);
         }
     }
 }
+
+// Test function to check if API is working
+export async function testAPI() {
+    try {
+        console.log('🧪 Testing API endpoint...');
+        
+        const response = await fetch('/api/openai/monthly-plan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                mrName: 'Test User',
+                month: 7,
+                year: 2025,
+                territoryContext: {
+                    customers: [
+                        {
+                            customer_name: 'Test Customer',
+                            tier_level: 'TIER_4_PROSPECT',
+                            area_name: 'Test Area',
+                            tier_score: 10,
+                            total_sales_90d: 1000
+                        }
+                    ],
+                    previous_performance: { total_visits: 0, total_revenue: 0, conversion_rate: 0, performance_grade: 'NEW' },
+                    seasonal_patterns: { month_performance_trend: 'STABLE', seasonal_factor: 1.0, avg_monthly_visits: 250 },
+                    territory_metrics: { total_customers: 1, territory_efficiency: 'LOW', coverage_analysis: 'FOCUSED' }
+                },
+                assistantId: process.env.REACT_APP_OPENAI_ASSISTANT_ID
+            })
+        });
+
+        const responseText = await response.text();
+        console.log('🧪 Test API Response Status:', response.status);
+        console.log('🧪 Test API Response Text:', responseText.substring(0, 500));
+        
+        if (response.ok) {
+            const result = JSON.parse(responseText);
+            console.log('✅ API test successful:', result.success);
+            return result;
+        } else {
+            console.error('❌ API test failed:', responseText);
+            return { success: false, error: responseText };
+        }
+        
+    } catch (error) {
+        console.error('❌ API test error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 
 // ===== MAIN SERVICE CLASS (KEEP MOST OF YOUR EXISTING CODE) =====
 class MonthlyTourPlanService {
