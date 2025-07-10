@@ -8,6 +8,89 @@ class MonthlyTourPlanService {
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
 
+
+    /**
+ * Standalone OpenAI call optimized for monthly tour planning
+ */
+async callOpenAIForMonthlyPlan(prompt) {
+    const openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY;
+    
+    if (!openaiApiKey) {
+        throw new Error('OpenAI API key not configured for monthly planning');
+    }
+
+    try {
+        console.log('🤖 Calling OpenAI for monthly plan generation...');
+        console.log('🤖 Prompt length:', prompt.length);
+        
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openaiApiKey}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-4',
+                messages: [
+                    {
+                        role: 'system', 
+                        content: `You are an expert monthly pharmaceutical territory planning AI for Kairali Ayurvedic products in India. 
+
+CRITICAL REQUIREMENTS:
+- Generate COMPLETE monthly plans with ALL 4-5 weeks
+- Include ALL working days (Monday-Saturday) for each week
+- Cover 80-100 different customers throughout the month
+- Use ONLY real customer names and area names provided in the prompt
+- Never truncate responses - always provide complete JSON
+- Ensure logical customer distribution across all weeks
+- Return only valid, complete JSON - no explanations or markdown
+
+You must generate comprehensive plans that cover the entire month with proper customer rotation and area coverage.`
+                    },
+                    {
+                        role: 'user', 
+                        content: prompt
+                    }
+                ],
+                max_tokens: 12000,          // ✅ MUCH HIGHER for complete plans
+                temperature: 0.1,           // ✅ LOW for consistency
+                top_p: 0.95,               // ✅ FOCUSED responses
+                frequency_penalty: 0.1,     // ✅ REDUCE repetition
+                presence_penalty: 0.1,      // ✅ ENCOURAGE variety
+                response_format: { type: "json_object" }  // ✅ FORCE JSON format
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ OpenAI API Error:', errorData);
+            throw new Error(`OpenAI API Error: ${errorData.error?.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        const aiResponse = data.choices[0].message.content;
+        
+        console.log('✅ OpenAI Response received');
+        console.log('📊 Response length:', aiResponse.length);
+        console.log('🔍 Response preview (first 500 chars):', aiResponse.substring(0, 500));
+        console.log('🔍 Response ending (last 300 chars):', aiResponse.slice(-300));
+        
+        // Log token usage
+        if (data.usage) {
+            console.log('📈 Token usage:', {
+                prompt_tokens: data.usage.prompt_tokens,
+                completion_tokens: data.usage.completion_tokens,
+                total_tokens: data.usage.total_tokens
+            });
+        }
+
+        return aiResponse;
+
+    } catch (error) {
+        console.error('❌ Monthly plan OpenAI call failed:', error);
+        throw error;
+    }
+}
     /**
      * Generate complete monthly tour plan
      */
@@ -454,27 +537,49 @@ class MonthlyTourPlanService {
     /**
      * Create AI-powered monthly plan
      */
-    async createMonthlyAIPlan(mrName, month, year, context) {
-        console.log(`🤖 Creating AI monthly plan for ${mrName}`);
+   /**
+ * Create AI-powered monthly plan using standalone OpenAI call
+ */
+async createMonthlyAIPlan(mrName, month, year, context) {
+    console.log(`🤖 Creating AI monthly plan for ${mrName}`);
 
-        const prompt = this.generateMonthlyPlanPrompt(mrName, month, year, context);
+    const prompt = this.generateMonthlyPlanPrompt(mrName, month, year, context);
+    
+    try {
+        // Use the standalone OpenAI function instead of aiTourPlanGenerator
+        const aiResponse = await this.callOpenAIForMonthlyPlan(prompt);
         
+        // Clean and parse response
+        const cleanResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
+        
+        console.log('🧹 Cleaned response length:', cleanResponse.length);
+        
+        let planJson;
         try {
-            const aiResponse = await aiTourPlanGenerator.callOpenAI(prompt);
-            console.log('🤖 AI Response Length:', aiResponse.length);
-            console.log('🤖 AI Response End:', aiResponse.slice(-500)); // Last 500 chars
-            
-            const cleanResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
-            const planJson = JSON.parse(cleanResponse);
-            
-            this.validateMonthlyPlanStructure(planJson);
-            return planJson;
-
-        } catch (error) {
-            console.error('❌ AI monthly plan generation failed:', error);
-            throw new Error(`AI planning failed: ${error.message}`);
+            planJson = JSON.parse(cleanResponse);
+        } catch (parseError) {
+            console.error('❌ JSON Parse Error:', parseError);
+            console.log('🔍 Problematic JSON (first 1000 chars):', cleanResponse.substring(0, 1000));
+            throw new Error(`JSON parsing failed: ${parseError.message}`);
         }
+        
+        // Validate plan structure
+        this.validateMonthlyPlanStructure(planJson);
+        
+        console.log('✅ Monthly plan structure validated');
+        console.log('📊 Plan summary:', {
+            weeks: planJson.weekly_plans?.length || 0,
+            customers: Object.keys(planJson.customer_visit_frequency || {}).length,
+            areas: Object.keys(planJson.area_coverage_plan || {}).length
+        });
+        
+        return planJson;
+
+    } catch (error) {
+        console.error('❌ AI monthly plan generation failed:', error);
+        throw new Error(`AI planning failed: ${error.message}`);
     }
+}
 
     /**
      * Generate comprehensive AI prompt for monthly planning
