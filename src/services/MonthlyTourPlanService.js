@@ -16,7 +16,7 @@ export class OpenAIAssistantService {
     async generateMonthlyPlan(mrName, month, year, territoryContext) {
         try {
             console.log(`🤖 Calling API for monthly plan generation for ${mrName}`);
-            console.log('📍 API URL:', '/api/openai/monthly-plan');
+            console.log('📍 API URL:', '/api/openai/monthly-plan-persistent'); // ✅ FIXED: Match actual URL
             console.log('📊 Territory context summary:', {
                 customers: territoryContext.customers?.length || 0,
                 hasPerformanceData: !!territoryContext.previous_performance,
