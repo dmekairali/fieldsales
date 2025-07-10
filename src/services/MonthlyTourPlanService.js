@@ -16,7 +16,7 @@ export class OpenAIAssistantService {
             console.log(`🤖 Calling API for monthly plan generation for ${mrName}`);
             
             // Call your backend API instead of OpenAI directly
-            const response = await fetch('/api/openai/monthly-plan', {
+            const response = await fetch('/api/monthly-plan', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
