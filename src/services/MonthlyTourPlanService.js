@@ -1,13 +1,9 @@
 // src/services/MonthlyTourPlanService.js
 import { supabase } from '../supabaseClient';
-import OpenAI from 'openai';
 
-// ===== OPENAI ASSISTANT SERVICE =====
+// ===== UPDATED OPENAI ASSISTANT SERVICE (CALLS YOUR API) =====
 export class OpenAIAssistantService {
     constructor() {
-        this.openai = new OpenAI({
-            apiKey: process.env.REACT_APP_OPENAI_API_KEY
-        });
         this.assistantId = process.env.REACT_APP_OPENAI_ASSISTANT_ID;
         
         if (!this.assistantId) {
@@ -17,169 +13,69 @@ export class OpenAIAssistantService {
 
     async generateMonthlyPlan(mrName, month, year, territoryContext) {
         try {
-            console.log(`🤖 Generating monthly plan for ${mrName} using OpenAI Assistant`);
+            console.log(`🤖 Calling API for monthly plan generation for ${mrName}`);
             
-            // Create thread
-            const thread = await this.openai.beta.threads.create();
-            console.log('📝 Thread created:', thread.id);
-            
-            // Build prompt
-            const prompt = this.buildPrompt(mrName, month, year, territoryContext);
-            
-            // Send message
-            await this.openai.beta.threads.messages.create(thread.id, {
-                role: "user",
-                content: prompt
+            // Call your backend API instead of OpenAI directly
+            const response = await fetch('/api/openai/monthly-plan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    mrName,
+                    month,
+                    year,
+                    territoryContext,
+                    assistantId: this.assistantId
+                })
             });
 
-            // Run assistant
-            const run = await this.openai.beta.threads.runs.create(thread.id, {
-                assistant_id: this.assistantId
+            console.log('📡 API response status:', response.status);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('❌ API call failed:', errorData);
+                throw new Error(errorData.error || `API call failed: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'API call failed');
+            }
+
+            console.log('✅ API call successful');
+            console.log('📊 Plan summary:', {
+                weeks: result.plan.weekly_plans?.length || 0,
+                customers: Object.keys(result.plan.customer_visit_frequency || {}).length,
+                areas: Object.keys(result.plan.area_coverage_plan || {}).length,
+                tokens_used: result.tokens_used
             });
 
-            console.log('🏃 Run started:', run.id);
-
-            // Wait for completion
-            let runStatus = await this.openai.beta.threads.runs.retrieve(thread.id, run.id);
-            
-            while (runStatus.status === 'running' || runStatus.status === 'queued') {
-                console.log(`🔄 Run status: ${runStatus.status}`);
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                runStatus = await this.openai.beta.threads.runs.retrieve(thread.id, run.id);
-            }
-
-            if (runStatus.status === 'completed') {
-                console.log('✅ Assistant run completed');
-                
-                // Get response
-                const messages = await this.openai.beta.threads.messages.list(thread.id);
-                const assistantMessage = messages.data[0];
-                const responseText = assistantMessage.content[0].text.value;
-                
-                console.log('📊 Response length:', responseText.length);
-                console.log('🔍 Response preview:', responseText.substring(0, 500));
-                
-                // Clean and parse JSON
-                const cleanedJSON = this.cleanJsonResponse(responseText);
-                const planJson = JSON.parse(cleanedJSON);
-                
-                return {
-                    success: true,
-                    plan: planJson,
-                    thread_id: thread.id,
-                    tokens_used: runStatus.usage?.total_tokens || 0
-                };
-            } else {
-                throw new Error(`Assistant failed with status: ${runStatus.status}`);
-            }
+            return {
+                success: true,
+                plan: result.plan,
+                thread_id: result.thread_id,
+                tokens_used: result.tokens_used
+            };
 
         } catch (error) {
-            console.error('❌ Assistant error:', error);
-            throw new Error(`Assistant planning failed: ${error.message}`);
+            console.error('❌ API call failed:', error);
+            throw new Error(`API planning failed: ${error.message}`);
         }
-    }
-
-    buildPrompt(mrName, month, year, context) {
-        const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-        const monthName = monthNames[month];
-        const daysInMonth = new Date(year, month, 0).getDate();
-
-        // Extract top customers
-        const topCustomers = context.customers
-            .sort((a, b) => (parseFloat(b.tier_score) || 0) - (parseFloat(a.tier_score) || 0))
-            .slice(0, 20)
-            .map((customer, index) => {
-                return `${index + 1}. ${customer.customer_name} (${customer.tier_level}) - Area: ${customer.area_name}, Score: ${customer.tier_score || 0}, Sales: ₹${customer.total_sales_90d || 0}`;
-            }).join('\n');
-
-        // Extract real areas
-        const realAreas = [...new Set(context.customers.map(c => c.area_name))].slice(0, 12);
-
-        // Tier distribution
-        const tierSummary = {};
-        context.customers.forEach(customer => {
-            const tier = customer.tier_level || 'TIER_4_PROSPECT';
-            tierSummary[tier] = (tierSummary[tier] || 0) + 1;
-        });
-
-        return `Generate a comprehensive monthly tour plan for ${mrName} for ${monthName} ${year} (${daysInMonth} days).
-
-TERRITORY CONTEXT:
-Total active customers: ${context.customers.length}
-Tier Distribution: ${Object.entries(tierSummary).map(([tier, count]) => `${tier}: ${count}`).join(', ')}
-
-TOP CUSTOMERS (USE THESE REAL NAMES):
-${topCustomers}
-
-REAL AREA NAMES (USE THESE ACTUAL AREAS):
-${realAreas.map(area => `"${area}"`).join(', ')}
-
-PREVIOUS MONTH PERFORMANCE:
-- Total visits: ${context.previous_performance?.total_visits || 0}
-- Total revenue: ₹${context.previous_performance?.total_revenue?.toLocaleString() || 0}
-- Conversion rate: ${context.previous_performance?.conversion_rate?.toFixed(1) || 0}%
-- Performance grade: ${context.previous_performance?.performance_grade || 'NEW'}
-
-SEASONAL PATTERNS:
-- Monthly trend: ${context.seasonal_patterns?.month_performance_trend || 'STABLE'}
-- Seasonal factor: ${context.seasonal_patterns?.seasonal_factor || 1.0}
-- Historical avg visits: ${context.seasonal_patterns?.avg_monthly_visits || 250}
-
-TERRITORY METRICS:
-- Total customers: ${context.territory_metrics?.total_customers || 0}
-- Territory efficiency: ${context.territory_metrics?.territory_efficiency || 'MEDIUM'}
-- Coverage analysis: ${context.territory_metrics?.coverage_analysis || 'BALANCED'}
-
-CRITICAL REQUIREMENTS:
-1. Generate EXACTLY 4 complete weeks with 6 daily plans each (24 total)
-2. Include 60-80 customers in customer_visit_frequency section
-3. Use ONLY the real customer names and area names provided above
-4. Distribute customers logically across all weeks
-5. Return complete JSON structure with all required sections
-6. Plan for ${Math.floor(daysInMonth * 6/7)} working days total
-7. Target 12-15 visits per working day (300+ total monthly visits)
-8. Ensure 40% focus on new business development
-
-WEEKLY DISTRIBUTION STRATEGY:
-Week 1: Focus on TIER_2_PERFORMER + top TIER_3_DEVELOPER customers
-Week 2: Remaining TIER_3_DEVELOPER + high-scoring TIER_4_PROSPECT
-Week 3: Medium-scoring TIER_4_PROSPECT customers  
-Week 4: Remaining TIER_4_PROSPECT + follow-up visits
-
-Return complete JSON with monthly_overview, weekly_plans, customer_visit_frequency, area_coverage_plan, revision_checkpoints, and risk_mitigation sections.`;
-    }
-
-    cleanJsonResponse(response) {
-        // Remove markdown code blocks
-        let cleaned = response.replace(/```json\n?|\n?```/g, '').trim();
-        
-        // Remove any text before the first {
-        const firstBrace = cleaned.indexOf('{');
-        if (firstBrace > 0) {
-            cleaned = cleaned.substring(firstBrace);
-        }
-        
-        // Remove any text after the last }
-        const lastBrace = cleaned.lastIndexOf('}');
-        if (lastBrace >= 0 && lastBrace < cleaned.length - 1) {
-            cleaned = cleaned.substring(0, lastBrace + 1);
-        }
-        
-        return cleaned;
     }
 }
 
-// ===== MAIN SERVICE CLASS =====
+// ===== MAIN SERVICE CLASS (KEEP MOST OF YOUR EXISTING CODE) =====
 class MonthlyTourPlanService {
     constructor() {
         this.cache = new Map();
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
-        this.assistantService = new OpenAIAssistantService();
+        this.assistantService = new OpenAIAssistantService(); // ✅ This now calls your API
     }
 
     /**
-     * Generate complete monthly tour plan using OpenAI Assistant
+     * Generate complete monthly tour plan using OpenAI Assistant API
      */
     async generateMonthlyPlan(mrName, month, year) {
         try {
@@ -188,7 +84,7 @@ class MonthlyTourPlanService {
             // Get territory context for the month
             const territoryContext = await this.getMonthlyTerritoryContext(mrName, month, year);
             
-            // Generate AI-powered monthly plan using Assistant
+            // Generate AI-powered monthly plan using Assistant API
             const monthlyPlan = await this.createMonthlyAIPlan(mrName, month, year, territoryContext);
             
             // Validate and structure the plan
@@ -215,15 +111,15 @@ class MonthlyTourPlanService {
     }
 
     /**
-     * Create AI-powered monthly plan using OpenAI Assistant
+     * Create AI-powered monthly plan using OpenAI Assistant API
      */
     async createMonthlyAIPlan(mrName, month, year, context) {
-        console.log(`🤖 Creating AI monthly plan for ${mrName} using Assistant`);
+        console.log(`🤖 Creating AI monthly plan for ${mrName} using Assistant API`);
 
         const assistantResult = await this.assistantService.generateMonthlyPlan(mrName, month, year, context);
         const planJson = assistantResult.plan;
         
-        // Validate plan structure
+        // Validate plan structure (keep existing validation)
         this.validateMonthlyPlanStructure(planJson);
         
         console.log('✅ Monthly plan structure validated');
@@ -729,6 +625,7 @@ class MonthlyTourPlanService {
         this.cache.clear();
         console.log('🗑️ Monthly Tour Plan cache cleared');
     }
+
 
     /**
      * WEEKLY REVISION SYSTEM
