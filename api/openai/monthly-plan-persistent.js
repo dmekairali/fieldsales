@@ -175,18 +175,18 @@ async function generateStrategicFramework(assistantId, threadId, mrName, month, 
 
     while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-        console.log(`🔄 Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+        console.log(`🔄 Framework Gen Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
 
         if (runStatus.status === 'completed') {
             break;
         }
         if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
-            throw new Error(`Assistant run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+            throw new Error(`Framework Gen: Assistant run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
         }
         // Continue polling if status is 'queued', 'running', or 'in_progress'
         if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
             // Handle unexpected statuses
-            console.warn(`Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+            console.warn(`Framework Gen: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
         }
 
         await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
@@ -195,14 +195,12 @@ async function generateStrategicFramework(assistantId, threadId, mrName, month, 
 
     if (runStatus.status !== 'completed') {
         if (attempts >= maxAttempts) {
-            throw new Error(`Assistant run polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+            throw new Error(`Framework Gen: Assistant run polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
         }
-        // This case should ideally be caught by the checks inside the loop (failed, cancelled, expired)
-        // or if the loop exited for a reason other than completion or maxAttempts.
-        throw new Error(`Assistant run did not complete. Final status: ${runStatus.status}`);
+        throw new Error(`Framework Gen: Assistant run did not complete. Final status: ${runStatus.status}`);
     }
 
-    console.log('✅ Assistant run completed');
+    console.log('✅ Framework Gen: Assistant run completed');
 
     // Get response
     const messages = await openai.beta.threads.messages.list(threadId);
@@ -247,16 +245,16 @@ async function reviseWeeklyPlan(assistantId, threadId, weekNumber, actualPerform
 
     while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-        console.log(`🔄 Weekly revision run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+        console.log(`🔄 Weekly Revision Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
 
         if (runStatus.status === 'completed') {
             break;
         }
         if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
-            throw new Error(`Weekly revision run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+            throw new Error(`Weekly Revision: Assistant run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
         }
         if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
-            console.warn(`Weekly revision: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+            console.warn(`Weekly Revision: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
         }
 
         await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
@@ -265,11 +263,11 @@ async function reviseWeeklyPlan(assistantId, threadId, weekNumber, actualPerform
 
     if (runStatus.status !== 'completed') {
         if (attempts >= maxAttempts) {
-            throw new Error(`Weekly revision polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+            throw new Error(`Weekly Revision: Assistant run polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
         }
-        throw new Error(`Weekly revision run did not complete. Final status: ${runStatus.status}`);
+        throw new Error(`Weekly Revision: Assistant run did not complete. Final status: ${runStatus.status}`);
     }
-
+    console.log('✅ Weekly Revision: Assistant run completed');
     const messages = await openai.beta.threads.messages.list(threadId);
     const response = messages.data[0].content[0].text.value;
 
@@ -308,16 +306,16 @@ async function updateDailyPlan(assistantId, threadId, actualPerformance) {
 
     while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-        console.log(`🔄 Daily update run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+        console.log(`🔄 Daily Update Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
 
         if (runStatus.status === 'completed') {
             break;
         }
         if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
-            throw new Error(`Daily update run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+            throw new Error(`Daily Update: Assistant run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
         }
         if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
-            console.warn(`Daily update: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+            console.warn(`Daily Update: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
         }
 
         await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
@@ -326,11 +324,11 @@ async function updateDailyPlan(assistantId, threadId, actualPerformance) {
 
     if (runStatus.status !== 'completed') {
         if (attempts >= maxAttempts) {
-            throw new Error(`Daily update polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+            throw new Error(`Daily Update: Assistant run polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
         }
-        throw new Error(`Daily update run did not complete. Final status: ${runStatus.status}`);
+        throw new Error(`Daily Update: Assistant run did not complete. Final status: ${runStatus.status}`);
     }
-
+    console.log('✅ Daily Update: Assistant run completed');
     const messages = await openai.beta.threads.messages.list(threadId);
     const response = messages.data[0].content[0].text.value;
 
@@ -368,16 +366,16 @@ async function monthlyReview(assistantId, threadId, monthlyPerformance) {
 
     while (attempts < maxAttempts) {
         runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-        console.log(`🔄 Monthly review run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+        console.log(`🔄 Monthly Review Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
 
         if (runStatus.status === 'completed') {
             break;
         }
         if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
-            throw new Error(`Monthly review run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
+            throw new Error(`Monthly Review: Assistant run terminated with status: ${runStatus.status}. Details: ${runStatus.last_error?.message || 'No details'}`);
         }
         if (runStatus.status !== 'queued' && runStatus.status !== 'running' && runStatus.status !== 'in_progress') {
-            console.warn(`Monthly review: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
+            console.warn(`Monthly Review: Unexpected run status: ${runStatus.status}. Continuing to poll.`);
         }
 
         await new Promise(resolve => setTimeout(resolve, pollingIntervalMs));
@@ -386,11 +384,11 @@ async function monthlyReview(assistantId, threadId, monthlyPerformance) {
 
     if (runStatus.status !== 'completed') {
         if (attempts >= maxAttempts) {
-            throw new Error(`Monthly review polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
+            throw new Error(`Monthly Review: Assistant run polling timed out after ${maxAttempts * pollingIntervalMs / 1000} seconds. Last status: ${runStatus.status}`);
         }
-        throw new Error(`Monthly review run did not complete. Final status: ${runStatus.status}`);
+        throw new Error(`Monthly Review: Assistant run did not complete. Final status: ${runStatus.status}`);
     }
-
+    console.log('✅ Monthly Review: Assistant run completed');
     const messages = await openai.beta.threads.messages.list(threadId);
     const response = messages.data[0].content[0].text.value;
 
@@ -434,21 +432,12 @@ PERFORMANCE CONTEXT:
 - Conversion rate: ${territoryContext.previous_performance?.conversion_rate?.toFixed(1) || 0}%
 
 Generate a strategic monthly planning framework focusing on:
-1.  **Monthly Overview**: Realistic targets including 'total_planned_visits' (integer) and 'target_revenue' (number, without commas).
-2.  **Weekly Plans (as an array called 'weekly_plans')**: A 4-week structure. For each week object in the array, include:
-    *   'week_number' (integer, e.g., 1, 2, 3, 4)
-    *   'start_date' (string, 'YYYY-MM-DD' format, calculated based on the month and week number)
-    *   'end_date' (string, 'YYYY-MM-DD' format)
-    *   'target_visits' (integer, overall target visits for this week)
-    *   'target_revenue' (number, without commas, overall target revenue for this week)
-    *   'focus_areas' (array of strings, key geographical areas for this week)
-    *   'priority_customers' (array of strings, key customer names to prioritize this week)
-    *   'daily_plans' (array of objects, for detailed daily breakdown - you can keep this high-level for now or provide a basic structure for each day if easy)
-3.  **Area-Based Clustering Strategy**: General strategy notes.
-4.  **Revision Checkpoints**: Notes on when/how to revise.
+1. Monthly overview with realistic targets
+2. 4-week structure with daily plans
+3. Area-based clustering strategy
+4. Weekly revision checkpoints
 
 I'll handle the detailed customer distribution based on your strategic framework.
-Ensure all numeric values like revenue and visits are pure numbers without commas or currency symbols.
 
 Please remember this context - I'll be back with weekly performance updates for plan adjustments.
 
@@ -526,57 +515,11 @@ function parseFrameworkResponse(response) {
         if (lastBrace >= 0 && lastBrace < cleaned.length - 1) {
             cleaned = cleaned.substring(0, lastBrace + 1);
         }
-
-        let parsedJson = JSON.parse(cleaned);
-
-        // Robust parsing for monthly_overview
-        if (parsedJson.monthly_overview) {
-            parsedJson.monthly_overview.target_revenue = parseFloat(String(parsedJson.monthly_overview.target_revenue).replace(/[^0-9.-]+/g, '')) || 0;
-            parsedJson.monthly_overview.total_planned_visits = parseInt(String(parsedJson.monthly_overview.total_planned_visits).replace(/[^0-9-]+/g, '')) || 0;
-            parsedJson.monthly_overview.nbd_visits_target = parseInt(String(parsedJson.monthly_overview.nbd_visits_target).replace(/[^0-9-]+/g, '')) || 0;
-            parsedJson.monthly_overview.total_working_days = parseInt(String(parsedJson.monthly_overview.total_working_days).replace(/[^0-9-]+/g, '')) || 0;
-        } else {
-            parsedJson.monthly_overview = { target_revenue: 0, total_planned_visits: 0, nbd_visits_target: 0, total_working_days: 0 };
-        }
-
-        // Robust parsing for weekly_plans
-        if (parsedJson.weekly_plans && Array.isArray(parsedJson.weekly_plans)) {
-            parsedJson.weekly_plans.forEach(week => {
-                week.week_number = parseInt(String(week.week_number)) || 0;
-                // start_date and end_date are expected as 'YYYY-MM-DD' strings, keep as is if valid, otherwise null/default
-                week.start_date = typeof week.start_date === 'string' && week.start_date.match(/^\d{4}-\d{2}-\d{2}$/) ? week.start_date : '';
-                week.end_date = typeof week.end_date === 'string' && week.end_date.match(/^\d{4}-\d{2}-\d{2}$/) ? week.end_date : '';
-                week.target_visits = parseInt(String(week.target_visits).replace(/[^0-9-]+/g, '')) || 0;
-                week.target_revenue = parseFloat(String(week.target_revenue).replace(/[^0-9.-]+/g, '')) || 0;
-                week.focus_areas = Array.isArray(week.focus_areas) ? week.focus_areas.map(String) : [];
-                week.priority_customers = Array.isArray(week.priority_customers) ? week.priority_customers.map(String) : [];
-                // daily_plans can be complex, ensure it's an array
-                week.daily_plans = Array.isArray(week.daily_plans) ? week.daily_plans : [];
-            });
-        } else {
-            parsedJson.weekly_plans = []; // Default to empty array if not provided or not an array
-        }
-
-        // Ensure other top-level expected structures exist if necessary
-        parsedJson.area_coverage_plan = parsedJson.area_coverage_plan || {};
-        parsedJson.revision_checkpoints = parsedJson.revision_checkpoints || {};
-
-
-        return parsedJson;
-
+        return JSON.parse(cleaned);
     } catch (error) {
         console.error('❌ Framework parsing failed:', error);
-        console.log('🔍 Response that failed to parse (cleaned preview):', cleaned.substring(0, 1000));
-        console.log('🔍 Original response preview:', response.substring(0, 1000));
-        // Fallback to a default structure on parsing failure to prevent downstream errors
-        return {
-            monthly_overview: { target_revenue: 0, total_planned_visits: 0, nbd_visits_target: 0, total_working_days: 0, summary: "Error parsing AI response." },
-            weekly_plans: [],
-            area_coverage_plan: {},
-            revision_checkpoints: {},
-            parsing_error: true,
-            parsing_error_message: error.message
-        };
+        console.log('🔍 Response that failed to parse:', response.substring(0, 1000));
+        throw new Error(`Framework parsing failed: ${error.message}`);
     }
 }
 
