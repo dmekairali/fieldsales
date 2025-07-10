@@ -30,7 +30,7 @@ async callOpenAIForMonthlyPlan(prompt) {
                 'Authorization': `Bearer ${openaiApiKey}`
             },
             body: JSON.stringify({
-                model: 'gpt-4',
+                model: 'gpt-4-1106-preview',
                 messages: [
                     {
                         role: 'system', 
