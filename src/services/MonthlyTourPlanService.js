@@ -30,7 +30,7 @@ async callOpenAIForMonthlyPlan(prompt) {
                 'Authorization': `Bearer ${openaiApiKey}`
             },
             body: JSON.stringify({
-                model: 'gpt-4-1106-preview',
+                model: 'gpt-3.5-turbo-1106',
                 messages: [
                     {
                         role: 'system', 
@@ -52,7 +52,7 @@ You must generate comprehensive plans that cover the entire month with proper cu
                         content: prompt
                     }
                 ],
-                max_tokens: 12000,          // ✅ MUCH HIGHER for complete plans
+                max_tokens: 4000,          // ✅ MUCH HIGHER for complete plans
                 temperature: 0.1,           // ✅ LOW for consistency
                 top_p: 0.95,               // ✅ FOCUSED responses
                 frequency_penalty: 0.1,     // ✅ REDUCE repetition
