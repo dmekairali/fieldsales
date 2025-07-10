@@ -1,15 +1,179 @@
 // src/services/MonthlyTourPlanService.js
 import { supabase } from '../supabaseClient';
-import { aiTourPlanGenerator } from './AITourPlanGenerator';
 
+// ===== UPDATED OPENAI ASSISTANT SERVICE (CALLS YOUR API) =====
+export class OpenAIAssistantService {
+    constructor() {
+        this.assistantId = process.env.REACT_APP_OPENAI_ASSISTANT_ID;
+        
+        if (!this.assistantId) {
+            throw new Error('REACT_APP_OPENAI_ASSISTANT_ID environment variable is required');
+        }
+        
+        console.log('🔧 Assistant ID configured:', this.assistantId?.substring(0, 10) + '...');
+    }
+
+    async generateMonthlyPlan(mrName, month, year, territoryContext) {
+        try {
+            console.log(`🤖 Calling API for monthly plan generation for ${mrName}`);
+            console.log('📍 API URL:', '/api/monthly-plan');
+            console.log('📊 Territory context summary:', {
+                customers: territoryContext.customers?.length || 0,
+                hasPerformanceData: !!territoryContext.previous_performance,
+                hasSeasonalData: !!territoryContext.seasonal_patterns,
+                hasTerritoryMetrics: !!territoryContext.territory_metrics
+            });
+            
+            const requestBody = {
+                mrName,
+                month,
+                year,
+                territoryContext,
+                assistantId: this.assistantId
+            };
+            
+            console.log('📤 Request body size:', JSON.stringify(requestBody).length, 'characters');
+            
+            // Call your backend API
+            const response = await fetch('/api/openai/monthly-plan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            console.log('📡 API response status:', response.status);
+            console.log('📡 API response headers:', Object.fromEntries(response.headers.entries()));
+
+            // Get response text first to debug what we're receiving
+            const responseText = await response.text();
+            console.log('📥 Raw response length:', responseText.length);
+            console.log('📥 Raw response preview (first 200 chars):', responseText.substring(0, 200));
+            
+            if (!response.ok) {
+                console.error('❌ API call failed with status:', response.status);
+                console.error('❌ Response text:', responseText);
+                
+                // Try to parse as JSON for structured error
+                let errorData;
+                try {
+                    errorData = JSON.parse(responseText);
+                    console.error('❌ Parsed error data:', errorData);
+                } catch (parseErr) {
+                    console.error('❌ Could not parse error response as JSON:', parseErr);
+                    // Return the raw text for debugging
+                    throw new Error(`API call failed (${response.status}): ${responseText.substring(0, 200)}...`);
+                }
+                
+                throw new Error(errorData.error || `API call failed: ${response.status}`);
+            }
+
+            // Try to parse the successful response
+            let result;
+            try {
+                result = JSON.parse(responseText);
+                console.log('✅ Successfully parsed API response');
+            } catch (parseErr) {
+                console.error('❌ Could not parse successful response as JSON:', parseErr);
+                console.error('❌ Response text that failed to parse:', responseText.substring(0, 500));
+                throw new Error(`Invalid JSON response from API: ${parseErr.message}`);
+            }
+            
+            if (!result.success) {
+                console.error('❌ API returned success=false:', result.error);
+                throw new Error(result.error || 'API call failed');
+            }
+
+            console.log('✅ API call successful');
+            console.log('📊 Plan summary:', {
+                weeks: result.plan?.weekly_plans?.length || 0,
+                customers: Object.keys(result.plan?.customer_visit_frequency || {}).length,
+                areas: Object.keys(result.plan?.area_coverage_plan || {}).length,
+                tokens_used: result.tokens_used,
+                thread_id: result.thread_id
+            });
+
+            return {
+                success: true,
+                plan: result.plan,
+                thread_id: result.thread_id,
+                tokens_used: result.tokens_used
+            };
+
+        } catch (error) {
+            console.error('❌ API call failed:', error);
+            console.error('❌ Error type:', error.constructor.name);
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Full error:', error);
+            
+            throw new Error(`API planning failed: ${error.message}`);
+        }
+    }
+}
+
+// Test function to check if API is working
+export async function testAPI() {
+    try {
+        console.log('🧪 Testing API endpoint...');
+        
+        const response = await fetch('/api/openai/monthly-plan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                mrName: 'Test User',
+                month: 7,
+                year: 2025,
+                territoryContext: {
+                    customers: [
+                        {
+                            customer_name: 'Test Customer',
+                            tier_level: 'TIER_4_PROSPECT',
+                            area_name: 'Test Area',
+                            tier_score: 10,
+                            total_sales_90d: 1000
+                        }
+                    ],
+                    previous_performance: { total_visits: 0, total_revenue: 0, conversion_rate: 0, performance_grade: 'NEW' },
+                    seasonal_patterns: { month_performance_trend: 'STABLE', seasonal_factor: 1.0, avg_monthly_visits: 250 },
+                    territory_metrics: { total_customers: 1, territory_efficiency: 'LOW', coverage_analysis: 'FOCUSED' }
+                },
+                assistantId: process.env.REACT_APP_OPENAI_ASSISTANT_ID
+            })
+        });
+
+        const responseText = await response.text();
+        console.log('🧪 Test API Response Status:', response.status);
+        console.log('🧪 Test API Response Text:', responseText.substring(0, 500));
+        
+        if (response.ok) {
+            const result = JSON.parse(responseText);
+            console.log('✅ API test successful:', result.success);
+            return result;
+        } else {
+            console.error('❌ API test failed:', responseText);
+            return { success: false, error: responseText };
+        }
+        
+    } catch (error) {
+        console.error('❌ API test error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+
+// ===== MAIN SERVICE CLASS (KEEP MOST OF YOUR EXISTING CODE) =====
 class MonthlyTourPlanService {
     constructor() {
         this.cache = new Map();
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
+        this.assistantService = new OpenAIAssistantService(); // ✅ This now calls your API
     }
 
     /**
-     * Generate complete monthly tour plan
+     * Generate complete monthly tour plan using OpenAI Assistant API
      */
     async generateMonthlyPlan(mrName, month, year) {
         try {
@@ -18,7 +182,7 @@ class MonthlyTourPlanService {
             // Get territory context for the month
             const territoryContext = await this.getMonthlyTerritoryContext(mrName, month, year);
             
-            // Generate AI-powered monthly plan
+            // Generate AI-powered monthly plan using Assistant API
             const monthlyPlan = await this.createMonthlyAIPlan(mrName, month, year, territoryContext);
             
             // Validate and structure the plan
@@ -45,6 +209,29 @@ class MonthlyTourPlanService {
     }
 
     /**
+     * Create AI-powered monthly plan using OpenAI Assistant API
+     */
+    async createMonthlyAIPlan(mrName, month, year, context) {
+        console.log(`🤖 Creating AI monthly plan for ${mrName} using Assistant API`);
+
+        const assistantResult = await this.assistantService.generateMonthlyPlan(mrName, month, year, context);
+        const planJson = assistantResult.plan;
+        
+        // Validate plan structure (keep existing validation)
+        this.validateMonthlyPlanStructure(planJson);
+        
+        console.log('✅ Monthly plan structure validated');
+        console.log('📊 Plan summary:', {
+            weeks: planJson.weekly_plans?.length || 0,
+            customers: Object.keys(planJson.customer_visit_frequency || {}).length,
+            areas: Object.keys(planJson.area_coverage_plan || {}).length,
+            tokens_used: assistantResult.tokens_used
+        });
+        
+        return planJson;
+    }
+
+    /**
      * Get comprehensive territory context for monthly planning
      */
     async getMonthlyTerritoryContext(mrName, month, year) {
@@ -52,7 +239,7 @@ class MonthlyTourPlanService {
 
         // Get customer data from materialized view
         const { data: customers, error: customersError } = await supabase
-            .from('customer_tier_metrics')
+            .from('customer_tiers')
             .select(`
                 customer_code,
                 customer_name,
@@ -60,13 +247,13 @@ class MonthlyTourPlanService {
                 territory,
                 area_name,
                 city_name,
-                tier_score_calc,
-                tier_level_calc,
-                recommended_frequency_calc,
+                tier_score,
+                tier_level,
+                recommended_frequency,
                 recommended_visit_duration,
-                total_orders_90d_calc,
-                total_sales_90d_calc,
-                conversion_rate_90d_calc,
+                total_orders_90d,
+                total_sales_90d,
+                conversion_rate_90d,
                 last_visit_date,
                 days_since_last_visit,
                 customer_segment,
@@ -75,7 +262,29 @@ class MonthlyTourPlanService {
             .eq('mr_name', mrName)
             .eq('status', 'ACTIVE');
 
+        console.log('🔍 DEBUG: Monthly Territory Context Results:', {
+            mrName: mrName,
+            error: customersError,
+            customerCount: customers?.length,
+            querySuccessful: !customersError && customers,
+            firstThreeCustomers: customers?.slice(0, 3).map(c => ({
+                code: c.customer_code,
+                name: c.customer_name,
+                area: c.area_name,
+                tier: c.tier_level,
+                score: c.tier_score,
+                status: c.status
+            })),
+            realAreas: [...new Set(customers?.slice(0, 10).map(c => c.area_name))],
+            tierDistribution: customers?.reduce((acc, c) => {
+                acc[c.tier_level] = (acc[c.tier_level] || 0) + 1;
+                return acc;
+            }, {}),
+            rawDataSample: customers?.[0]
+        });
+
         if (customersError) {
+            console.error('❌ Customer data fetch error:', customersError);
             throw new Error(`Customer data fetch failed: ${customersError.message}`);
         }
 
@@ -107,7 +316,7 @@ class MonthlyTourPlanService {
     async getPreviousMonthPerformance(mrName, month, year) {
         try {
             const startDate = new Date(year, month - 1, 1);
-            const endDate = new Date(year, month, 0); // Last day of month
+            const endDate = new Date(year, month, 0);
 
             const { data: visits, error } = await supabase
                 .from('mr_visits')
@@ -149,7 +358,6 @@ class MonthlyTourPlanService {
         const convertingVisits = visits.filter(visit => (parseFloat(visit.amountOfSale) || 0) > 0).length;
         const uniqueCustomers = new Set(visits.map(visit => visit.clientName)).size;
         
-        // Calculate average visit duration
         const validDurations = visits
             .filter(visit => visit.visitTime)
             .map(visit => this.timeToMinutes(visit.visitTime))
@@ -159,7 +367,6 @@ class MonthlyTourPlanService {
             ? validDurations.reduce((sum, duration) => sum + duration, 0) / validDurations.length 
             : 35;
 
-        // Area-wise performance
         const areaPerformance = {};
         visits.forEach(visit => {
             const area = visit.areaName || 'Unknown';
@@ -180,7 +387,7 @@ class MonthlyTourPlanService {
             conversion_rate: totalVisits > 0 ? (convertingVisits / totalVisits) * 100 : 0,
             avg_revenue_per_visit: totalVisits > 0 ? totalRevenue / totalVisits : 0,
             avg_visit_duration: avgVisitDuration,
-            visits_per_day: totalVisits / 30, // Approximate monthly average
+            visits_per_day: totalVisits / 30,
             area_performance: areaPerformance,
             performance_grade: this.calculatePerformanceGrade(totalVisits, totalRevenue, convertingVisits)
         };
@@ -190,8 +397,8 @@ class MonthlyTourPlanService {
      * Calculate performance grade based on metrics
      */
     calculatePerformanceGrade(visits, revenue, conversions) {
-        const visitScore = Math.min((visits / 300) * 100, 100); // Target: 10 visits/day * 30 days
-        const revenueScore = Math.min((revenue / 150000) * 100, 100); // Target: 5K/day * 30 days
+        const visitScore = Math.min((visits / 300) * 100, 100);
+        const revenueScore = Math.min((revenue / 150000) * 100, 100);
         const conversionScore = conversions > 0 ? Math.min((conversions / visits) * 200, 100) : 0;
         
         const overallScore = (visitScore + revenueScore + conversionScore) / 3;
@@ -224,7 +431,6 @@ class MonthlyTourPlanService {
      */
     async getSeasonalPatterns(mrName, month) {
         try {
-            // Get same month data from previous years
             const { data: historicalData, error } = await supabase
                 .from('mr_visits')
                 .select(`
@@ -240,7 +446,6 @@ class MonthlyTourPlanService {
                 return this.getDefaultSeasonalPattern(month);
             }
 
-            // Group by year and calculate metrics
             const yearlyData = {};
             historicalData.forEach(visit => {
                 const year = visit.dcrDate.split('-')[0];
@@ -252,7 +457,6 @@ class MonthlyTourPlanService {
                 yearlyData[year].customers.add(visit.clientName);
             });
 
-            // Calculate trends
             const years = Object.keys(yearlyData).sort();
             const avgVisits = years.reduce((sum, year) => sum + yearlyData[year].visits, 0) / years.length;
             const avgRevenue = years.reduce((sum, year) => sum + yearlyData[year].revenue, 0) / years.length;
@@ -276,18 +480,8 @@ class MonthlyTourPlanService {
      */
     getDefaultSeasonalPattern(month) {
         const seasonalFactors = {
-            1: 0.9,  // January - Post-holiday slow
-            2: 0.95, // February
-            3: 1.1,  // March - Financial year end
-            4: 1.0,  // April - New year start
-            5: 1.05, // May
-            6: 1.0,  // June
-            7: 0.95, // July - Monsoon
-            8: 0.9,  // August - Monsoon
-            9: 1.05, // September - Festival season prep
-            10: 1.15, // October - Festival season
-            11: 1.1, // November - Festival season
-            12: 0.85 // December - Holiday season
+            1: 0.9, 2: 0.95, 3: 1.1, 4: 1.0, 5: 1.05, 6: 1.0,
+            7: 0.95, 8: 0.9, 9: 1.05, 10: 1.15, 11: 1.1, 12: 0.85
         };
 
         return {
@@ -335,12 +529,12 @@ class MonthlyTourPlanService {
     async calculateTerritoryMetrics(mrName) {
         try {
             const { data: territoryData, error } = await supabase
-                .from('customer_tier_metrics')
+                .from('customer_tiers')
                 .select(`
                     area_name,
-                    tier_level_calc,
-                    total_sales_90d_calc,
-                    conversion_rate_90d_calc
+                    tier_level,
+                    total_sales_90d,
+                    conversion_rate_90d
                 `)
                 .eq('mr_name', mrName)
                 .eq('status', 'ACTIVE');
@@ -349,7 +543,6 @@ class MonthlyTourPlanService {
                 return this.getDefaultTerritoryMetrics();
             }
 
-            // Area-wise analysis
             const areaMetrics = {};
             territoryData.forEach(customer => {
                 const area = customer.area_name || 'Unknown';
@@ -363,14 +556,13 @@ class MonthlyTourPlanService {
                 }
 
                 areaMetrics[area].customers++;
-                areaMetrics[area].total_sales += parseFloat(customer.total_sales_90d_calc) || 0;
+                areaMetrics[area].total_sales += parseFloat(customer.total_sales_90d) || 0;
                 
-                const tier = customer.tier_level_calc || 'TIER_4_PROSPECT';
+                const tier = customer.tier_level || 'TIER_4_PROSPECT';
                 areaMetrics[area].tier_distribution[tier] = (areaMetrics[area].tier_distribution[tier] || 0) + 1;
-                areaMetrics[area].avg_conversion += parseFloat(customer.conversion_rate_90d_calc) || 0;
+                areaMetrics[area].avg_conversion += parseFloat(customer.conversion_rate_90d) || 0;
             });
 
-            // Calculate averages
             Object.keys(areaMetrics).forEach(area => {
                 areaMetrics[area].avg_conversion = areaMetrics[area].avg_conversion / areaMetrics[area].customers;
                 areaMetrics[area].sales_per_customer = areaMetrics[area].total_sales / areaMetrics[area].customers;
@@ -428,163 +620,6 @@ class MonthlyTourPlanService {
     }
 
     /**
-     * Create AI-powered monthly plan
-     */
-    async createMonthlyAIPlan(mrName, month, year, context) {
-        console.log(`🤖 Creating AI monthly plan for ${mrName}`);
-
-        const prompt = this.generateMonthlyPlanPrompt(mrName, month, year, context);
-        
-        try {
-            const aiResponse = await aiTourPlanGenerator.callOpenAI(prompt);
-            const cleanResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
-            const planJson = JSON.parse(cleanResponse);
-            
-            this.validateMonthlyPlanStructure(planJson);
-            return planJson;
-
-        } catch (error) {
-            console.error('❌ AI monthly plan generation failed:', error);
-            throw new Error(`AI planning failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Generate comprehensive AI prompt for monthly planning
-     */
-    generateMonthlyPlanPrompt(mrName, month, year, context) {
-        const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-        const monthName = monthNames[month];
-        const daysInMonth = new Date(year, month, 0).getDate();
-
-        const customersSummary = `Total active customers: ${context.customers.length}`;
-        const tierSummary = {};
-        context.customers.forEach(customer => {
-            const tier = customer.tier_level_calc || 'TIER_4_PROSPECT';
-            tierSummary[tier] = (tierSummary[tier] || 0) + 1;
-        });
-
-        let tierBreakdown = '';
-        Object.entries(tierSummary).forEach(([tier, count]) => {
-            tierBreakdown += `- ${tier}: ${count} customers\n`;
-        });
-
-        return `
-You are an AI Monthly Tour Planning Assistant for Kairali Ayurvedic products. Generate a comprehensive monthly tour plan for ${mrName} for ${monthName} ${year} (${daysInMonth} days).
-
-TERRITORY CONTEXT:
-${customersSummary}
-${tierBreakdown}
-
-Previous Month Performance:
-- Total visits: ${context.previous_performance.total_visits}
-- Total revenue: ₹${context.previous_performance.total_revenue?.toLocaleString()}
-- Conversion rate: ${context.previous_performance.conversion_rate?.toFixed(1)}%
-- Performance grade: ${context.previous_performance.performance_grade}
-- Average visits per day: ${context.previous_performance.visits_per_day?.toFixed(1)}
-
-Seasonal Analysis:
-- Month performance trend: ${context.seasonal_patterns.month_performance_trend}
-- Seasonal factor: ${context.seasonal_patterns.seasonal_factor}
-- Historical average visits: ${context.seasonal_patterns.avg_monthly_visits}
-- Historical average revenue: ₹${context.seasonal_patterns.avg_monthly_revenue?.toLocaleString()}
-
-Territory Metrics:
-- Total customers: ${context.territory_metrics.total_customers}
-- Territory efficiency: ${context.territory_metrics.territory_efficiency}
-- Coverage analysis: ${context.territory_metrics.coverage_analysis}
-
-MONTHLY PLANNING CONSTRAINTS:
-- Plan for ${daysInMonth} days (excluding Sundays)
-- Target 11-15 visits per working day
-- Ensure 40% NBD focus throughout month
-- Balance tier-wise customer coverage
-- Optimize for seasonal factors
-- Account for territory efficiency
-- Plan for weekly revision cycles
-
-CUSTOMER PRIORITIZATION:
-1. Tier 1 Champions: Visit 2-3 times per month
-2. Tier 2 Performers: Visit 2 times per month  
-3. Tier 3 Developers: Visit 1-2 times per month
-4. Tier 4 Prospects: Visit 1 time per month
-5. High churn risk customers: Prioritize early in month
-6. Area-wise clustering for efficiency
-
-OUTPUT FORMAT (JSON only):
-{
-    "monthly_overview": {
-        "mr_name": "${mrName}",
-        "month": ${month},
-        "year": ${year},
-        "total_working_days": ${Math.floor(daysInMonth * 6/7)},
-        "total_planned_visits": 300,
-        "target_revenue": 150000,
-        "nbd_visits_target": 120,
-        "tier_distribution_target": {
-            "TIER_1_CHAMPION": 30,
-            "TIER_2_PERFORMER": 80,
-            "TIER_3_DEVELOPER": 120,
-            "TIER_4_PROSPECT": 70
-        }
-    },
-    "weekly_plans": [
-        {
-            "week_number": 1,
-            "start_date": "${year}-${month.toString().padStart(2, '0')}-01",
-            "end_date": "${year}-${month.toString().padStart(2, '0')}-07",
-            "target_visits": 75,
-            "target_revenue": 37500,
-            "focus_areas": ["Area1", "Area2"],
-            "priority_customers": ["Customer1", "Customer2"],
-            "daily_plans": [
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-01",
-                    "day_of_week": "Monday",
-                    "planned_visits": 12,
-                    "focus_tier": "TIER_1_CHAMPION",
-                    "target_areas": ["Area1"],
-                    "estimated_revenue": 6000
-                }
-            ]
-        }
-    ],
-    "customer_visit_frequency": {
-        "Customer1": {
-            "tier": "TIER_1_CHAMPION",
-            "planned_visits": 3,
-            "recommended_dates": ["2025-01-01", "2025-01-15", "2025-01-29"],
-            "priority_reason": "High value customer"
-        }
-    },
-    "area_coverage_plan": {
-        "Area1": {
-            "total_customers": 15,
-            "planned_visits": 45,
-            "focus_weeks": [1, 3],
-            "efficiency_rating": "HIGH"
-        }
-    },
-    "revision_checkpoints": [
-        {
-            "date": "${year}-${month.toString().padStart(2, '0')}-07",
-            "week": 1,
-            "review_focus": "Week 1 performance vs plan",
-            "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
-        }
-    ],
-    "risk_mitigation": {
-        "weather_contingency": "Indoor customer focus during monsoon",
-        "festival_adjustments": "Customer availability considerations",
-        "territory_challenges": "Traffic and accessibility planning"
-    }
-}
-
-Generate a comprehensive monthly plan considering all constraints and context. Return only valid JSON.`;
-    }
-
-    /**
      * Validate monthly plan structure
      */
     validateMonthlyPlanStructure(plan) {
@@ -619,9 +654,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
             }
         };
 
-        // Validate structure
         this.validateStructuredPlan(structuredPlan);
-        
         return structuredPlan;
     }
 
@@ -642,8 +675,9 @@ Generate a comprehensive monthly plan considering all constraints and context. R
      */
     async saveMonthlyPlan(mrName, month, year, plan) {
         try {
+            console.log('🚀 Executing upsert with data:', plan);
             const { data, error } = await supabase
-                .from('ai_tour_plan.monthly_tour_plans')
+                .from('monthly_tour_plans')
                 .upsert({
                     mr_name: mrName,
                     plan_month: month,
@@ -655,7 +689,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }, {
-                    onConflict: 'mr_name,plan_month,plan_year'
+                    onConflict: 'mr_name,plan_month,plan_year,status'
                 })
                 .select()
                 .single();
@@ -672,6 +706,24 @@ Generate a comprehensive monthly plan considering all constraints and context. R
             throw error;
         }
     }
+
+    /**
+     * Utility: Convert time string to minutes
+     */
+    timeToMinutes(timeStr) {
+        if (!timeStr) return 0;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0]) * 60 + parseInt(parts[1]) + (parseInt(parts[2] || 0) / 60);
+    }
+
+    /**
+     * Clear cache
+     */
+    clearCache() {
+        this.cache.clear();
+        console.log('🗑️ Monthly Tour Plan cache cleared');
+    }
+
 
     /**
      * WEEKLY REVISION SYSTEM
@@ -721,29 +773,35 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     /**
      * Get monthly plan from database
      */
-    async getMonthlyPlan(mrName, month, year) {
-        try {
-            const { data, error } = await supabase
-                .from('ai_tour_plan.monthly_tour_plans')
-                .select('*')
-                .eq('mr_name', mrName)
-                .eq('plan_month', month)
-                .eq('plan_year', year)
-                .eq('status', 'ACTIVE')
-                .single();
+   /**
+ * Get monthly plan from database
+ */
+async getMonthlyPlan(mrName, month, year) {
+    try {
+       
 
-            if (error) {
-                console.error('❌ Monthly plan fetch error:', error);
-                return null;
-            }
+        // Then query without schema qualification
+        const { data, error } = await supabase
+            .from('monthly_tour_plans') // Just table name, no schema prefix
+            .select('*')
+            .eq('mr_name', mrName)
+            .eq('plan_month', month)
+            .eq('plan_year', year)
+            .eq('status', 'ACTIVE')
+            .single();
 
-            return data;
-
-        } catch (error) {
-            console.error('❌ Failed to get monthly plan:', error);
+        if (error) {
+            console.error('❌ Monthly plan fetch error:', error);
             return null;
         }
+
+        return data;
+
+    } catch (error) {
+        console.error('❌ Failed to get monthly plan:', error);
+        return null;
     }
+}
 
     /**
      * Analyze week performance vs planned targets
@@ -1144,7 +1202,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async saveWeeklyRevision(monthlyPlanId, weekNumber, revisedPlan, analysis) {
         try {
             const { data, error } = await supabase
-                .from('ai_tour_plan.weekly_plan_revisions')
+                .from('weekly_plan_revisions')
                 .insert({
                     monthly_plan_id: monthlyPlanId,
                     week_number: weekNumber,
@@ -1178,7 +1236,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async updateCurrentPlan(planId, revisedPlan) {
         try {
             const { error } = await supabase
-                .from('ai_tour_plan.monthly_tour_plans')
+                .from('monthly_tour_plans')
                 .update({
                     current_plan_json: revisedPlan,
                     current_revision: revisedPlan.plan_metadata.revision_count,
@@ -1314,7 +1372,7 @@ Generate a comprehensive monthly plan considering all constraints and context. R
     async saveMonthlyReport(report) {
         try {
             const { data, error } = await supabase
-                .from('ai_tour_plan.monthly_performance_reports')
+                .from('monthly_performance_reports')
                 .insert({
                     monthly_plan_id: report.monthly_plan_id || null,
                     mr_name: report.mr_name,
