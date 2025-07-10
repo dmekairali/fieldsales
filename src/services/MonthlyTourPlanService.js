@@ -461,6 +461,9 @@ class MonthlyTourPlanService {
         
         try {
             const aiResponse = await aiTourPlanGenerator.callOpenAI(prompt);
+            console.log('🤖 AI Response Length:', aiResponse.length);
+            console.log('🤖 AI Response End:', aiResponse.slice(-500)); // Last 500 chars
+            
             const cleanResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
             const planJson = JSON.parse(cleanResponse);
             
