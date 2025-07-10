@@ -178,17 +178,16 @@ class MonthlyPlanServiceV2 {
             console.log(`💾 [V2] Saving monthly plan for ${mrName}`);
 
             const planData = {
-                mr_name: mrName,
-                plan_month: month,
-                plan_year: year,
-                current_plan_json: plan,
-                plan_status: 'ACTIVE',
-                generated_at: new Date().toISOString(),
-                thread_id: threadId,
-                plan_version: '2.0', // V2 format
-                tokens_used: plan.metadata?.tokens_used || 0,
-                customer_count: Object.keys(plan.cvs || {}).length,
-                area_count: Object.keys(plan.avs || {}).length
+                    mr_name: mrName,
+                    plan_month: month,
+                    plan_year: year,
+                    original_plan_json: plan,
+                    current_plan_json: plan,
+                    current_revision: 0,
+                    status: 'ACTIVE',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    thread_id: threadId
             };
 
             // Check if plan already exists
