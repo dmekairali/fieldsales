@@ -660,127 +660,171 @@ Territory Metrics:
 - Territory efficiency: ${context.territory_metrics.territory_efficiency}
 - Coverage analysis: ${context.territory_metrics.coverage_analysis}
 
-MANDATORY COMPREHENSIVE STRUCTURE - MUST GENERATE ALL OF THE FOLLOWING:
+CRITICAL INSTRUCTIONS:
+- Use ONLY the real customer names and area names provided above
+- DO NOT use generic names like "Customer1", "Area1", "Customer2", "Area2" 
+- Use actual names like "${sampleCustomer1?.customer_name}", "${sampleCustomer2?.customer_name}"
+- Use actual areas like "${sampleArea1}", "${sampleArea2}"
 
-WEEK 1 (${year}-${month.toString().padStart(2, '0')}-01 to ${year}-${month.toString().padStart(2, '0')}-07):
-- Generate 6 complete daily_plans (Monday to Saturday)
-- focus_areas: [${realAreas.slice(0, 2).map(area => `"${area}"`).join(', ')}]
-- priority_customers: [${context.customers.slice(0, 2).map(c => `"${c.customer_name}"`).join(', ')}]
-- Include 20+ customers in this week
+MANDATORY COMPREHENSIVE COVERAGE REQUIREMENTS:
+- Generate EXACTLY 4 complete weeks (weeks 1, 2, 3, 4)
+- Each week MUST have 6 daily_plans (Monday through Saturday)
+- Include 60-80 different customers in customer_visit_frequency section
+- Distribute customers across all 4 weeks evenly
+- Use different area combinations for each week
+- TARGET RESPONSE LENGTH: 12,000+ characters minimum
+- MINIMUM TOKEN USAGE: 2,500+ completion tokens
 
-WEEK 2 (${year}-${month.toString().padStart(2, '0')}-08 to ${year}-${month.toString().padStart(2, '0')}-14):
-- Generate 6 complete daily_plans (Monday to Saturday)
-- focus_areas: [${realAreas.slice(2, 4).map(area => `"${area}"`).join(', ')}]
-- priority_customers: [${context.customers.slice(2, 4).map(c => `"${c.customer_name}"`).join(', ')}]
-- Include 20+ customers in this week
+WEEKLY DISTRIBUTION MANDATE:
+Week 1: Focus on highest tier customers (TIER_2_PERFORMER + top TIER_3_DEVELOPER)
+Week 2: Focus on remaining TIER_3_DEVELOPER + high-scoring TIER_4_PROSPECT  
+Week 3: Focus on medium-scoring TIER_4_PROSPECT customers
+Week 4: Focus on remaining TIER_4_PROSPECT + follow-up visits
 
-WEEK 3 (${year}-${month.toString().padStart(2, '0')}-15 to ${year}-${month.toString().padStart(2, '0')}-21):
-- Generate 6 complete daily_plans (Monday to Saturday)
-- focus_areas: [${realAreas.slice(4, 6).map(area => `"${area}"`).join(', ')}]
-- priority_customers: [${context.customers.slice(4, 6).map(c => `"${c.customer_name}"`).join(', ')}]
-- Include 20+ customers in this week
+CUSTOMER_VISIT_FREQUENCY REQUIREMENTS:
+Must include 60-80 customers total with entries like:
+- All TIER_2_PERFORMER customers (${tierSummary.TIER_2_PERFORMER || 0} customers): 2-3 visits each
+- All TIER_3_DEVELOPER customers (${tierSummary.TIER_3_DEVELOPER || 0} customers): 1-2 visits each  
+- Top 60 TIER_4_PROSPECT customers: 1 visit each
+Do NOT truncate this section - include comprehensive customer coverage.
 
-WEEK 4 (${year}-${month.toString().padStart(2, '0')}-22 to ${year}-${month.toString().padStart(2, '0')}-28):
-- Generate 6 complete daily_plans (Monday to Saturday)
-- focus_areas: [${realAreas.slice(6, 8).map(area => `"${area}"`).join(', ')}]
-- priority_customers: [${context.customers.slice(6, 8).map(c => `"${c.customer_name}"`).join(', ')}]
-- Include 20+ customers in this week
+MONTHLY PLANNING CONSTRAINTS:
+- Plan for ${daysInMonth} days (excluding Sundays)
+- Target 11-15 visits per working day
+- Ensure 40% NBD focus throughout month
+- Balance tier-wise customer coverage
+- Optimize for seasonal factors
+- Account for territory efficiency
+- Plan for weekly revision cycles
 
-${daysInMonth > 28 ? `
-WEEK 5 (${year}-${month.toString().padStart(2, '0')}-29 to ${year}-${month.toString().padStart(2, '0')}-${daysInMonth}):
-- Generate daily_plans for remaining days
-- focus_areas: [${realAreas.slice(8, 10).map(area => `"${area}"`).join(', ')}]
-- priority_customers: [${context.customers.slice(8, 10).map(c => `"${c.customer_name}"`).join(', ')}]
-- Include 10+ customers in this week
-` : ''}
-
-CUSTOMER_VISIT_FREQUENCY MUST INCLUDE 80+ CUSTOMERS:
-Include ALL of these customers and more:
-${context.customers.slice(0, 15).map((c, i) => `"${c.customer_name}": { "tier": "${c.tier_level}", "planned_visits": ${c.tier_level === 'TIER_2_PERFORMER' ? 3 : c.tier_level === 'TIER_3_DEVELOPER' ? 2 : 1}, "area": "${c.area_name}" }`).join(',\n')}
-... and 65+ more customers from the provided list.
-
-AREA_COVERAGE_PLAN MUST INCLUDE ALL AREAS:
-Include plans for: ${realAreas.slice(0, 10).map(area => `"${area}"`).join(', ')}, and more.
-
-REVISION_CHECKPOINTS - Generate 4-5 checkpoints:
-- Week 1: ${year}-${month.toString().padStart(2, '0')}-07
-- Week 2: ${year}-${month.toString().padStart(2, '0')}-14  
-- Week 3: ${year}-${month.toString().padStart(2, '0')}-21
-- Week 4: ${year}-${month.toString().padStart(2, '0')}-28
-${daysInMonth > 28 ? `- Week 5: ${year}-${month.toString().padStart(2, '0')}-${daysInMonth}` : ''}
-
-CRITICAL REQUIREMENTS:
-- Generate COMPLETE response with ALL weeks (minimum 4 weeks)
-- Include ALL 80+ customers in customer_visit_frequency
-- Use ONLY real customer names and area names provided
-- Target response length: 15,000+ characters (NOT 2,000!)
-- Minimum token usage: 3,000+ tokens
-- DO NOT TRUNCATE - generate the complete structure
-
-OUTPUT FORMAT (JSON only) - COMPLETE STRUCTURE REQUIRED:
+OUTPUT FORMAT (JSON only) - GENERATE COMPLETE STRUCTURE:
 {
     "monthly_overview": {
         "mr_name": "${mrName}",
         "month": ${month},
         "year": ${year},
         "total_working_days": ${Math.floor(daysInMonth * 6/7)},
-        "total_planned_visits": ${Math.floor(daysInMonth * 6/7) * 12},
+        "total_planned_visits": 300,
         "target_revenue": 150000,
-        "nbd_visits_target": ${Math.floor(Math.floor(daysInMonth * 6/7) * 12 * 0.4)},
+        "nbd_visits_target": 120,
         "tier_distribution_target": ${JSON.stringify(tierSummary)}
     },
     "weekly_plans": [
-        // MUST INCLUDE ALL 4-5 WEEKS WITH COMPLETE DAILY PLANS
         {
             "week_number": 1,
             "start_date": "${year}-${month.toString().padStart(2, '0')}-01",
             "end_date": "${year}-${month.toString().padStart(2, '0')}-07",
-            "target_visits": 72,
-            "target_revenue": 36000,
-            "focus_areas": [${realAreas.slice(0, 2).map(area => `"${area}"`).join(', ')}],
-            "priority_customers": [${context.customers.slice(0, 2).map(c => `"${c.customer_name}"`).join(', ')}],
+            "target_visits": 75,
+            "target_revenue": 37500,
+            "focus_areas": ["${sampleArea1}", "${sampleArea2}"],
+            "priority_customers": ["${sampleCustomer1?.customer_name}", "${sampleCustomer2?.customer_name}"],
             "daily_plans": [
-                // MUST INCLUDE ALL 6 DAYS (Monday-Saturday)
                 {
                     "date": "${year}-${month.toString().padStart(2, '0')}-01",
-                    "day_of_week": "Tuesday",
+                    "day_of_week": "Monday",
                     "planned_visits": 12,
                     "focus_tier": "TIER_4_PROSPECT",
-                    "target_areas": ["${realAreas[0] || 'MAUJPUR'}"],
+                    "target_areas": ["${sampleArea1}"],
                     "estimated_revenue": 6000
                 },
                 {
                     "date": "${year}-${month.toString().padStart(2, '0')}-02",
-                    "day_of_week": "Wednesday", 
+                    "day_of_week": "Tuesday", 
                     "planned_visits": 12,
                     "focus_tier": "TIER_3_DEVELOPER",
-                    "target_areas": ["${realAreas[1] || 'NAVEEN SHAHDARA'}"],
+                    "target_areas": ["${sampleArea2}"],
                     "estimated_revenue": 6000
+                },
+                {
+                    "date": "${year}-${month.toString().padStart(2, '0')}-03",
+                    "day_of_week": "Wednesday",
+                    "planned_visits": 12,
+                    "focus_tier": "TIER_4_PROSPECT", 
+                    "target_areas": ["${sampleArea1}"],
+                    "estimated_revenue": 6000
+                },
+                {
+                    "date": "${year}-${month.toString().padStart(2, '0')}-04",
+                    "day_of_week": "Thursday",
+                    "planned_visits": 12,
+                    "focus_tier": "TIER_3_DEVELOPER",
+                    "target_areas": ["${sampleArea2}"],
+                    "estimated_revenue": 6000
+                },
+                {
+                    "date": "${year}-${month.toString().padStart(2, '0')}-05",
+                    "day_of_week": "Friday",
+                    "planned_visits": 12,
+                    "focus_tier": "TIER_4_PROSPECT",
+                    "target_areas": ["${sampleArea1}"],
+                    "estimated_revenue": 6000
+                },
+                {
+                    "date": "${year}-${month.toString().padStart(2, '0')}-06",
+                    "day_of_week": "Saturday",
+                    "planned_visits": 10,
+                    "focus_tier": "TIER_2_PERFORMER",
+                    "target_areas": ["${sampleArea2}"],
+                    "estimated_revenue": 5000
                 }
-                // ... CONTINUE FOR ALL 6 DAYS
+            ]
+        },
+        {
+            "week_number": 2,
+            "start_date": "${year}-${month.toString().padStart(2, '0')}-08",
+            "end_date": "${year}-${month.toString().padStart(2, '0')}-14",
+            "target_visits": 75,
+            "target_revenue": 37500,
+            "focus_areas": ["AREA_FROM_WEEK_2", "ANOTHER_AREA_WEEK_2"],
+            "priority_customers": ["CUSTOMER_FROM_WEEK_2", "ANOTHER_CUSTOMER_WEEK_2"],
+            "daily_plans": [
+                // Generate 6 daily plans for week 2 (Monday-Saturday)
+                // Similar structure as week 1 but with different dates, areas, and customers
+            ]
+        },
+        {
+            "week_number": 3,
+            "start_date": "${year}-${month.toString().padStart(2, '0')}-15",
+            "end_date": "${year}-${month.toString().padStart(2, '0')}-21",
+            "target_visits": 75,
+            "target_revenue": 37500,
+            "focus_areas": ["AREA_FROM_WEEK_3", "ANOTHER_AREA_WEEK_3"],
+            "priority_customers": ["CUSTOMER_FROM_WEEK_3", "ANOTHER_CUSTOMER_WEEK_3"],
+            "daily_plans": [
+                // Generate 6 daily plans for week 3 (Monday-Saturday)
+            ]
+        },
+        {
+            "week_number": 4,
+            "start_date": "${year}-${month.toString().padStart(2, '0')}-22",
+            "end_date": "${year}-${month.toString().padStart(2, '0')}-28",
+            "target_visits": 75,
+            "target_revenue": 37500,
+            "focus_areas": ["AREA_FROM_WEEK_4", "ANOTHER_AREA_WEEK_4"],
+            "priority_customers": ["CUSTOMER_FROM_WEEK_4", "ANOTHER_CUSTOMER_WEEK_4"],
+            "daily_plans": [
+                // Generate 6 daily plans for week 4 (Monday-Saturday)
             ]
         }
-        // ... CONTINUE FOR ALL 4-5 WEEKS
     ],
     "customer_visit_frequency": {
-        // MUST INCLUDE 80+ CUSTOMERS - NOT JUST 1!
-        ${context.customers.slice(0, 5).map((c, i) => `"${c.customer_name}": {
-            "tier": "${c.tier_level}",
-            "planned_visits": ${c.tier_level === 'TIER_2_PERFORMER' ? 3 : c.tier_level === 'TIER_3_DEVELOPER' ? 2 : 1},
-            "recommended_dates": ["${year}-${month.toString().padStart(2, '0')}-${String(i * 5 + 1).padStart(2, '0')}"],
-            "priority_reason": "Customer from ${c.area_name}"
-        }`).join(',\n        ')}
-        // ... CONTINUE FOR ALL 80+ CUSTOMERS
+        "${sampleCustomer1?.customer_name}": {
+            "tier": "${sampleCustomer1?.tier_level}",
+            "planned_visits": 1,
+            "recommended_dates": ["${year}-${month.toString().padStart(2, '0')}-01"],
+            "priority_reason": "High value customer from ${sampleCustomer1?.area_name}"
+        }
+        // MANDATORY: Include 60-80 more customers here - DO NOT TRUNCATE THIS SECTION
+        // Include customers from all weeks with appropriate visit frequencies
     },
     "area_coverage_plan": {
-        // MUST INCLUDE ALL AREAS - NOT JUST 1!
-        ${realAreas.slice(0, 5).map((area, i) => `"${area}": {
-            "total_customers": ${Math.floor(context.customers.filter(c => c.area_name === area).length)},
-            "planned_visits": ${Math.floor(context.customers.filter(c => c.area_name === area).length * 1.5)},
-            "focus_weeks": [${i % 2 === 0 ? '1, 3' : '2, 4'}],
-            "efficiency_rating": "MEDIUM"
-        }`).join(',\n        ')}
-        // ... CONTINUE FOR ALL AREAS
+        "${sampleArea1}": {
+            "total_customers": 15,
+            "planned_visits": 45,
+            "focus_weeks": [1, 3],
+            "efficiency_rating": "HIGH"
+        }
+        // Include 8-12 different areas from the real area list provided
     },
     "revision_checkpoints": [
         {
@@ -790,21 +834,21 @@ OUTPUT FORMAT (JSON only) - COMPLETE STRUCTURE REQUIRED:
             "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
         },
         {
-            "date": "${year}-${month.toString().padStart(2, '0')}-14", 
+            "date": "${year}-${month.toString().padStart(2, '0')}-14",
             "week": 2,
-            "review_focus": "Week 2 performance vs plan",
+            "review_focus": "Week 2 performance vs plan", 
             "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
         },
         {
             "date": "${year}-${month.toString().padStart(2, '0')}-21",
-            "week": 3, 
+            "week": 3,
             "review_focus": "Week 3 performance vs plan",
             "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
         },
         {
             "date": "${year}-${month.toString().padStart(2, '0')}-28",
             "week": 4,
-            "review_focus": "Week 4 performance vs plan", 
+            "review_focus": "Week 4 performance vs plan",
             "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
         }
     ],
@@ -815,8 +859,15 @@ OUTPUT FORMAT (JSON only) - COMPLETE STRUCTURE REQUIRED:
     }
 }
 
-FINAL REMINDER: Generate the COMPLETE structure above with ALL weeks, ALL customers, and ALL areas. Do not truncate the response. Use only real customer names and area names from the provided data.
-`;
+CRITICAL SUCCESS CRITERIA:
+✅ 4 complete weeks with 6 daily plans each (24 total daily plans)
+✅ 60-80 customers in customer_visit_frequency section
+✅ 8-12 areas in area_coverage_plan section  
+✅ 4 revision checkpoints (one per week)
+✅ Response length 12,000+ characters
+✅ All real customer names and area names from provided data
+
+IMPORTANT: Generate the COMPLETE structure above. Do NOT truncate any sections. Replace ALL placeholder text with actual customer names and area names from the data provided. Return only valid JSON with comprehensive coverage.`;
     }
 
     /**
