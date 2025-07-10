@@ -477,29 +477,62 @@ class MonthlyTourPlanService {
      * Generate comprehensive AI prompt for monthly planning
      */
     generateMonthlyPlanPrompt(mrName, month, year, context) {
-        const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                           'July', 'August', 'September', 'October', 'November', 'December'];
-        const monthName = monthNames[month];
-        const daysInMonth = new Date(year, month, 0).getDate();
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = monthNames[month];
+    const daysInMonth = new Date(year, month, 0).getDate();
 
-        const customersSummary = `Total active customers: ${context.customers.length}`;
-        const tierSummary = {};
-        context.customers.forEach(customer => {
-            const tier = customer.tier_level || 'TIER_4_PROSPECT';
-            tierSummary[tier] = (tierSummary[tier] || 0) + 1;
-        });
+    const customersSummary = `Total active customers: ${context.customers.length}`;
+    const tierSummary = {};
+    context.customers.forEach(customer => {
+        const tier = customer.tier_level || 'TIER_4_PROSPECT';
+        tierSummary[tier] = (tierSummary[tier] || 0) + 1;
+    });
 
-        let tierBreakdown = '';
-        Object.entries(tierSummary).forEach(([tier, count]) => {
-            tierBreakdown += `- ${tier}: ${count} customers\n`;
-        });
+    let tierBreakdown = '';
+    Object.entries(tierSummary).forEach(([tier, count]) => {
+        tierBreakdown += `- ${tier}: ${count} customers\n`;
+    });
 
-        return `
+    // ✅ ADD: Extract real customer data for the prompt
+    const topCustomers = context.customers
+        .sort((a, b) => (parseFloat(b.tier_score) || 0) - (parseFloat(a.tier_score) || 0))
+        .slice(0, 15)
+        .map((customer, index) => {
+            const tierScore = parseFloat(customer.tier_score) || 0;
+            const salesAmount = parseFloat(customer.total_sales_90d) || 0;
+            const conversionRate = parseFloat(customer.conversion_rate_90d) || 0;
+            const daysSinceVisit = parseInt(customer.days_since_last_visit) || 999;
+            
+            return `${index + 1}. ${customer.customer_name} (${customer.tier_level}) - Area: ${customer.area_name}, Score: ${tierScore.toFixed(1)}, Sales: ₹${salesAmount.toLocaleString()}, Days since visit: ${daysSinceVisit}`;
+        }).join('\n');
+
+    // ✅ ADD: Extract real area names
+    const realAreas = [...new Set(context.customers.map(c => c.area_name))].slice(0, 10);
+    const realAreasString = realAreas.join('", "');
+
+    // ✅ ADD: Get sample high-value customers for examples
+    const highValueCustomers = context.customers
+        .filter(c => parseFloat(c.tier_score) > 20)
+        .slice(0, 3);
+    
+    const sampleCustomer1 = highValueCustomers[0] || context.customers[0];
+    const sampleCustomer2 = highValueCustomers[1] || context.customers[1];
+    const sampleArea1 = realAreas[0] || 'MAUJPUR';
+    const sampleArea2 = realAreas[1] || 'NAVEEN SHAHDARA';
+
+    return `
 You are an AI Monthly Tour Planning Assistant for Kairali Ayurvedic products. Generate a comprehensive monthly tour plan for ${mrName} for ${monthName} ${year} (${daysInMonth} days).
 
 TERRITORY CONTEXT:
 ${customersSummary}
 ${tierBreakdown}
+
+TOP CUSTOMERS (by tier score) - USE THESE REAL NAMES:
+${topCustomers}
+
+REAL AREA NAMES - USE THESE ACTUAL AREAS:
+"${realAreasString}"
 
 Previous Month Performance:
 - Total visits: ${context.previous_performance.total_visits}
@@ -519,6 +552,12 @@ Territory Metrics:
 - Territory efficiency: ${context.territory_metrics.territory_efficiency}
 - Coverage analysis: ${context.territory_metrics.coverage_analysis}
 
+CRITICAL INSTRUCTIONS:
+- Use ONLY the real customer names and area names provided above
+- DO NOT use generic names like "Customer1", "Area1", "Customer2", "Area2" 
+- Use actual names like "${sampleCustomer1?.customer_name}", "${sampleCustomer2?.customer_name}"
+- Use actual areas like "${sampleArea1}", "${sampleArea2}"
+
 MONTHLY PLANNING CONSTRAINTS:
 - Plan for ${daysInMonth} days (excluding Sundays)
 - Target 11-15 visits per working day
@@ -528,15 +567,7 @@ MONTHLY PLANNING CONSTRAINTS:
 - Account for territory efficiency
 - Plan for weekly revision cycles
 
-CUSTOMER PRIORITIZATION:
-1. Tier 1 Champions: Visit 2-3 times per month
-2. Tier 2 Performers: Visit 2 times per month  
-3. Tier 3 Developers: Visit 1-2 times per month
-4. Tier 4 Prospects: Visit 1 time per month
-5. High churn risk customers: Prioritize early in month
-6. Area-wise clustering for efficiency
-
-OUTPUT FORMAT (JSON only):
+OUTPUT FORMAT (JSON only) - USE REAL NAMES THROUGHOUT:
 {
     "monthly_overview": {
         "mr_name": "${mrName}",
@@ -546,12 +577,7 @@ OUTPUT FORMAT (JSON only):
         "total_planned_visits": 300,
         "target_revenue": 150000,
         "nbd_visits_target": 120,
-        "tier_distribution_target": {
-            "TIER_1_CHAMPION": 30,
-            "TIER_2_PERFORMER": 80,
-            "TIER_3_DEVELOPER": 120,
-            "TIER_4_PROSPECT": 70
-        }
+        "tier_distribution_target": ${JSON.stringify(tierSummary)}
     },
     "weekly_plans": [
         {
@@ -560,30 +586,30 @@ OUTPUT FORMAT (JSON only):
             "end_date": "${year}-${month.toString().padStart(2, '0')}-07",
             "target_visits": 75,
             "target_revenue": 37500,
-            "focus_areas": ["Area1", "Area2"],
-            "priority_customers": ["Customer1", "Customer2"],
+            "focus_areas": ["${sampleArea1}", "${sampleArea2}"],
+            "priority_customers": ["${sampleCustomer1?.customer_name}", "${sampleCustomer2?.customer_name}"],
             "daily_plans": [
                 {
                     "date": "${year}-${month.toString().padStart(2, '0')}-01",
                     "day_of_week": "Monday",
                     "planned_visits": 12,
-                    "focus_tier": "TIER_1_CHAMPION",
-                    "target_areas": ["Area1"],
+                    "focus_tier": "TIER_4_PROSPECT",
+                    "target_areas": ["${sampleArea1}"],
                     "estimated_revenue": 6000
                 }
             ]
         }
     ],
     "customer_visit_frequency": {
-        "Customer1": {
-            "tier": "TIER_1_CHAMPION",
-            "planned_visits": 3,
-            "recommended_dates": ["2025-01-01", "2025-01-15", "2025-01-29"],
-            "priority_reason": "High value customer"
+        "${sampleCustomer1?.customer_name}": {
+            "tier": "${sampleCustomer1?.tier_level}",
+            "planned_visits": 1,
+            "recommended_dates": ["${year}-${month.toString().padStart(2, '0')}-01"],
+            "priority_reason": "High value customer from ${sampleCustomer1?.area_name}"
         }
     },
     "area_coverage_plan": {
-        "Area1": {
+        "${sampleArea1}": {
             "total_customers": 15,
             "planned_visits": 45,
             "focus_weeks": [1, 3],
@@ -605,8 +631,8 @@ OUTPUT FORMAT (JSON only):
     }
 }
 
-Generate a comprehensive monthly plan considering all constraints and context. Return only valid JSON.`;
-    }
+IMPORTANT: Replace ALL instances of generic names with actual customer names and area names from the data provided above. Return only valid JSON with real data.`;
+}
 
     /**
      * Validate monthly plan structure
