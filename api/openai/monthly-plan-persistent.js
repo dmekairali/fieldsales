@@ -434,12 +434,21 @@ PERFORMANCE CONTEXT:
 - Conversion rate: ${territoryContext.previous_performance?.conversion_rate?.toFixed(1) || 0}%
 
 Generate a strategic monthly planning framework focusing on:
-1. Monthly overview with realistic targets
-2. 4-week structure with daily plans  
-3. Area-based clustering strategy
-4. Weekly revision checkpoints
+1.  **Monthly Overview**: Realistic targets including 'total_planned_visits' (integer) and 'target_revenue' (number, without commas).
+2.  **Weekly Plans (as an array called 'weekly_plans')**: A 4-week structure. For each week object in the array, include:
+    *   'week_number' (integer, e.g., 1, 2, 3, 4)
+    *   'start_date' (string, 'YYYY-MM-DD' format, calculated based on the month and week number)
+    *   'end_date' (string, 'YYYY-MM-DD' format)
+    *   'target_visits' (integer, overall target visits for this week)
+    *   'target_revenue' (number, without commas, overall target revenue for this week)
+    *   'focus_areas' (array of strings, key geographical areas for this week)
+    *   'priority_customers' (array of strings, key customer names to prioritize this week)
+    *   'daily_plans' (array of objects, for detailed daily breakdown - you can keep this high-level for now or provide a basic structure for each day if easy)
+3.  **Area-Based Clustering Strategy**: General strategy notes.
+4.  **Revision Checkpoints**: Notes on when/how to revise.
 
 I'll handle the detailed customer distribution based on your strategic framework.
+Ensure all numeric values like revenue and visits are pure numbers without commas or currency symbols.
 
 Please remember this context - I'll be back with weekly performance updates for plan adjustments.
 
@@ -517,11 +526,57 @@ function parseFrameworkResponse(response) {
         if (lastBrace >= 0 && lastBrace < cleaned.length - 1) {
             cleaned = cleaned.substring(0, lastBrace + 1);
         }
-        return JSON.parse(cleaned);
+
+        let parsedJson = JSON.parse(cleaned);
+
+        // Robust parsing for monthly_overview
+        if (parsedJson.monthly_overview) {
+            parsedJson.monthly_overview.target_revenue = parseFloat(String(parsedJson.monthly_overview.target_revenue).replace(/[^0-9.-]+/g, '')) || 0;
+            parsedJson.monthly_overview.total_planned_visits = parseInt(String(parsedJson.monthly_overview.total_planned_visits).replace(/[^0-9-]+/g, '')) || 0;
+            parsedJson.monthly_overview.nbd_visits_target = parseInt(String(parsedJson.monthly_overview.nbd_visits_target).replace(/[^0-9-]+/g, '')) || 0;
+            parsedJson.monthly_overview.total_working_days = parseInt(String(parsedJson.monthly_overview.total_working_days).replace(/[^0-9-]+/g, '')) || 0;
+        } else {
+            parsedJson.monthly_overview = { target_revenue: 0, total_planned_visits: 0, nbd_visits_target: 0, total_working_days: 0 };
+        }
+
+        // Robust parsing for weekly_plans
+        if (parsedJson.weekly_plans && Array.isArray(parsedJson.weekly_plans)) {
+            parsedJson.weekly_plans.forEach(week => {
+                week.week_number = parseInt(String(week.week_number)) || 0;
+                // start_date and end_date are expected as 'YYYY-MM-DD' strings, keep as is if valid, otherwise null/default
+                week.start_date = typeof week.start_date === 'string' && week.start_date.match(/^\d{4}-\d{2}-\d{2}$/) ? week.start_date : '';
+                week.end_date = typeof week.end_date === 'string' && week.end_date.match(/^\d{4}-\d{2}-\d{2}$/) ? week.end_date : '';
+                week.target_visits = parseInt(String(week.target_visits).replace(/[^0-9-]+/g, '')) || 0;
+                week.target_revenue = parseFloat(String(week.target_revenue).replace(/[^0-9.-]+/g, '')) || 0;
+                week.focus_areas = Array.isArray(week.focus_areas) ? week.focus_areas.map(String) : [];
+                week.priority_customers = Array.isArray(week.priority_customers) ? week.priority_customers.map(String) : [];
+                // daily_plans can be complex, ensure it's an array
+                week.daily_plans = Array.isArray(week.daily_plans) ? week.daily_plans : [];
+            });
+        } else {
+            parsedJson.weekly_plans = []; // Default to empty array if not provided or not an array
+        }
+
+        // Ensure other top-level expected structures exist if necessary
+        parsedJson.area_coverage_plan = parsedJson.area_coverage_plan || {};
+        parsedJson.revision_checkpoints = parsedJson.revision_checkpoints || {};
+
+
+        return parsedJson;
+
     } catch (error) {
         console.error('❌ Framework parsing failed:', error);
-        console.log('🔍 Response that failed to parse:', response.substring(0, 1000));
-        throw new Error(`Framework parsing failed: ${error.message}`);
+        console.log('🔍 Response that failed to parse (cleaned preview):', cleaned.substring(0, 1000));
+        console.log('🔍 Original response preview:', response.substring(0, 1000));
+        // Fallback to a default structure on parsing failure to prevent downstream errors
+        return {
+            monthly_overview: { target_revenue: 0, total_planned_visits: 0, nbd_visits_target: 0, total_working_days: 0, summary: "Error parsing AI response." },
+            weekly_plans: [],
+            area_coverage_plan: {},
+            revision_checkpoints: {},
+            parsing_error: true,
+            parsing_error_message: error.message
+        };
     }
 }
 

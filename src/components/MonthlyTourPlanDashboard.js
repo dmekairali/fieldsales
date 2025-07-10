@@ -577,10 +577,10 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                         </h3>
                                         <div className="flex items-center gap-4">
                                             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                                                Version: {monthlyPlan.current_revision + 1}.0
+                                        Version: {(monthlyPlan.current_revision || 0) + 1}.0
                                             </span>
                                             <span className="text-sm text-gray-500">
-                                                Generated: {new Date(monthlyPlan.created_at).toLocaleDateString()}
+                                        Generated: {monthlyPlan.created_at ? new Date(monthlyPlan.created_at).toLocaleDateString() : 'N/A'}
                                             </span>
                                         </div>
                                     </div>
@@ -589,25 +589,25 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
                                             <div className="text-2xl font-bold text-blue-600">
-                                                {monthlyPlan.current_plan_json?.monthly_overview?.total_planned_visits || 0}
+                                        {monthlyPlan.current_plan_json?.monthly_overview?.total_planned_visits || 'N/A'}
                                             </div>
                                             <div className="text-sm text-blue-600 font-medium">Total Visits</div>
                                         </div>
                                         <div className="bg-green-50 rounded-lg p-4 text-center border border-green-100">
                                             <div className="text-2xl font-bold text-green-600">
-                                                ₹{((monthlyPlan.current_plan_json?.monthly_overview?.target_revenue || 0) / 1000).toFixed(0)}K
+                                        ₹{((parseFloat(String(monthlyPlan.current_plan_json?.monthly_overview?.target_revenue).replace(/[^0-9.-]+/g, '')) || 0) / 1000).toFixed(0)}K
                                             </div>
                                             <div className="text-sm text-green-600 font-medium">Target Revenue</div>
                                         </div>
                                         <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-100">
                                             <div className="text-2xl font-bold text-purple-600">
-                                                {monthlyPlan.current_plan_json?.monthly_overview?.nbd_visits_target || 0}
+                                        {monthlyPlan.current_plan_json?.monthly_overview?.nbd_visits_target || 'N/A'}
                                             </div>
                                             <div className="text-sm text-purple-600 font-medium">NBD Visits</div>
                                         </div>
                                         <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-100">
                                             <div className="text-2xl font-bold text-orange-600">
-                                                {monthlyPlan.current_plan_json?.monthly_overview?.total_working_days || 0}
+                                        {monthlyPlan.current_plan_json?.monthly_overview?.total_working_days || 'N/A'}
                                             </div>
                                             <div className="text-sm text-orange-600 font-medium">Working Days</div>
                                         </div>
@@ -623,80 +623,181 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                     
                                     <div className="p-6">
                                         <div className="grid gap-6">
-                                            {monthlyPlan.current_plan_json?.weekly_plans?.map((week, index) => (
-                                                <div key={index} className="border border-gray-200 rounded-lg p-4">
-                                                    <div className="flex items-center justify-between mb-4">
-                                                        <h4 className="font-semibold text-gray-900">
-                                                            Week {week.week_number} ({week.start_date} to {week.end_date})
-                                                        </h4>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                                getWeekStatus(week.week_number) === 'completed' ? 'bg-green-100 text-green-800' :
-                                                                getWeekStatus(week.week_number) === 'current' ? 'bg-blue-100 text-blue-800' :
-                                                                'bg-gray-100 text-gray-600'
-                                                            }`}>
-                                                                {getWeekStatus(week.week_number) === 'completed' ? 'Completed' :
-                                                                 getWeekStatus(week.week_number) === 'current' ? 'Current' : 'Upcoming'}
-                                                            </span>
-                                                            {canPerformRevision(week.week_number) && (
-                                                                <button
-                                                                    onClick={() => performWeeklyRevision(week.week_number)}
-                                                                    disabled={actionLoading?.startsWith('revision')}
-                                                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors"
-                                                                >
-                                                                    {actionLoading === `revision-${week.week_number}` ? 'Analyzing...' : 'Analyze Week'}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                                                        <div className="text-center">
-                                                            <div className="text-lg font-bold text-blue-600">{week.target_visits}</div>
-                                                            <div className="text-xs text-gray-600">Target Visits</div>
-                                                        </div>
-                                                        <div className="text-center">
-                                                            <div className="text-lg font-bold text-green-600">₹{(week.target_revenue / 1000).toFixed(0)}K</div>
-                                                            <div className="text-xs text-gray-600">Target Revenue</div>
-                                                        </div>
-                                                        <div className="text-center">
-                                                            <div className="text-lg font-bold text-purple-600">{week.focus_areas?.length || 0}</div>
-                                                            <div className="text-xs text-gray-600">Focus Areas</div>
-                                                        </div>
-                                                        <div className="text-center">
-                                                            <div className="text-lg font-bold text-orange-600">{week.priority_customers?.length || 0}</div>
-                                                            <div className="text-xs text-gray-600">Priority Customers</div>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    {week.focus_areas && week.focus_areas.length > 0 && (
-                                                        <div className="mb-3">
-                                                            <div className="text-sm font-medium text-gray-700 mb-2">Focus Areas:</div>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {week.focus_areas.map((area, areaIndex) => (
-                                                                    <span key={areaIndex} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs">
-                                                                        {area}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {week.priority_customers && week.priority_customers.length > 0 && (
-                                                        <div>
-                                                            <div className="text-sm font-medium text-gray-700 mb-2">Priority Customers:</div>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {week.priority_customers.slice(0, 5).map((customer, customerIndex) => (
-                                                                    <span key={customerIndex} className="bg-green-100 text-green-800 px-2 py-1 rounded-md text-xs">
-                                                                        {customer}
-                                                                    </span>
-                                                                ))}
-                                                                {week.priority_customers.length > 5 && (
-                                                                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs">
-                                                                        +{week.priority_customers.length - 5} more
-                                                                    </span>
+                                            {monthlyPlan.current_plan_json?.weekly_plans?.map((week, index) => {
+                                                const weeklyTargetRevenue = parseFloat(String(week.target_revenue).replace(/[^0-9.-]+/g, '')) || 0;
+                                                const focusAreasCount = Array.isArray(week.focus_areas) ? week.focus_areas.length : 0;
+                                                const priorityCustomersCount = Array.isArray(week.priority_customers) ? week.priority_customers.length : 0;
+
+                                                return (
+                                                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <h4 className="font-semibold text-gray-900">
+                                                                Week {week.week_number || 'N/A'} ({week.start_date || 'N/A'} to {week.end_date || 'N/A'})
+                                                            </h4>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                    getWeekStatus(week.week_number) === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                    getWeekStatus(week.week_number) === 'current' ? 'bg-blue-100 text-blue-800' :
+                                                                    'bg-gray-100 text-gray-600'
+                                                                }`}>
+                                                                    {getWeekStatus(week.week_number) === 'completed' ? 'Completed' :
+                                                                     getWeekStatus(week.week_number) === 'current' ? 'Current' : 'Upcoming'}
+                                                                </span>
+                                                                {canPerformRevision(week.week_number) && (
+                                                                    <button
+                                                                        onClick={() => performWeeklyRevision(week.week_number)}
+                                                                        disabled={actionLoading?.startsWith('revision')}
+                                                                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                                                                    >
+                                                                        {actionLoading === `revision-${week.week_number}` ? 'Analyzing...' : 'Analyze Week'}
+                                                                    </button>
                                                                 )}
                                                             </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                                            <div className="text-center">
+                                                                <div className="text-lg font-bold text-blue-600">{week.target_visits || 'N/A'}</div>
+                                                                <div className="text-xs text-gray-600">Target Visits</div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <div className="text-lg font-bold text-green-600">₹{(weeklyTargetRevenue / 1000).toFixed(0)}K</div>
+                                                                <div className="text-xs text-gray-600">Target Revenue</div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <div className="text-lg font-bold text-purple-600">{focusAreasCount}</div>
+                                                                <div className="text-xs text-gray-600">Focus Areas</div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <div className="text-lg font-bold text-orange-600">{priorityCustomersCount}</div>
+                                                                <div className="text-xs text-gray-600">Priority Customers</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {focusAreasCount > 0 ? (
+                                                            <div className="mb-3">
+                                                                <div className="text-sm font-medium text-gray-700 mb-2">Focus Areas:</div>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {week.focus_areas.map((area, areaIndex) => (
+                                                                        <span key={areaIndex} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-xs">
+                                                                            {area || 'N/A'}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ) : <p className="text-xs text-gray-500 mb-3">No focus areas specified for this week.</p>}
+
+                                                        {priorityCustomersCount > 0 ? (
+                                                            <div>
+                                                                <div className="text-sm font-medium text-gray-700 mb-2">Priority Customers:</div>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {week.priority_customers.slice(0, 5).map((customer, customerIndex) => (
+                                                                        <span key={customerIndex} className="bg-green-100 text-green-800 px-2 py-1 rounded-md text-xs">
+                                                                            {customer || 'N/A'}
+                                                                        </span>
+                                                                    ))}
+                                                                    {week.priority_customers.length > 5 && (
+                                                                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs">
+                                                                            +{week.priority_customers.length - 5} more
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ) : <p className="text-xs text-gray-500">No priority customers specified for this week.</p>}
+                                                    </div>
+                                                );
+                                            }) || (
+                                                <div className="text-center py-8 text-gray-500">
+                                                    <div className="text-4xl mb-4">📅</div>
+                                                    <p>No weekly plans available</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Customer Visit Frequency */}
+                                {monthlyPlan.current_plan_json?.customer_visit_frequency && (
+                                    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                                        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-xl">
+                                            <h3 className="text-xl font-bold">Customer Visit Schedule</h3>
+                                            <p className="text-green-100 mt-2">Planned customer visit frequencies and priorities</p>
+                                        </div>
+
+                                        <div className="p-6">
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead className="bg-gray-50">
+                                                        <tr>
+                                                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Planned Visits</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Priority Reason</th>
+                                                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled Dates</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="bg-white divide-y divide-gray-200">
+                                                        {Object.entries(monthlyPlan.current_plan_json.customer_visit_frequency)
+                                                            .slice(0, 10)
+                                                            .map(([customerName, schedule], index) => (
+                                                                <tr key={index} className="hover:bg-gray-50">
+                                                                    <td className="px-4 py-3 font-medium text-gray-900">{customerName}</td>
+                                                                    <td className="px-4 py-3 text-center">
+                                                                        <span className={`px-2 py-1 rounded-md text-xs font-medium ${
+                                                                            schedule.tier === 'TIER_1_CHAMPION' ? 'bg-purple-100 text-purple-800' :
+                                                                            schedule.tier === 'TIER_2_PERFORMER' ? 'bg-blue-100 text-blue-800' :
+                                                                            schedule.tier === 'TIER_3_DEVELOPER' ? 'bg-green-100 text-green-800' :
+                                                                            'bg-gray-100 text-gray-800'
+                                                                        }`}>
+                                                                            {schedule.tier?.replace('TIER_', 'T') || 'T4'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-center font-semibold">{schedule.planned_visits || 'N/A'}</td>
+                                                                    <td className="px-4 py-3 text-center text-sm text-gray-600">{schedule.priority_reason || 'N/A'}</td>
+                                                                    <td className="px-4 py-3 text-center text-xs">
+                                                                        {Array.isArray(schedule.recommended_dates) && schedule.recommended_dates.slice(0, 2).map((date, dateIndex) => (
+                                                                            <div key={dateIndex} className="mb-1">
+                                                                                {date ? new Date(date).toLocaleDateString() : 'N/A'}
+                                                                            </div>
+                                                                        ))}
+                                                                        {Array.isArray(schedule.recommended_dates) && schedule.recommended_dates.length > 2 && (
+                                                                            <div className="text-gray-500">+{schedule.recommended_dates.length - 2} more</div>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            {Object.keys(monthlyPlan.current_plan_json.customer_visit_frequency).length > 10 && (
+                                                <div className="text-center mt-4 text-sm text-gray-500">
+                                                    Showing top 10 customers. Total: {Object.keys(monthlyPlan.current_plan_json.customer_visit_frequency).length} customers planned.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                                <div className="text-center">
+                                    <div className="text-6xl mb-4">📅</div>
+                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">No Monthly Plan Generated</h3>
+                                    <p className="text-gray-600 mb-6">Create a comprehensive monthly tour plan to get started with systematic territory planning.</p>
+                                    <button
+                                        onClick={generateMonthlyPlan}
+                                        disabled={actionLoading === 'generating'}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50"
+                                    >
+                                        {actionLoading === 'generating' ? 'Generating plan (up to 2 mins)...' : 'Generate Monthly Plan'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeView === 'weekly-analysis' && (
                                                         </div>
                                                     )}
                                                 </div>
