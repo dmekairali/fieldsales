@@ -16,7 +16,7 @@ export class OpenAIAssistantService {
     async generateMonthlyPlan(mrName, month, year, territoryContext) {
         try {
             console.log(`🤖 Calling API for monthly plan generation for ${mrName}`);
-            console.log('📍 API URL:', '/api/monthly-plan');
+            console.log('📍 API URL:', '/api/openai/monthly-plan');
             console.log('📊 Territory context summary:', {
                 customers: territoryContext.customers?.length || 0,
                 hasPerformanceData: !!territoryContext.previous_performance,
@@ -29,13 +29,14 @@ export class OpenAIAssistantService {
                 month,
                 year,
                 territoryContext,
-                assistantId: this.assistantId
+                assistantId: this.assistantId,
+                action: 'generate'
             };
             
             console.log('📤 Request body size:', JSON.stringify(requestBody).length, 'characters');
             
             // Call your backend API
-            const response = await fetch('/api/openai/monthly-plan', {
+            const response = await fetch('/api/openai/monthly-plan-persistent', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -110,58 +111,86 @@ export class OpenAIAssistantService {
             throw new Error(`API planning failed: ${error.message}`);
         }
     }
-}
 
-// Test function to check if API is working
-export async function testAPI() {
+
+    // ADD THESE METHODS AFTER generateMonthlyPlan():
+
+async reviseWeeklyPlan(threadId, weekNumber, actualPerformance, revisionReason) {
     try {
-        console.log('🧪 Testing API endpoint...');
+        console.log(`🔄 Weekly revision: Week ${weekNumber}`);
         
-        const response = await fetch('/api/openai/monthly-plan', {
+        const response = await fetch('/api/openai/monthly-plan-persistent', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                mrName: 'Test User',
-                month: 7,
-                year: 2025,
-                territoryContext: {
-                    customers: [
-                        {
-                            customer_name: 'Test Customer',
-                            tier_level: 'TIER_4_PROSPECT',
-                            area_name: 'Test Area',
-                            tier_score: 10,
-                            total_sales_90d: 1000
-                        }
-                    ],
-                    previous_performance: { total_visits: 0, total_revenue: 0, conversion_rate: 0, performance_grade: 'NEW' },
-                    seasonal_patterns: { month_performance_trend: 'STABLE', seasonal_factor: 1.0, avg_monthly_visits: 250 },
-                    territory_metrics: { total_customers: 1, territory_efficiency: 'LOW', coverage_analysis: 'FOCUSED' }
-                },
-                assistantId: process.env.REACT_APP_OPENAI_ASSISTANT_ID
+                action: 'revise_weekly',
+                threadId: threadId,
+                weekNumber: weekNumber,
+                actualPerformance: actualPerformance,
+                revisionReason: revisionReason,
+                assistantId: this.assistantId
             })
         });
 
-        const responseText = await response.text();
-        console.log('🧪 Test API Response Status:', response.status);
-        console.log('🧪 Test API Response Text:', responseText.substring(0, 500));
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
         
-        if (response.ok) {
-            const result = JSON.parse(responseText);
-            console.log('✅ API test successful:', result.success);
-            return result;
-        } else {
-            console.error('❌ API test failed:', responseText);
-            return { success: false, error: responseText };
-        }
-        
+        return result;
     } catch (error) {
-        console.error('❌ API test error:', error);
-        return { success: false, error: error.message };
+        console.error('❌ Weekly revision failed:', error);
+        throw error;
     }
 }
+
+async updateDailyPlan(threadId, actualPerformance) {
+    try {
+        const response = await fetch('/api/openai/monthly-plan-persistent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'update_daily',
+                threadId: threadId,
+                actualPerformance: actualPerformance,
+                assistantId: this.assistantId
+            })
+        });
+
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
+        
+        return result;
+    } catch (error) {
+        console.error('❌ Daily update failed:', error);
+        throw error;
+    }
+}
+
+async monthlyReview(threadId, monthlyPerformance) {
+    try {
+        const response = await fetch('/api/openai/monthly-plan-persistent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'monthly_review',
+                threadId: threadId,
+                actualPerformance: monthlyPerformance,
+                assistantId: this.assistantId
+            })
+        });
+
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error);
+        
+        return result;
+    } catch (error) {
+        console.error('❌ Monthly review failed:', error);
+        throw error;
+    }
+}
+    
+}
+
+
 
 
 // ===== MAIN SERVICE CLASS (KEEP MOST OF YOUR EXISTING CODE) =====
@@ -644,7 +673,8 @@ class MonthlyTourPlanService {
                 revision_count: 0,
                 status: 'ACTIVE',
                 month: month,
-                year: year
+                year: year,
+                thread_id: aiPlan.thread_id || null
             },
             performance_baseline: {
                 planned_visits: aiPlan.monthly_overview.total_planned_visits,
@@ -687,7 +717,8 @@ class MonthlyTourPlanService {
                     current_revision: 0,
                     status: 'ACTIVE',
                     created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
+                    thread_id: plan.thread_id || null
                 }, {
                     onConflict: 'mr_name,plan_month,plan_year,status'
                 })
