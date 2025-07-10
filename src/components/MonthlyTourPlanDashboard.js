@@ -717,7 +717,7 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                 </div>
 
                                 {/* Customer Visit Frequency */}
-                                {monthlyPlan.current_plan_json?.customer_visit_frequency && (
+                                {monthlyPlan.current_plan_json?.customer_visit_frequency && Object.keys(monthlyPlan.current_plan_json.customer_visit_frequency).length > 0 ? (
                                     <div className="bg-white rounded-xl shadow-sm border border-gray-200">
                                         <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-xl">
                                             <h3 className="text-xl font-bold">Customer Visit Schedule</h3>
@@ -738,10 +738,10 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                     </thead>
                                                     <tbody className="bg-white divide-y divide-gray-200">
                                                         {Object.entries(monthlyPlan.current_plan_json.customer_visit_frequency)
-                                                            .slice(0, 10)
+                                                            .slice(0, 10) // Show top 10, can be adjusted
                                                             .map(([customerName, schedule], index) => (
                                                                 <tr key={index} className="hover:bg-gray-50">
-                                                                    <td className="px-4 py-3 font-medium text-gray-900">{customerName}</td>
+                                                                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{customerName || 'N/A'}</td>
                                                                     <td className="px-4 py-3 text-center">
                                                                         <span className={`px-2 py-1 rounded-md text-xs font-medium ${
                                                                             schedule.tier === 'TIER_1_CHAMPION' ? 'bg-purple-100 text-purple-800' :
@@ -749,17 +749,16 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                                             schedule.tier === 'TIER_3_DEVELOPER' ? 'bg-green-100 text-green-800' :
                                                                             'bg-gray-100 text-gray-800'
                                                                         }`}>
-                                                                            {schedule.tier?.replace('TIER_', 'T') || 'T4'}
+                                                                            {schedule.tier?.replace('TIER_', 'T') || 'N/A'}
                                                                         </span>
                                                                     </td>
-                                                                    <td className="px-4 py-3 text-center font-semibold">{schedule.planned_visits || 'N/A'}</td>
+                                                                    <td className="px-4 py-3 text-center font-semibold">{schedule.planned_visits != null ? schedule.planned_visits : 'N/A'}</td>
                                                                     <td className="px-4 py-3 text-center text-sm text-gray-600">{schedule.priority_reason || 'N/A'}</td>
-                                                                    {/* Corrected/Re-asserted block for Scheduled Dates display */}
                                                                     <td className="px-4 py-3 text-center text-xs">
                                                                         {Array.isArray(schedule.recommended_dates) && schedule.recommended_dates.length > 0 ? (
                                                                             <>
                                                                                 {schedule.recommended_dates.slice(0, 2).map((date, dateIndex) => (
-                                                                                    <div key={dateIndex} className="mb-1">
+                                                                                    <div key={dateIndex} className="mb-1 whitespace-nowrap">
                                                                                         {date ? new Date(date).toLocaleDateString() : 'N/A'}
                                                                                     </div>
                                                                                 ))}
@@ -781,9 +780,12 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                     Showing top 10 customers. Total: {Object.keys(monthlyPlan.current_plan_json.customer_visit_frequency).length} customers planned.
                                                 </div>
                                             )}
+                                            {Object.keys(monthlyPlan.current_plan_json.customer_visit_frequency).length === 0 && (
+                                                <p className="text-center text-sm text-gray-500 py-4">No customer visit frequency data available.</p>
+                                            )}
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
                             </>
                         ) : (
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
