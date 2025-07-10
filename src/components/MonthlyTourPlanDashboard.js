@@ -649,7 +649,7 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                                         <div className="text-center">
                                                             <div className="text-lg font-bold text-blue-600">{week.target_visits}</div>
@@ -668,7 +668,7 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                             <div className="text-xs text-gray-600">Priority Customers</div>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     {week.focus_areas && week.focus_areas.length > 0 && (
                                                         <div className="mb-3">
                                                             <div className="text-sm font-medium text-gray-700 mb-2">Focus Areas:</div>
@@ -681,7 +681,7 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                             </div>
                                                         </div>
                                                     )}
-                                                    
+
                                                     {week.priority_customers && week.priority_customers.length > 0 && (
                                                         <div>
                                                             <div className="text-sm font-medium text-gray-700 mb-2">Priority Customers:</div>
