@@ -212,10 +212,12 @@ class MonthlyTourPlanService {
             const territoryContext = await this.getMonthlyTerritoryContext(mrName, month, year);
             
             // Generate AI-powered monthly plan using Assistant API
-            const monthlyPlan = await this.createMonthlyAIPlan(mrName, month, year, territoryContext);
+            // createMonthlyAIPlan now returns an object: { plan, thread_id, tokens_used }
+            const aiPlanData = await this.createMonthlyAIPlan(mrName, month, year, territoryContext);
             
             // Validate and structure the plan
-            const structuredPlan = await this.structureMonthlyPlan(monthlyPlan, month, year);
+            // Pass the entire aiPlanData object to structureMonthlyPlan
+            const structuredPlan = await this.structureMonthlyPlan(aiPlanData, month, year);
             
             // Save to database
             const savedPlan = await this.saveMonthlyPlan(mrName, month, year, structuredPlan);
@@ -244,20 +246,25 @@ class MonthlyTourPlanService {
         console.log(`🤖 Creating AI monthly plan for ${mrName} using Assistant API`);
 
         const assistantResult = await this.assistantService.generateMonthlyPlan(mrName, month, year, context);
-        const planJson = assistantResult.plan;
+        const planContent = assistantResult.plan;
         
         // Validate plan structure (keep existing validation)
-        this.validateMonthlyPlanStructure(planJson);
+        this.validateMonthlyPlanStructure(planContent);
         
         console.log('✅ Monthly plan structure validated');
         console.log('📊 Plan summary:', {
-            weeks: planJson.weekly_plans?.length || 0,
-            customers: Object.keys(planJson.customer_visit_frequency || {}).length,
-            areas: Object.keys(planJson.area_coverage_plan || {}).length,
-            tokens_used: assistantResult.tokens_used
+            weeks: planContent.weekly_plans?.length || 0,
+            customers: Object.keys(planContent.customer_visit_frequency || {}).length,
+            areas: Object.keys(planContent.area_coverage_plan || {}).length,
+            tokens_used: assistantResult.tokens_used,
+            thread_id: assistantResult.thread_id
         });
         
-        return planJson;
+        return {
+            plan: planContent,
+            thread_id: assistantResult.thread_id,
+            tokens_used: assistantResult.tokens_used
+        };
     }
 
     /**
@@ -662,11 +669,13 @@ class MonthlyTourPlanService {
     /**
      * Structure and validate monthly plan
      */
-    async structureMonthlyPlan(aiPlan, month, year) {
+    async structureMonthlyPlan(aiPlanData, month, year) { // aiPlanData is { plan, thread_id, tokens_used }
         console.log(`📋 Structuring monthly plan for ${month}/${year}`);
 
+        const planContent = aiPlanData.plan; // Actual plan content
+
         const structuredPlan = {
-            ...aiPlan,
+            ...planContent, // Spread the actual plan content
             plan_metadata: {
                 generated_at: new Date().toISOString(),
                 plan_version: '1.0',
@@ -674,12 +683,13 @@ class MonthlyTourPlanService {
                 status: 'ACTIVE',
                 month: month,
                 year: year,
-                thread_id: aiPlan.thread_id || null
+                thread_id: aiPlanData.thread_id || null, // Use thread_id from aiPlanData
+                generation_tokens_used: aiPlanData.tokens_used || 0 // Add tokens_used
             },
             performance_baseline: {
-                planned_visits: aiPlan.monthly_overview.total_planned_visits,
-                planned_revenue: aiPlan.monthly_overview.target_revenue,
-                planned_nbd_visits: aiPlan.monthly_overview.nbd_visits_target,
+                planned_visits: planContent.monthly_overview.total_planned_visits,
+                planned_revenue: planContent.monthly_overview.target_revenue,
+                planned_nbd_visits: planContent.monthly_overview.nbd_visits_target,
                 baseline_date: new Date().toISOString()
             }
         };
@@ -718,9 +728,10 @@ class MonthlyTourPlanService {
                     status: 'ACTIVE',
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
-                    thread_id: plan.thread_id || null
+                    thread_id: plan.plan_metadata.thread_id || null, // Corrected path
+                    generation_tokens_used: plan.plan_metadata.generation_tokens_used || 0 // Added field
                 }, {
-                    onConflict: 'mr_name,plan_month,plan_year,status'
+                    onConflict: 'mr_name,plan_month,plan_year,status' // Assuming status helps define uniqueness for active plans
                 })
                 .select()
                 .single();
