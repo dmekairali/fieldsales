@@ -1,4 +1,5 @@
-// Uses same assistant + thread for entire month with weekly revisions
+// /api/openai/monthly-plan-persistent.js
+// Complete persistent thread-based monthly planning with hybrid approach
 
 import OpenAI from 'openai';
 
@@ -7,8 +8,20 @@ const openai = new OpenAI({
 });
 
 export default async function handler(req, res) {
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ 
+            success: false,
+            error: 'Method not allowed. Use POST.' 
+        });
     }
 
     try {
@@ -18,7 +31,7 @@ export default async function handler(req, res) {
             year, 
             territoryContext, 
             assistantId,
-            action = 'generate', // 'generate', 'revise_weekly', 'update_daily'
+            action = 'generate',
             threadId = null,
             weekNumber = null,
             actualPerformance = null,
@@ -57,42 +70,91 @@ export default async function handler(req, res) {
         return res.status(500).json({
             success: false,
             error: error.message,
-            action: req.body.action
+            action: req.body.action || 'unknown'
         });
     }
 }
 
 // ===================================================================
-// INITIAL PLAN GENERATION WITH THREAD CREATION
+// INITIAL PLAN GENERATION (HYBRID APPROACH FOR ALL SIZES)
 // ===================================================================
 
 async function generateInitialPlan(assistantId, mrName, month, year, territoryContext) {
-    console.log(`🆕 Creating new planning thread for ${mrName}`);
+    console.log(`🆕 Creating new planning thread for ${mrName} with ${territoryContext.customers.length} customers`);
 
-    // Create persistent thread for this monthly plan
+    // Create persistent thread
     const thread = await openai.beta.threads.create({
         metadata: {
             mr_name: mrName,
             month: month.toString(),
             year: year.toString(),
             plan_type: 'monthly_tour_plan',
+            customer_count: territoryContext.customers.length.toString(),
             created_at: new Date().toISOString()
         }
     });
 
     console.log('📝 Thread created:', thread.id);
 
-    // Build comprehensive initial prompt with context setting
-    const initialPrompt = buildInitialPlanPrompt(mrName, month, year, territoryContext);
+    // Use hybrid approach for ALL customer counts
+    const result = await generateHybridPlan(assistantId, thread.id, mrName, month, year, territoryContext);
 
-    // Send initial planning message
-    await openai.beta.threads.messages.create(thread.id, {
+    return {
+        plan: result.plan,
+        thread_id: thread.id,
+        tokens_used: result.tokens_used,
+        generation_method: 'hybrid_persistent',
+        customers_processed: Object.keys(result.plan.customer_visit_frequency || {}).length
+    };
+}
+
+// ===================================================================
+// HYBRID PLAN GENERATION
+// ===================================================================
+
+async function generateHybridPlan(assistantId, threadId, mrName, month, year, territoryContext) {
+    console.log(`🔄 Hybrid: Generating plan for ${territoryContext.customers.length} customers`);
+
+    // STEP 1: Generate strategic framework with AI
+    const framework = await generateStrategicFramework(assistantId, threadId, mrName, month, year, territoryContext);
+    
+    // STEP 2: Algorithmically distribute ALL customers
+    const customerPlan = distributeAllCustomers(territoryContext.customers, month, year);
+    
+    // STEP 3: Generate area coverage plan
+    const areaPlan = generateAreaCoverage(territoryContext.customers);
+    
+    // STEP 4: Combine into complete plan
+    const completePlan = {
+        ...framework,
+        customer_visit_frequency: customerPlan,
+        area_coverage_plan: areaPlan
+    };
+
+    return {
+        plan: completePlan,
+        tokens_used: framework.tokens_used
+    };
+}
+
+// ===================================================================
+// AI STRATEGIC FRAMEWORK GENERATION
+// ===================================================================
+
+async function generateStrategicFramework(assistantId, threadId, mrName, month, year, territoryContext) {
+    console.log('🎯 Generating strategic framework with AI');
+
+    // Build lightweight prompt for framework
+    const prompt = buildFrameworkPrompt(mrName, month, year, territoryContext);
+
+    // Send message to existing thread
+    await openai.beta.threads.messages.create(threadId, {
         role: "user",
-        content: initialPrompt
+        content: prompt
     });
 
-    // Run the assistant
-    const run = await openai.beta.threads.runs.create(thread.id, {
+    // Run assistant
+    const run = await openai.beta.threads.runs.create(threadId, {
         assistant_id: assistantId,
         additional_instructions: `This is the initial monthly plan generation for ${mrName}. 
         
@@ -100,29 +162,38 @@ async function generateInitialPlan(assistantId, mrName, month, year, territoryCo
         - MR Name: ${mrName}
         - Month/Year: ${month}/${year}
         - Total customers: ${territoryContext.customers.length}
-        - Territory areas: ${[...new Set(territoryContext.customers.map(c => c.area_name))].join(', ')}
+        - Territory areas: ${[...new Set(territoryContext.customers.map(c => c.area_name))].slice(0, 10).join(', ')}
         
-        Generate the complete initial plan. I will send weekly performance updates to this same thread for revisions.`
+        Generate ONLY the strategic framework (no individual customer assignments). I will send weekly performance updates to this same thread for revisions.`
     });
 
-    // Wait for completion
-    const completedRun = await waitForRunCompletion(thread.id, run.id);
-    
+    // Wait for completion with built-in logic
+    let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    let attempts = 0;
+    const maxAttempts = 60; // 2 minutes max
+
+    while ((runStatus.status === 'running' || runStatus.status === 'queued') && attempts < maxAttempts) {
+        console.log(`🔄 Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        attempts++;
+    }
+
+    if (runStatus.status !== 'completed') {
+        throw new Error(`Assistant run failed with status: ${runStatus.status}`);
+    }
+
+    console.log('✅ Assistant run completed');
+
     // Get response
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    const assistantMessage = messages.data[0];
-    const responseText = assistantMessage.content[0].text.value;
+    const messages = await openai.beta.threads.messages.list(threadId);
+    const response = messages.data[0].content[0].text.value;
 
-    // Parse plan (using smart parsing for large customer bases)
-    const plan = await parseAndCompletePlan(responseText, territoryContext, month, year);
+    // Parse response
+    const framework = parseFrameworkResponse(response);
+    framework.tokens_used = runStatus.usage?.total_tokens || 0;
 
-    return {
-        plan: plan,
-        thread_id: thread.id,
-        run_id: completedRun.id,
-        tokens_used: completedRun.usage?.total_tokens || 0,
-        generation_method: 'initial_with_thread'
-    };
+    return framework;
 }
 
 // ===================================================================
@@ -132,54 +203,47 @@ async function generateInitialPlan(assistantId, mrName, month, year, territoryCo
 async function reviseWeeklyPlan(assistantId, threadId, weekNumber, actualPerformance, revisionReason) {
     console.log(`🔄 Weekly revision: Week ${weekNumber} in thread ${threadId}`);
 
-    // Build revision prompt with performance data
     const revisionPrompt = buildWeeklyRevisionPrompt(weekNumber, actualPerformance, revisionReason);
 
-    // Add revision message to existing thread
     await openai.beta.threads.messages.create(threadId, {
         role: "user",
         content: revisionPrompt
     });
 
-    // Run assistant with revision context
     const run = await openai.beta.threads.runs.create(threadId, {
         assistant_id: assistantId,
         additional_instructions: `This is a weekly revision for Week ${weekNumber}. 
         
         You have the full context of the original monthly plan from our previous conversation.
-        
         Based on the actual performance data provided, revise the remaining weeks of the plan.
         
-        Focus on:
-        1. Adjusting targets based on actual performance
-        2. Redistributing missed visits to remaining weeks
-        3. Updating customer priorities based on actual visits
-        4. Optimizing remaining schedule for better results
-        
-        Return the updated plan sections that need changes.`
+        Return text recommendations, not JSON.`
     });
 
-    const completedRun = await waitForRunCompletion(threadId, run.id);
-    
-    const messages = await openai.beta.threads.messages.list(threadId);
-    const assistantMessage = messages.data[0];
-    const responseText = assistantMessage.content[0].text.value;
+    // Wait for completion
+    let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    while (runStatus.status === 'running' || runStatus.status === 'queued') {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    }
 
-    // Parse revision (could be partial plan or full plan)
-    const revisionPlan = parseRevisionResponse(responseText);
+    if (runStatus.status !== 'completed') {
+        throw new Error(`Weekly revision failed with status: ${runStatus.status}`);
+    }
+
+    const messages = await openai.beta.threads.messages.list(threadId);
+    const response = messages.data[0].content[0].text.value;
 
     return {
-        revised_plan: revisionPlan,
+        revised_recommendations: response,
         week_number: weekNumber,
         thread_id: threadId,
-        run_id: completedRun.id,
-        tokens_used: completedRun.usage?.total_tokens || 0,
-        generation_method: 'weekly_revision'
+        tokens_used: runStatus.usage?.total_tokens || 0
     };
 }
 
 // ===================================================================
-// DAILY UPDATES USING EXISTING THREAD  
+// DAILY UPDATES USING EXISTING THREAD
 // ===================================================================
 
 async function updateDailyPlan(assistantId, threadId, actualPerformance) {
@@ -188,35 +252,33 @@ async function updateDailyPlan(assistantId, threadId, actualPerformance) {
     const updatePrompt = buildDailyUpdatePrompt(actualPerformance);
 
     await openai.beta.threads.messages.create(threadId, {
-        role: "user", 
+        role: "user",
         content: updatePrompt
     });
 
     const run = await openai.beta.threads.runs.create(threadId, {
         assistant_id: assistantId,
-        additional_instructions: `This is a daily performance update. 
-        
-        Use this information to:
-        1. Track progress against the monthly plan
-        2. Identify any immediate adjustments needed
-        3. Suggest focus areas for tomorrow
-        4. Update customer priorities if needed
-        
-        Provide brief recommendations, not a full plan revision.`
+        additional_instructions: `This is a daily performance update. Provide brief, actionable recommendations for tomorrow's focus.`
     });
 
-    const completedRun = await waitForRunCompletion(threadId, run.id);
-    
+    // Wait for completion
+    let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    while (runStatus.status === 'running' || runStatus.status === 'queued') {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    }
+
+    if (runStatus.status !== 'completed') {
+        throw new Error(`Daily update failed with status: ${runStatus.status}`);
+    }
+
     const messages = await openai.beta.threads.messages.list(threadId);
-    const assistantMessage = messages.data[0];
-    const responseText = assistantMessage.content[0].text.value;
+    const response = messages.data[0].content[0].text.value;
 
     return {
-        daily_recommendations: responseText,
+        daily_recommendations: response,
         thread_id: threadId,
-        run_id: completedRun.id,
-        tokens_used: completedRun.usage?.total_tokens || 0,
-        generation_method: 'daily_update'
+        tokens_used: runStatus.usage?.total_tokens || 0
     };
 }
 
@@ -236,36 +298,27 @@ async function monthlyReview(assistantId, threadId, monthlyPerformance) {
 
     const run = await openai.beta.threads.runs.create(threadId, {
         assistant_id: assistantId,
-        additional_instructions: `This is the final monthly review. 
-        
-        You have full context of:
-        - Original monthly plan
-        - Weekly revisions made
-        - Daily updates received
-        - Final performance results
-        
-        Provide:
-        1. Performance analysis vs original plan
-        2. Key learnings from this month
-        3. Recommendations for next month's planning
-        4. Territory optimization suggestions
-        5. Customer relationship insights
-        
-        This completes our monthly planning cycle.`
+        additional_instructions: `This is the final monthly review. Provide comprehensive analysis and recommendations for next month.`
     });
 
-    const completedRun = await waitForRunCompletion(threadId, run.id);
-    
+    // Wait for completion
+    let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    while (runStatus.status === 'running' || runStatus.status === 'queued') {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+    }
+
+    if (runStatus.status !== 'completed') {
+        throw new Error(`Monthly review failed with status: ${runStatus.status}`);
+    }
+
     const messages = await openai.beta.threads.messages.list(threadId);
-    const assistantMessage = messages.data[0];
-    const responseText = assistantMessage.content[0].text.value;
+    const response = messages.data[0].content[0].text.value;
 
     return {
-        monthly_review: responseText,
+        monthly_review: response,
         thread_id: threadId,
-        run_id: completedRun.id,
-        tokens_used: completedRun.usage?.total_tokens || 0,
-        generation_method: 'monthly_review'
+        tokens_used: runStatus.usage?.total_tokens || 0
     };
 }
 
@@ -273,21 +326,11 @@ async function monthlyReview(assistantId, threadId, monthlyPerformance) {
 // PROMPT BUILDERS
 // ===================================================================
 
-function buildInitialPlanPrompt(mrName, month, year, territoryContext) {
-    // Use hybrid approach for large customer bases
-    const customerCount = territoryContext.customers.length;
-    
-    if (customerCount > 100) {
-        return buildHybridInitialPrompt(mrName, month, year, territoryContext);
-    } else {
-        return buildStandardInitialPrompt(mrName, month, year, territoryContext);
-    }
-}
-
-function buildHybridInitialPrompt(mrName, month, year, territoryContext) {
+function buildFrameworkPrompt(mrName, month, year, territoryContext) {
     const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
                        'July', 'August', 'September', 'October', 'November', 'December'];
     const monthName = monthNames[month];
+    const daysInMonth = new Date(year, month, 0).getDate();
 
     // Tier summary
     const tierSummary = {};
@@ -296,37 +339,28 @@ function buildHybridInitialPrompt(mrName, month, year, territoryContext) {
         tierSummary[tier] = (tierSummary[tier] || 0) + 1;
     });
 
-    // Top customers by priority
-    const topCustomers = territoryContext.customers
-        .sort((a, b) => (parseFloat(b.tier_score) || 0) - (parseFloat(a.tier_score) || 0))
-        .slice(0, 30)
-        .map(c => c.customer_name);
-
-    // Areas
-    const uniqueAreas = [...new Set(territoryContext.customers.map(c => c.area_name))];
+    // Area summary
+    const areas = [...new Set(territoryContext.customers.map(c => c.area_name))];
 
     return `I am ${mrName}, and I need a monthly tour plan for ${monthName} ${year}. This will be our planning thread for the entire month - I'll send weekly updates and revisions here.
 
 TERRITORY OVERVIEW:
 - Total customers: ${territoryContext.customers.length}
 - Tier distribution: ${Object.entries(tierSummary).map(([tier, count]) => `${tier}: ${count}`).join(', ')}
-- Key areas: ${uniqueAreas.join(', ')}
-- Top priority customers: ${topCustomers.slice(0, 10).join(', ')}
+- Key areas: ${areas.slice(0, 10).join(', ')}${areas.length > 10 ? ` (and ${areas.length - 10} more)` : ''}
 
 PERFORMANCE CONTEXT:
 - Previous month visits: ${territoryContext.previous_performance?.total_visits || 0}
 - Previous month revenue: ₹${territoryContext.previous_performance?.total_revenue?.toLocaleString() || 0}
 - Conversion rate: ${territoryContext.previous_performance?.conversion_rate?.toFixed(1) || 0}%
 
-Since I have ${territoryContext.customers.length} customers, please generate a strategic framework plan focusing on:
-
+Generate a strategic monthly planning framework focusing on:
 1. Monthly overview with realistic targets
-2. 4-week structure with daily plans
+2. 4-week structure with daily plans  
 3. Area-based clustering strategy
-4. Tier-based visit frequency guidelines
-5. Weekly revision checkpoints
+4. Weekly revision checkpoints
 
-I'll handle the detailed customer distribution based on your strategic framework. 
+I'll handle the detailed customer distribution based on your strategic framework.
 
 Please remember this context - I'll be back with weekly performance updates for plan adjustments.
 
@@ -358,7 +392,7 @@ Focus on:
 3. Adjusting targets to be more realistic
 4. Optimizing area coverage for remaining weeks
 
-Return the updated plan sections that need changes.`;
+Provide text recommendations for adjustments.`;
 }
 
 function buildDailyUpdatePrompt(actualPerformance) {
@@ -392,92 +426,163 @@ Based on our month-long planning cycle, what are your key insights and recommend
 }
 
 // ===================================================================
-// SMART PARSING FOR LARGE CUSTOMER BASES
+// RESPONSE PARSING
 // ===================================================================
 
-async function parseAndCompletePlan(responseText, territoryContext, month, year) {
+function parseFrameworkResponse(response) {
     try {
-        // Try to parse as complete JSON first
-        const cleaned = cleanJsonResponse(responseText);
-        const parsedPlan = JSON.parse(cleaned);
-        
-        // Check if customer_visit_frequency is complete
-        const customerFreqCount = Object.keys(parsedPlan.customer_visit_frequency || {}).length;
-        const totalCustomers = territoryContext.customers.length;
-        
-        if (customerFreqCount < totalCustomers * 0.5) { // Less than 50% coverage
-            console.log(`🔧 Completing customer distribution: ${customerFreqCount}/${totalCustomers} customers`);
-            
-            // Complete the customer distribution algorithmically
-            parsedPlan.customer_visit_frequency = await completeCustomerDistribution(
-                parsedPlan.customer_visit_frequency || {},
-                territoryContext.customers,
-                month,
-                year
-            );
+        let cleaned = response.replace(/```json\n?|\n?```/g, '').trim();
+        const firstBrace = cleaned.indexOf('{');
+        if (firstBrace > 0) cleaned = cleaned.substring(firstBrace);
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (lastBrace >= 0 && lastBrace < cleaned.length - 1) {
+            cleaned = cleaned.substring(0, lastBrace + 1);
         }
-
-        return parsedPlan;
-
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.log('🔧 JSON parsing failed, using hybrid completion');
-        
-        // Fallback: Extract framework and complete algorithmically
-        return await createHybridPlan(responseText, territoryContext, month, year);
+        console.error('❌ Framework parsing failed:', error);
+        console.log('🔍 Response that failed to parse:', response.substring(0, 1000));
+        throw new Error(`Framework parsing failed: ${error.message}`);
     }
 }
 
-// Complete customer distribution for large customer bases
-async function completeCustomerDistribution(existingPlan, allCustomers, month, year) {
-    const completePlan = { ...existingPlan };
-    const existingCustomers = new Set(Object.keys(existingPlan));
+// ===================================================================
+// ALGORITHMIC CUSTOMER DISTRIBUTION (NO TOKEN LIMITS)
+// ===================================================================
+
+function distributeAllCustomers(customers, month, year) {
+    console.log(`📊 Distributing ${customers.length} customers algorithmically`);
     
-    // Add missing customers
-    allCustomers.forEach(customer => {
-        if (!existingCustomers.has(customer.customer_name)) {
-            const visitFreq = getVisitFrequency(customer.tier_level);
-            const dates = generateVisitDates(month, year, visitFreq);
-            
-            completePlan[customer.customer_name] = {
-                tier: customer.tier_level || 'TIER_4_PROSPECT',
-                planned_visits: visitFreq,
-                recommended_dates: dates,
-                priority_reason: generatePriorityReason(customer)
-            };
-        }
+    const customerPlan = {};
+    
+    // Sort by priority
+    const sortedCustomers = customers.sort((a, b) => {
+        const scoreA = calculateCustomerPriority(a);
+        const scoreB = calculateCustomerPriority(b);
+        return scoreB - scoreA;
     });
 
-    return completePlan;
+    // Visit frequency by tier
+    const getVisitFreq = (tier) => {
+        switch (tier) {
+            case 'TIER_2_PERFORMER': return 3;
+            case 'TIER_3_DEVELOPER': return 2; 
+            case 'TIER_4_PROSPECT': return 1;
+            default: return 1;
+        }
+    };
+
+    // Generate working dates for the month
+    const monthDates = generateMonthDates(month, year);
+    let dateIndex = 0;
+
+    sortedCustomers.forEach(customer => {
+        const freq = getVisitFreq(customer.tier_level);
+        const dates = [];
+        
+        for (let i = 0; i < freq; i++) {
+            if (monthDates[dateIndex]) {
+                dates.push(monthDates[dateIndex]);
+                dateIndex = (dateIndex + 1) % monthDates.length;
+            }
+        }
+
+        customerPlan[customer.customer_name] = {
+            tier: customer.tier_level || 'TIER_4_PROSPECT',
+            planned_visits: freq,
+            recommended_dates: dates,
+            priority_reason: generatePriorityReason(customer)
+        };
+    });
+
+    console.log(`✅ Distributed ${Object.keys(customerPlan).length} customers`);
+    return customerPlan;
 }
 
-function getVisitFrequency(tier) {
-    switch (tier) {
-        case 'TIER_2_PERFORMER': return 3;
-        case 'TIER_3_DEVELOPER': return 2;
-        case 'TIER_4_PROSPECT': return 1;
-        default: return 1;
+function calculateCustomerPriority(customer) {
+    let score = 0;
+    
+    // Tier priority
+    switch (customer.tier_level) {
+        case 'TIER_2_PERFORMER': score += 100; break;
+        case 'TIER_3_DEVELOPER': score += 75; break;
+        case 'TIER_4_PROSPECT': score += 50; break;
     }
+    
+    // Tier score
+    score += parseFloat(customer.tier_score) || 0;
+    
+    // Days since last visit
+    const daysSince = parseInt(customer.days_since_last_visit) || 0;
+    if (daysSince > 30) score += 20;
+    else if (daysSince > 14) score += 10;
+    
+    // Sales potential
+    score += (parseFloat(customer.total_sales_90d) || 0) / 1000;
+    
+    return score;
 }
 
-function generateVisitDates(month, year, frequency) {
+function generatePriorityReason(customer) {
+    const tier = customer.tier_level;
+    const daysSince = parseInt(customer.days_since_last_visit) || 0;
+    const sales = parseFloat(customer.total_sales_90d) || 0;
+    
+    if (tier === 'TIER_2_PERFORMER') return 'High-value performer requiring regular attention';
+    if (tier === 'TIER_3_DEVELOPER' && sales > 10000) return 'Growing customer with strong potential';
+    if (daysSince > 30) return 'Long overdue visit - relationship maintenance';
+    if (sales > 5000) return 'Active customer with good sales volume';
+    return 'Territory coverage and relationship building';
+}
+
+function generateMonthDates(month, year) {
     const dates = [];
     const daysInMonth = new Date(year, month, 0).getDate();
-    const interval = Math.floor(daysInMonth / frequency);
     
-    for (let i = 0; i < frequency; i++) {
-        const day = Math.min(1 + (i * interval), daysInMonth);
-        dates.push(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month - 1, day);
+        const dayOfWeek = date.getDay();
+        
+        // Skip Sundays (0)
+        if (dayOfWeek !== 0) {
+            dates.push(`${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+        }
     }
     
     return dates;
 }
 
-function generatePriorityReason(customer) {
-    const tier = customer.tier_level;
-    const sales = parseFloat(customer.total_sales_90d) || 0;
+// ===================================================================
+// AREA COVERAGE GENERATION
+// ===================================================================
+
+function generateAreaCoverage(customers) {
+    const areaCoverage = {};
     
-    if (tier === 'TIER_2_PERFORMER') return 'High-value performer requiring regular attention';
-    if (tier === 'TIER_3_DEVELOPER') return 'Growing customer with development potential';
-    if (sales > 5000) return 'Active customer with good sales volume';
-    return 'Territory coverage and relationship building';
+    // Group customers by area
+    const customersByArea = {};
+    customers.forEach(customer => {
+        const area = customer.area_name;
+        if (!customersByArea[area]) customersByArea[area] = [];
+        customersByArea[area].push(customer);
+    });
+
+    // Calculate coverage for each area
+    Object.entries(customersByArea).forEach(([area, areaCustomers]) => {
+        const totalVisits = areaCustomers.reduce((sum, customer) => {
+            const freq = customer.tier_level === 'TIER_2_PERFORMER' ? 3 :
+                        customer.tier_level === 'TIER_3_DEVELOPER' ? 2 : 1;
+            return sum + freq;
+        }, 0);
+
+        areaCoverage[area] = {
+            total_customers: areaCustomers.length,
+            planned_visits: totalVisits,
+            focus_weeks: [1, 2, 3, 4], // Distribute across all weeks
+            efficiency_rating: areaCustomers.length >= 15 ? 'HIGH' : 
+                              areaCustomers.length >= 8 ? 'MEDIUM' : 'LOW'
+        };
+    });
+
+    return areaCoverage;
 }
