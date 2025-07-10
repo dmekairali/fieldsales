@@ -754,14 +754,21 @@ const MonthlyTourPlanDashboard = ({ mrName, mrData }) => {
                                                                     </td>
                                                                     <td className="px-4 py-3 text-center font-semibold">{schedule.planned_visits || 'N/A'}</td>
                                                                     <td className="px-4 py-3 text-center text-sm text-gray-600">{schedule.priority_reason || 'N/A'}</td>
+                                                                    {/* Corrected/Re-asserted block for Scheduled Dates display */}
                                                                     <td className="px-4 py-3 text-center text-xs">
-                                                                        {Array.isArray(schedule.recommended_dates) && schedule.recommended_dates.slice(0, 2).map((date, dateIndex) => (
-                                                                            <div key={dateIndex} className="mb-1">
-                                                                                {date ? new Date(date).toLocaleDateString() : 'N/A'}
-                                                                            </div>
-                                                                        ))}
-                                                                        {Array.isArray(schedule.recommended_dates) && schedule.recommended_dates.length > 2 && (
-                                                                            <div className="text-gray-500">+{schedule.recommended_dates.length - 2} more</div>
+                                                                        {Array.isArray(schedule.recommended_dates) && schedule.recommended_dates.length > 0 ? (
+                                                                            <>
+                                                                                {schedule.recommended_dates.slice(0, 2).map((date, dateIndex) => (
+                                                                                    <div key={dateIndex} className="mb-1">
+                                                                                        {date ? new Date(date).toLocaleDateString() : 'N/A'}
+                                                                                    </div>
+                                                                                ))}
+                                                                                {schedule.recommended_dates.length > 2 && (
+                                                                                    <div className="text-gray-500">+{schedule.recommended_dates.length - 2} more</div>
+                                                                                )}
+                                                                            </>
+                                                                        ) : (
+                                                                            <span className="text-xs text-gray-400">No dates</span>
                                                                         )}
                                                                     </td>
                                                                 </tr>
