@@ -1,11 +1,8 @@
 // src/services/MonthlyTourPlanService.js
 import { supabase } from '../supabaseClient';
-import { aiTourPlanGenerator } from './AITourPlanGenerator';
-
-
-// ===== ADD THIS NEW IMPORT AND CLASS AT THE TOP =====
 import OpenAI from 'openai';
 
+// ===== OPENAI ASSISTANT SERVICE =====
 export class OpenAIAssistantService {
     constructor() {
         this.openai = new OpenAI({
@@ -78,10 +75,7 @@ export class OpenAIAssistantService {
 
         } catch (error) {
             console.error('❌ Assistant error:', error);
-            return {
-                success: false,
-                error: error.message
-            };
+            throw new Error(`Assistant planning failed: ${error.message}`);
         }
     }
 
@@ -176,99 +170,16 @@ Return complete JSON with monthly_overview, weekly_plans, customer_visit_frequen
     }
 }
 
+// ===== MAIN SERVICE CLASS =====
 class MonthlyTourPlanService {
     constructor() {
         this.cache = new Map();
         this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
-        // ===== ADD THIS LINE =====
         this.assistantService = new OpenAIAssistantService();
     }
-  
 
     /**
- * Standalone OpenAI call optimized for monthly tour planning
- */
-async callOpenAIForMonthlyPlan(prompt) {
-    const openaiApiKey = process.env.REACT_APP_OPENAI_API_KEY;
-    
-    if (!openaiApiKey) {
-        throw new Error('OpenAI API key not configured for monthly planning');
-    }
-
-    try {
-        console.log('🤖 Calling OpenAI for monthly plan generation...');
-        console.log('🤖 Prompt length:', prompt.length);
-        
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openaiApiKey}`
-            },
-            body: JSON.stringify({
-                model: 'gpt-3.5-turbo-1106',
-                messages: [
-                    {
-                        role: 'system', 
-                        content: `You are an expert monthly pharmaceutical territory planning AI for Kairali Ayurvedic products in India. 
-
-CRITICAL REQUIREMENTS:
-- Generate COMPLETE monthly plans with ALL 4-5 weeks
-- Include ALL working days (Monday-Saturday) for each week
-- Cover 80-100 different customers throughout the month
-- Use ONLY real customer names and area names provided in the prompt
-- Never truncate responses - always provide complete JSON
-- Ensure logical customer distribution across all weeks
-- Return only valid, complete JSON - no explanations or markdown
-
-You must generate comprehensive plans that cover the entire month with proper customer rotation and area coverage.`
-                    },
-                    {
-                        role: 'user', 
-                        content: prompt
-                    }
-                ],
-                max_tokens: 4000,          // ✅ MUCH HIGHER for complete plans
-                temperature: 0.1,           // ✅ LOW for consistency
-                top_p: 0.95,               // ✅ FOCUSED responses
-                frequency_penalty: 0.1,     // ✅ REDUCE repetition
-                presence_penalty: 0.1,      // ✅ ENCOURAGE variety
-                response_format: { type: "json_object" }  // ✅ FORCE JSON format
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('❌ OpenAI API Error:', errorData);
-            throw new Error(`OpenAI API Error: ${errorData.error?.message || response.statusText}`);
-        }
-
-        const data = await response.json();
-        const aiResponse = data.choices[0].message.content;
-        
-        console.log('✅ OpenAI Response received');
-        console.log('📊 Response length:', aiResponse.length);
-        console.log('🔍 Response preview (first 500 chars):', aiResponse.substring(0, 500));
-        console.log('🔍 Response ending (last 300 chars):', aiResponse.slice(-300));
-        
-        // Log token usage
-        if (data.usage) {
-            console.log('📈 Token usage:', {
-                prompt_tokens: data.usage.prompt_tokens,
-                completion_tokens: data.usage.completion_tokens,
-                total_tokens: data.usage.total_tokens
-            });
-        }
-
-        return aiResponse;
-
-    } catch (error) {
-        console.error('❌ Monthly plan OpenAI call failed:', error);
-        throw error;
-    }
-}
-    /**
-     * Generate complete monthly tour plan
+     * Generate complete monthly tour plan using OpenAI Assistant
      */
     async generateMonthlyPlan(mrName, month, year) {
         try {
@@ -277,7 +188,7 @@ You must generate comprehensive plans that cover the entire month with proper cu
             // Get territory context for the month
             const territoryContext = await this.getMonthlyTerritoryContext(mrName, month, year);
             
-            // Generate AI-powered monthly plan
+            // Generate AI-powered monthly plan using Assistant
             const monthlyPlan = await this.createMonthlyAIPlan(mrName, month, year, territoryContext);
             
             // Validate and structure the plan
@@ -301,6 +212,29 @@ You must generate comprehensive plans that cover the entire month with proper cu
                 error: error.message
             };
         }
+    }
+
+    /**
+     * Create AI-powered monthly plan using OpenAI Assistant
+     */
+    async createMonthlyAIPlan(mrName, month, year, context) {
+        console.log(`🤖 Creating AI monthly plan for ${mrName} using Assistant`);
+
+        const assistantResult = await this.assistantService.generateMonthlyPlan(mrName, month, year, context);
+        const planJson = assistantResult.plan;
+        
+        // Validate plan structure
+        this.validateMonthlyPlanStructure(planJson);
+        
+        console.log('✅ Monthly plan structure validated');
+        console.log('📊 Plan summary:', {
+            weeks: planJson.weekly_plans?.length || 0,
+            customers: Object.keys(planJson.customer_visit_frequency || {}).length,
+            areas: Object.keys(planJson.area_coverage_plan || {}).length,
+            tokens_used: assistantResult.tokens_used
+        });
+        
+        return planJson;
     }
 
     /**
@@ -334,33 +268,31 @@ You must generate comprehensive plans that cover the entire month with proper cu
             .eq('mr_name', mrName)
             .eq('status', 'ACTIVE');
 
+        console.log('🔍 DEBUG: Monthly Territory Context Results:', {
+            mrName: mrName,
+            error: customersError,
+            customerCount: customers?.length,
+            querySuccessful: !customersError && customers,
+            firstThreeCustomers: customers?.slice(0, 3).map(c => ({
+                code: c.customer_code,
+                name: c.customer_name,
+                area: c.area_name,
+                tier: c.tier_level,
+                score: c.tier_score,
+                status: c.status
+            })),
+            realAreas: [...new Set(customers?.slice(0, 10).map(c => c.area_name))],
+            tierDistribution: customers?.reduce((acc, c) => {
+                acc[c.tier_level] = (acc[c.tier_level] || 0) + 1;
+                return acc;
+            }, {}),
+            rawDataSample: customers?.[0]
+        });
 
-         // ADD THIS COMPREHENSIVE DEBUG BLOCK
-    console.log('🔍 DEBUG: Monthly Territory Context Results:', {
-        mrName: mrName,
-        error: customersError,
-        customerCount: customers?.length,
-        querySuccessful: !customersError && customers,
-        firstThreeCustomers: customers?.slice(0, 3).map(c => ({
-            code: c.customer_code,
-            name: c.customer_name,
-            area: c.area_name,
-            tier: c.tier_level,
-            score: c.tier_score,
-            status: c.status
-        })),
-        realAreas: [...new Set(customers?.slice(0, 10).map(c => c.area_name))],
-        tierDistribution: customers?.reduce((acc, c) => {
-            acc[c.tier_level] = (acc[c.tier_level] || 0) + 1;
-            return acc;
-        }, {}),
-        rawDataSample: customers?.[0] // Show the complete first customer object
-    });
-
-  if (customersError) {
-        console.error('❌ Customer data fetch error:', customersError);
-        throw new Error(`Customer data fetch failed: ${customersError.message}`);
-    }
+        if (customersError) {
+            console.error('❌ Customer data fetch error:', customersError);
+            throw new Error(`Customer data fetch failed: ${customersError.message}`);
+        }
 
         // Get previous month performance
         const previousMonth = month === 1 ? 12 : month - 1;
@@ -390,7 +322,7 @@ You must generate comprehensive plans that cover the entire month with proper cu
     async getPreviousMonthPerformance(mrName, month, year) {
         try {
             const startDate = new Date(year, month - 1, 1);
-            const endDate = new Date(year, month, 0); // Last day of month
+            const endDate = new Date(year, month, 0);
 
             const { data: visits, error } = await supabase
                 .from('mr_visits')
@@ -432,7 +364,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
         const convertingVisits = visits.filter(visit => (parseFloat(visit.amountOfSale) || 0) > 0).length;
         const uniqueCustomers = new Set(visits.map(visit => visit.clientName)).size;
         
-        // Calculate average visit duration
         const validDurations = visits
             .filter(visit => visit.visitTime)
             .map(visit => this.timeToMinutes(visit.visitTime))
@@ -442,7 +373,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
             ? validDurations.reduce((sum, duration) => sum + duration, 0) / validDurations.length 
             : 35;
 
-        // Area-wise performance
         const areaPerformance = {};
         visits.forEach(visit => {
             const area = visit.areaName || 'Unknown';
@@ -463,7 +393,7 @@ You must generate comprehensive plans that cover the entire month with proper cu
             conversion_rate: totalVisits > 0 ? (convertingVisits / totalVisits) * 100 : 0,
             avg_revenue_per_visit: totalVisits > 0 ? totalRevenue / totalVisits : 0,
             avg_visit_duration: avgVisitDuration,
-            visits_per_day: totalVisits / 30, // Approximate monthly average
+            visits_per_day: totalVisits / 30,
             area_performance: areaPerformance,
             performance_grade: this.calculatePerformanceGrade(totalVisits, totalRevenue, convertingVisits)
         };
@@ -473,8 +403,8 @@ You must generate comprehensive plans that cover the entire month with proper cu
      * Calculate performance grade based on metrics
      */
     calculatePerformanceGrade(visits, revenue, conversions) {
-        const visitScore = Math.min((visits / 300) * 100, 100); // Target: 10 visits/day * 30 days
-        const revenueScore = Math.min((revenue / 150000) * 100, 100); // Target: 5K/day * 30 days
+        const visitScore = Math.min((visits / 300) * 100, 100);
+        const revenueScore = Math.min((revenue / 150000) * 100, 100);
         const conversionScore = conversions > 0 ? Math.min((conversions / visits) * 200, 100) : 0;
         
         const overallScore = (visitScore + revenueScore + conversionScore) / 3;
@@ -507,7 +437,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
      */
     async getSeasonalPatterns(mrName, month) {
         try {
-            // Get same month data from previous years
             const { data: historicalData, error } = await supabase
                 .from('mr_visits')
                 .select(`
@@ -523,7 +452,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
                 return this.getDefaultSeasonalPattern(month);
             }
 
-            // Group by year and calculate metrics
             const yearlyData = {};
             historicalData.forEach(visit => {
                 const year = visit.dcrDate.split('-')[0];
@@ -535,7 +463,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
                 yearlyData[year].customers.add(visit.clientName);
             });
 
-            // Calculate trends
             const years = Object.keys(yearlyData).sort();
             const avgVisits = years.reduce((sum, year) => sum + yearlyData[year].visits, 0) / years.length;
             const avgRevenue = years.reduce((sum, year) => sum + yearlyData[year].revenue, 0) / years.length;
@@ -559,18 +486,8 @@ You must generate comprehensive plans that cover the entire month with proper cu
      */
     getDefaultSeasonalPattern(month) {
         const seasonalFactors = {
-            1: 0.9,  // January - Post-holiday slow
-            2: 0.95, // February
-            3: 1.1,  // March - Financial year end
-            4: 1.0,  // April - New year start
-            5: 1.05, // May
-            6: 1.0,  // June
-            7: 0.95, // July - Monsoon
-            8: 0.9,  // August - Monsoon
-            9: 1.05, // September - Festival season prep
-            10: 1.15, // October - Festival season
-            11: 1.1, // November - Festival season
-            12: 0.85 // December - Holiday season
+            1: 0.9, 2: 0.95, 3: 1.1, 4: 1.0, 5: 1.05, 6: 1.0,
+            7: 0.95, 8: 0.9, 9: 1.05, 10: 1.15, 11: 1.1, 12: 0.85
         };
 
         return {
@@ -632,7 +549,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
                 return this.getDefaultTerritoryMetrics();
             }
 
-            // Area-wise analysis
             const areaMetrics = {};
             territoryData.forEach(customer => {
                 const area = customer.area_name || 'Unknown';
@@ -653,7 +569,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
                 areaMetrics[area].avg_conversion += parseFloat(customer.conversion_rate_90d) || 0;
             });
 
-            // Calculate averages
             Object.keys(areaMetrics).forEach(area => {
                 areaMetrics[area].avg_conversion = areaMetrics[area].avg_conversion / areaMetrics[area].customers;
                 areaMetrics[area].sales_per_customer = areaMetrics[area].total_sales / areaMetrics[area].customers;
@@ -710,332 +625,6 @@ You must generate comprehensive plans that cover the entire month with proper cu
         return 'DISPERSED';
     }
 
-  /**
-     * Create AI-powered monthly plan using OpenAI Assistant (UPDATED)
-     */
-  
-    async generateMonthlyPlan(mrName, month, year) {
-        try {
-            console.log(`🗓️ Generating monthly plan for ${mrName} - ${month}/${year}`);
-
-            // Get territory context for the month
-            const territoryContext = await this.getMonthlyTerritoryContext(mrName, month, year);
-            
-            // Generate AI-powered monthly plan using Assistant
-            const monthlyPlan = await this.createMonthlyAIPlan(mrName, month, year, territoryContext);
-            
-            // Validate and structure the plan
-            const structuredPlan = await this.structureMonthlyPlan(monthlyPlan, month, year);
-            
-            // Save to database
-            const savedPlan = await this.saveMonthlyPlan(mrName, month, year, structuredPlan);
-            
-            console.log(`✅ Monthly plan generated and saved for ${mrName}`);
-            return {
-                success: true,
-                plan_id: savedPlan.id,
-                plan: structuredPlan,
-                generated_at: new Date().toISOString()
-            };
-
-        } catch (error) {
-            console.error('❌ Monthly plan generation failed:', error);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
-
-    /**
-     * Generate comprehensive AI prompt for monthly planning
-     */
-    generateMonthlyPlanPrompt(mrName, month, year, context) {
-    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
-    const monthName = monthNames[month];
-    const daysInMonth = new Date(year, month, 0).getDate();
-
-    const customersSummary = `Total active customers: ${context.customers.length}`;
-    const tierSummary = {};
-    context.customers.forEach(customer => {
-        const tier = customer.tier_level || 'TIER_4_PROSPECT';
-        tierSummary[tier] = (tierSummary[tier] || 0) + 1;
-    });
-
-    let tierBreakdown = '';
-    Object.entries(tierSummary).forEach(([tier, count]) => {
-        tierBreakdown += `- ${tier}: ${count} customers\n`;
-    });
-
-    // ✅ ADD: Extract real customer data for the prompt
-    const topCustomers = context.customers
-        .sort((a, b) => (parseFloat(b.tier_score) || 0) - (parseFloat(a.tier_score) || 0))
-        .slice(0, 15)
-        .map((customer, index) => {
-            const tierScore = parseFloat(customer.tier_score) || 0;
-            const salesAmount = parseFloat(customer.total_sales_90d) || 0;
-            const conversionRate = parseFloat(customer.conversion_rate_90d) || 0;
-            const daysSinceVisit = parseInt(customer.days_since_last_visit) || 999;
-            
-            return `${index + 1}. ${customer.customer_name} (${customer.tier_level}) - Area: ${customer.area_name}, Score: ${tierScore.toFixed(1)}, Sales: ₹${salesAmount.toLocaleString()}, Days since visit: ${daysSinceVisit}`;
-        }).join('\n');
-
-    // ✅ ADD: Extract real area names
-    const realAreas = [...new Set(context.customers.map(c => c.area_name))].slice(0, 10);
-    const realAreasString = realAreas.join('", "');
-
-    // ✅ ADD: Get sample high-value customers for examples
-    const highValueCustomers = context.customers
-        .filter(c => parseFloat(c.tier_score) > 20)
-        .slice(0, 3);
-    
-    const sampleCustomer1 = highValueCustomers[0] || context.customers[0];
-    const sampleCustomer2 = highValueCustomers[1] || context.customers[1];
-    const sampleArea1 = realAreas[0] || 'MAUJPUR';
-    const sampleArea2 = realAreas[1] || 'NAVEEN SHAHDARA';
-
-    return `
-You are an AI Monthly Tour Planning Assistant for Kairali Ayurvedic products. Generate a comprehensive monthly tour plan for ${mrName} for ${monthName} ${year} (${daysInMonth} days).
-
-TERRITORY CONTEXT:
-${customersSummary}
-${tierBreakdown}
-
-TOP CUSTOMERS (by tier score) - USE THESE REAL NAMES:
-${topCustomers}
-
-REAL AREA NAMES - USE THESE ACTUAL AREAS:
-"${realAreasString}"
-
-Previous Month Performance:
-- Total visits: ${context.previous_performance.total_visits}
-- Total revenue: ₹${context.previous_performance.total_revenue?.toLocaleString()}
-- Conversion rate: ${context.previous_performance.conversion_rate?.toFixed(1)}%
-- Performance grade: ${context.previous_performance.performance_grade}
-- Average visits per day: ${context.previous_performance.visits_per_day?.toFixed(1)}
-
-Seasonal Analysis:
-- Month performance trend: ${context.seasonal_patterns.month_performance_trend}
-- Seasonal factor: ${context.seasonal_patterns.seasonal_factor}
-- Historical average visits: ${context.seasonal_patterns.avg_monthly_visits}
-- Historical average revenue: ₹${context.seasonal_patterns.avg_monthly_revenue?.toLocaleString()}
-
-Territory Metrics:
-- Total customers: ${context.territory_metrics.total_customers}
-- Territory efficiency: ${context.territory_metrics.territory_efficiency}
-- Coverage analysis: ${context.territory_metrics.coverage_analysis}
-
-CRITICAL INSTRUCTIONS:
-- Use ONLY the real customer names and area names provided above
-- DO NOT use generic names like "Customer1", "Area1", "Customer2", "Area2" 
-- Use actual names like "${sampleCustomer1?.customer_name}", "${sampleCustomer2?.customer_name}"
-- Use actual areas like "${sampleArea1}", "${sampleArea2}"
-
-MANDATORY COMPREHENSIVE COVERAGE REQUIREMENTS:
-- Generate EXACTLY 4 complete weeks (weeks 1, 2, 3, 4)
-- Each week MUST have 6 daily_plans (Monday through Saturday)
-- Include 60-80 different customers in customer_visit_frequency section
-- Distribute customers across all 4 weeks evenly
-- Use different area combinations for each week
-- TARGET RESPONSE LENGTH: 12,000+ characters minimum
-- MINIMUM TOKEN USAGE: 2,500+ completion tokens
-
-WEEKLY DISTRIBUTION MANDATE:
-Week 1: Focus on highest tier customers (TIER_2_PERFORMER + top TIER_3_DEVELOPER)
-Week 2: Focus on remaining TIER_3_DEVELOPER + high-scoring TIER_4_PROSPECT  
-Week 3: Focus on medium-scoring TIER_4_PROSPECT customers
-Week 4: Focus on remaining TIER_4_PROSPECT + follow-up visits
-
-CUSTOMER_VISIT_FREQUENCY REQUIREMENTS:
-Must include 60-80 customers total with entries like:
-- All TIER_2_PERFORMER customers (${tierSummary.TIER_2_PERFORMER || 0} customers): 2-3 visits each
-- All TIER_3_DEVELOPER customers (${tierSummary.TIER_3_DEVELOPER || 0} customers): 1-2 visits each  
-- Top 60 TIER_4_PROSPECT customers: 1 visit each
-Do NOT truncate this section - include comprehensive customer coverage.
-
-MONTHLY PLANNING CONSTRAINTS:
-- Plan for ${daysInMonth} days (excluding Sundays)
-- Target 11-15 visits per working day
-- Ensure 40% NBD focus throughout month
-- Balance tier-wise customer coverage
-- Optimize for seasonal factors
-- Account for territory efficiency
-- Plan for weekly revision cycles
-
-OUTPUT FORMAT (JSON only) - GENERATE COMPLETE STRUCTURE:
-{
-    "monthly_overview": {
-        "mr_name": "${mrName}",
-        "month": ${month},
-        "year": ${year},
-        "total_working_days": ${Math.floor(daysInMonth * 6/7)},
-        "total_planned_visits": 300,
-        "target_revenue": 150000,
-        "nbd_visits_target": 120,
-        "tier_distribution_target": ${JSON.stringify(tierSummary)}
-    },
-    "weekly_plans": [
-        {
-            "week_number": 1,
-            "start_date": "${year}-${month.toString().padStart(2, '0')}-01",
-            "end_date": "${year}-${month.toString().padStart(2, '0')}-07",
-            "target_visits": 75,
-            "target_revenue": 37500,
-            "focus_areas": ["${sampleArea1}", "${sampleArea2}"],
-            "priority_customers": ["${sampleCustomer1?.customer_name}", "${sampleCustomer2?.customer_name}"],
-            "daily_plans": [
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-01",
-                    "day_of_week": "Monday",
-                    "planned_visits": 12,
-                    "focus_tier": "TIER_4_PROSPECT",
-                    "target_areas": ["${sampleArea1}"],
-                    "estimated_revenue": 6000
-                },
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-02",
-                    "day_of_week": "Tuesday", 
-                    "planned_visits": 12,
-                    "focus_tier": "TIER_3_DEVELOPER",
-                    "target_areas": ["${sampleArea2}"],
-                    "estimated_revenue": 6000
-                },
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-03",
-                    "day_of_week": "Wednesday",
-                    "planned_visits": 12,
-                    "focus_tier": "TIER_4_PROSPECT", 
-                    "target_areas": ["${sampleArea1}"],
-                    "estimated_revenue": 6000
-                },
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-04",
-                    "day_of_week": "Thursday",
-                    "planned_visits": 12,
-                    "focus_tier": "TIER_3_DEVELOPER",
-                    "target_areas": ["${sampleArea2}"],
-                    "estimated_revenue": 6000
-                },
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-05",
-                    "day_of_week": "Friday",
-                    "planned_visits": 12,
-                    "focus_tier": "TIER_4_PROSPECT",
-                    "target_areas": ["${sampleArea1}"],
-                    "estimated_revenue": 6000
-                },
-                {
-                    "date": "${year}-${month.toString().padStart(2, '0')}-06",
-                    "day_of_week": "Saturday",
-                    "planned_visits": 10,
-                    "focus_tier": "TIER_2_PERFORMER",
-                    "target_areas": ["${sampleArea2}"],
-                    "estimated_revenue": 5000
-                }
-            ]
-        },
-        {
-            "week_number": 2,
-            "start_date": "${year}-${month.toString().padStart(2, '0')}-08",
-            "end_date": "${year}-${month.toString().padStart(2, '0')}-14",
-            "target_visits": 75,
-            "target_revenue": 37500,
-            "focus_areas": ["AREA_FROM_WEEK_2", "ANOTHER_AREA_WEEK_2"],
-            "priority_customers": ["CUSTOMER_FROM_WEEK_2", "ANOTHER_CUSTOMER_WEEK_2"],
-            "daily_plans": [
-                // Generate 6 daily plans for week 2 (Monday-Saturday)
-                // Similar structure as week 1 but with different dates, areas, and customers
-            ]
-        },
-        {
-            "week_number": 3,
-            "start_date": "${year}-${month.toString().padStart(2, '0')}-15",
-            "end_date": "${year}-${month.toString().padStart(2, '0')}-21",
-            "target_visits": 75,
-            "target_revenue": 37500,
-            "focus_areas": ["AREA_FROM_WEEK_3", "ANOTHER_AREA_WEEK_3"],
-            "priority_customers": ["CUSTOMER_FROM_WEEK_3", "ANOTHER_CUSTOMER_WEEK_3"],
-            "daily_plans": [
-                // Generate 6 daily plans for week 3 (Monday-Saturday)
-            ]
-        },
-        {
-            "week_number": 4,
-            "start_date": "${year}-${month.toString().padStart(2, '0')}-22",
-            "end_date": "${year}-${month.toString().padStart(2, '0')}-28",
-            "target_visits": 75,
-            "target_revenue": 37500,
-            "focus_areas": ["AREA_FROM_WEEK_4", "ANOTHER_AREA_WEEK_4"],
-            "priority_customers": ["CUSTOMER_FROM_WEEK_4", "ANOTHER_CUSTOMER_WEEK_4"],
-            "daily_plans": [
-                // Generate 6 daily plans for week 4 (Monday-Saturday)
-            ]
-        }
-    ],
-    "customer_visit_frequency": {
-        "${sampleCustomer1?.customer_name}": {
-            "tier": "${sampleCustomer1?.tier_level}",
-            "planned_visits": 1,
-            "recommended_dates": ["${year}-${month.toString().padStart(2, '0')}-01"],
-            "priority_reason": "High value customer from ${sampleCustomer1?.area_name}"
-        }
-        // MANDATORY: Include 60-80 more customers here - DO NOT TRUNCATE THIS SECTION
-        // Include customers from all weeks with appropriate visit frequencies
-    },
-    "area_coverage_plan": {
-        "${sampleArea1}": {
-            "total_customers": 15,
-            "planned_visits": 45,
-            "focus_weeks": [1, 3],
-            "efficiency_rating": "HIGH"
-        }
-        // Include 8-12 different areas from the real area list provided
-    },
-    "revision_checkpoints": [
-        {
-            "date": "${year}-${month.toString().padStart(2, '0')}-07",
-            "week": 1,
-            "review_focus": "Week 1 performance vs plan",
-            "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
-        },
-        {
-            "date": "${year}-${month.toString().padStart(2, '0')}-14",
-            "week": 2,
-            "review_focus": "Week 2 performance vs plan", 
-            "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
-        },
-        {
-            "date": "${year}-${month.toString().padStart(2, '0')}-21",
-            "week": 3,
-            "review_focus": "Week 3 performance vs plan",
-            "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
-        },
-        {
-            "date": "${year}-${month.toString().padStart(2, '0')}-28",
-            "week": 4,
-            "review_focus": "Week 4 performance vs plan",
-            "key_metrics": ["visit_completion", "revenue_achievement", "quality_scores"]
-        }
-    ],
-    "risk_mitigation": {
-        "weather_contingency": "Indoor customer focus during monsoon",
-        "festival_adjustments": "Customer availability considerations",
-        "territory_challenges": "Traffic and accessibility planning"
-    }
-}
-
-CRITICAL SUCCESS CRITERIA:
-✅ 4 complete weeks with 6 daily plans each (24 total daily plans)
-✅ 60-80 customers in customer_visit_frequency section
-✅ 8-12 areas in area_coverage_plan section  
-✅ 4 revision checkpoints (one per week)
-✅ Response length 12,000+ characters
-✅ All real customer names and area names from provided data
-
-IMPORTANT: Generate the COMPLETE structure above. Do NOT truncate any sections. Replace ALL placeholder text with actual customer names and area names from the data provided. Return only valid JSON with comprehensive coverage.`;
-    }
-
     /**
      * Validate monthly plan structure
      */
@@ -1071,9 +660,7 @@ IMPORTANT: Generate the COMPLETE structure above. Do NOT truncate any sections. 
             }
         };
 
-        // Validate structure
         this.validateStructuredPlan(structuredPlan);
-        
         return structuredPlan;
     }
 
@@ -1094,7 +681,7 @@ IMPORTANT: Generate the COMPLETE structure above. Do NOT truncate any sections. 
      */
     async saveMonthlyPlan(mrName, month, year, plan) {
         try {
-                    console.log('🚀 Executing upsert with data:', plan);
+            console.log('🚀 Executing upsert with data:', plan);
             const { data, error } = await supabase
                 .from('monthly_tour_plans')
                 .upsert({
@@ -1124,6 +711,23 @@ IMPORTANT: Generate the COMPLETE structure above. Do NOT truncate any sections. 
             console.error('❌ Failed to save monthly plan:', error);
             throw error;
         }
+    }
+
+    /**
+     * Utility: Convert time string to minutes
+     */
+    timeToMinutes(timeStr) {
+        if (!timeStr) return 0;
+        const parts = timeStr.split(':');
+        return parseInt(parts[0]) * 60 + parseInt(parts[1]) + (parseInt(parts[2] || 0) / 60);
+    }
+
+    /**
+     * Clear cache
+     */
+    clearCache() {
+        this.cache.clear();
+        console.log('🗑️ Monthly Tour Plan cache cleared');
     }
 
     /**
