@@ -1,13 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import TourPlanSidebar from './components/TourPlanSidebar';
-import MonthlyTourPlanDashboard from './components/MonthlyTourPlanDashboard';
-import MonthlyPlanningDashboard from './components/MonthlyPlanningDashboard'; // Add this import
+import MonthlyPlanningDashboard from './components/MonthlyPlanningDashboard';
 import EmergencyDashboard from './components/EmergencyDashboard';
 import VisitQualityMonitor from './components/VisitQualityMonitor';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
-import RouteOptimizationDashboard from './components/RouteOptimizationDashboard';
-import AITourPlanDashboard from './components/AITourPlanDashboard';
-import GeocodingDashboard from './components/GeocodingDashboard';
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 
 function App() {
@@ -74,21 +70,70 @@ function App() {
         return <NBDPerformanceDashboard 
           mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
         />;
-      case 'routes':
-        return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
-      case 'ai-tour':
-        return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'monthly-tour':
-        return <MonthlyPlanningDashboard />; // Use the new component
-      case 'geocoding':
-        return <GeocodingDashboard />;
+        return <MonthlyPlanningDashboard />;
+      case 'weekly-revision':
+        return (
+          <div className="min-h-screen bg-slate-50 p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center py-20">
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">🔄</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Weekly Revision</h2>
+                <p className="text-gray-600 mb-8">Weekly plan revision and optimization coming soon</p>
+              </div>
+            </div>
+          </div>
+        );
+      case 'analytics':
+        return (
+          <div className="min-h-screen bg-slate-50 p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center py-20">
+                <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Performance Analytics</h2>
+                <p className="text-gray-600 mb-8">Advanced analytics and insights coming soon</p>
+              </div>
+            </div>
+          </div>
+        );
+      case 'reports':
+        return (
+          <div className="min-h-screen bg-slate-50 p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center py-20">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📄</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Reports & Analytics</h2>
+                <p className="text-gray-600 mb-8">Comprehensive reporting dashboard coming soon</p>
+              </div>
+            </div>
+          </div>
+        );
       case 'settings':
         return (
           <div className="min-h-screen bg-slate-50 p-6">
             <div className="max-w-5xl mx-auto">
               <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Settings</h2>
-                <p className="text-gray-600">Dashboard configuration options coming soon...</p>
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
+                    <span className="text-xl">⚙️</span>
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
+                    <p className="text-gray-600">Configure dashboard preferences and alerts</p>
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Dashboard Configuration</h3>
+                    <p className="text-gray-600">Advanced settings and customization options coming soon</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -98,8 +143,34 @@ function App() {
           <div className="min-h-screen bg-slate-50 p-6">
             <div className="max-w-7xl mx-auto">
               <div className="text-center py-20">
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
-                <p className="text-gray-600 text-lg">Select a module from the sidebar to get started</p>
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-4">TourPlan Pro Dashboard</h2>
+                <p className="text-gray-600 text-lg mb-8">Select a module from the sidebar to get started</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                  <div className="bg-white rounded-lg p-6 border border-gray-200">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                      <span className="text-xl">📅</span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Monthly Planning</h3>
+                    <p className="text-gray-600 text-sm">AI-powered comprehensive tour planning</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-6 border border-gray-200">
+                    <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                      <span className="text-xl">🚨</span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Emergency Territory</h3>
+                    <p className="text-gray-600 text-sm">Critical territory management</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-6 border border-gray-200">
+                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                      <span className="text-xl">📊</span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2">Visit Quality</h3>
+                    <p className="text-gray-600 text-sm">Quality monitoring & analysis</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -159,7 +230,7 @@ function App() {
             </div>
             
             {/* MR Selector - Only show for tabs that need it */}
-            {['quality', 'nbd', 'routes', 'ai-tour'].includes(activeTab) && (
+            {['quality', 'nbd'].includes(activeTab) && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <label className="text-gray-700 font-medium text-sm">Active MR:</label>
