@@ -139,58 +139,81 @@ class MonthlyPlanDecompressionService {
     /**
      * Decompress for dashboard viewing
      */
-  decompressForDashboard(storedPlan) {
-    const plan = storedPlan.original_plan_json || storedPlan.current_plan_json;
-    
-    if (!plan) {
-        throw new Error('No plan data found');
-    }
-    
-    // Handle the actual saved structure
-    const aiPlan = plan.ai_plan || plan;
-    
-    return {
-        monthly_overview: {
-            mr_name: aiPlan.mo.mr,
-            month: aiPlan.mo.m,
-            year: aiPlan.mo.y,
-            total_visits: aiPlan.mo.tv,
-            target_revenue: aiPlan.mo.tr,
-            working_days: aiPlan.mo.wd,
-            strategy_summary: aiPlan.mo.summary
-        },
-        weekly_summary: Object.entries(aiPlan.ws || {}).map(([week, data]) => ({
-            week_number: parseInt(week),
-            dates: data.dates,
-            customers: data.customers,
-            revenue_target: data.revenue_target,
-            focus: data.focus
-        })),
-        customer_summary: Object.entries(aiPlan.cvs || {}).slice(0, 50).map(([customerCode, visitDates]) => ({
-            customer_code: customerCode,
-            customer_name: `Customer ${customerCode.slice(-4)}`,
-            customer_type: 'Doctor',
-            tier_level: 'TIER_3_DEVELOPER',
-            area_name: 'Area',
-            total_visits: visitDates.length,
-            visit_dates: visitDates.map(date => `2025-07-${date.substring(0, 2)}`),
-            estimated_revenue: Math.round((storedPlan.total_revenue_target || 2000000) / (storedPlan.total_customers || 90)),
-            priority_reason: 'Scheduled visit'
-        })),
-        summary_metrics: {
-            total_customers: storedPlan.total_customers || Object.keys(aiPlan.cvs || {}).length,
-            total_planned_visits: storedPlan.total_planned_visits || aiPlan.mo.tv,
-            total_revenue_target: storedPlan.total_revenue_target || aiPlan.mo.tr
-        },
-        metadata: { thread_id: storedPlan.thread_id, tokens_used: storedPlan.tokens_used },
-        quick_stats: {
-            customers_per_day: Math.round((storedPlan.total_customers || 90) / (aiPlan.mo.wd || 26)),
-            revenue_per_customer: Math.round((aiPlan.mo.tr || 0) / (storedPlan.total_customers || 1)),
-            areas_covered: Object.keys(aiPlan.cvs || {}).length,
-            highest_tier_count: storedPlan.total_customers || 90
-        }
-    };
+async decompressForDashboard(storedPlan) {
+   const plan = storedPlan.original_plan_json || storedPlan.current_plan_json;
+   
+   if (!plan) {
+       throw new Error('No plan data found');
+   }
+   
+   // Handle the actual saved structure
+   const aiPlan = plan.ai_plan || plan;
+   
+   // Fetch customer names from database
+   const customerCodes = Object.keys(aiPlan.cvs || {});
+   const { data: customerData, error } = await supabase
+       .from('customer_tiers')
+       .select('customer_code, customer_name, customer_type, area_name, tier_level')
+       .eq('mr_name', storedPlan.mr_name)
+       .in('customer_code', customerCodes);
+
+   if (error) {
+       console.warn('Failed to fetch customer data:', error);
+   }
+
+   // Create lookup map
+   const customerLookup = {};
+   (customerData || []).forEach(customer => {
+       customerLookup[customer.customer_code] = customer;
+   });
+   
+   return {
+       monthly_overview: {
+           mr_name: aiPlan.mo.mr,
+           month: aiPlan.mo.m,
+           year: aiPlan.mo.y,
+           total_visits: aiPlan.mo.tv,
+           target_revenue: aiPlan.mo.tr,
+           working_days: aiPlan.mo.wd,
+           strategy_summary: aiPlan.mo.summary
+       },
+       weekly_summary: Object.entries(aiPlan.ws || {}).map(([week, data]) => ({
+           week_number: parseInt(week),
+           dates: data.dates,
+           customers: data.customers,
+           revenue_target: data.revenue_target,
+           focus: data.focus
+       })),
+       customer_summary: Object.entries(aiPlan.cvs || {}).slice(0, 50).map(([customerCode, visitDates]) => {
+           const customerInfo = customerLookup[customerCode] || {};
+           
+           return {
+               customer_code: customerCode,
+               customer_name: customerInfo.customer_name || `Customer ${customerCode.slice(-4)}`,
+               customer_type: customerInfo.customer_type || 'Doctor',
+               tier_level: customerInfo.tier_level || 'TIER_3_DEVELOPER',
+               area_name: customerInfo.area_name || 'Area',
+               total_visits: visitDates.length,
+               visit_dates: visitDates.map(date => `${storedPlan.plan_year}-${storedPlan.plan_month.toString().padStart(2, '0')}-${date.substring(0, 2)}`),
+               estimated_revenue: Math.round((storedPlan.total_revenue_target || 2000000) / (storedPlan.total_customers || 90)),
+               priority_reason: 'Scheduled visit'
+           };
+       }),
+       summary_metrics: {
+           total_customers: storedPlan.total_customers || Object.keys(aiPlan.cvs || {}).length,
+           total_planned_visits: storedPlan.total_planned_visits || aiPlan.mo.tv,
+           total_revenue_target: storedPlan.total_revenue_target || aiPlan.mo.tr
+       },
+       metadata: { thread_id: storedPlan.thread_id, tokens_used: storedPlan.tokens_used },
+       quick_stats: {
+           customers_per_day: Math.round((storedPlan.total_customers || 90) / (aiPlan.mo.wd || 26)),
+           revenue_per_customer: Math.round((aiPlan.mo.tr || 0) / (storedPlan.total_customers || 1)),
+           areas_covered: Object.keys(aiPlan.cvs || {}).length,
+           highest_tier_count: storedPlan.total_customers || 90
+       }
+   };
 }
+    
 // Add this new method:
 generateCustomerSummaryFromCVS(cvs, storedPlan) {
     if (!cvs) return [];
@@ -323,6 +346,8 @@ generateCustomerSummaryFromCVS(cvs, storedPlan) {
         };
     }
 
+
+    
     // ================================================================
     // DATABASE OPERATIONS
     // ================================================================
@@ -395,6 +420,7 @@ generateCustomerSummaryFromCVS(cvs, storedPlan) {
         }
     }
 
+    
     /**
      * Search customers in plan
      */
