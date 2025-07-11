@@ -507,7 +507,7 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                                     </div>
                                 )}
 
-                                {/* Weekly Revision Tab */}
+     {/* Weekly Revision Tab */}
                                
 {activeTab === 'revision' && (
     <WeeklyRevisionDashboard 
