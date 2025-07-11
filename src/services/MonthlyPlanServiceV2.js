@@ -331,7 +331,7 @@ sanitizePlanData(plan) {
     if (sanitized.mo) {
         // Fix revenue target - extract numbers or set default
         if (typeof sanitized.mo.tr === 'string') {
-            sanitized.mo.tr = 2000000; // Default 20 lakh
+            sanitized.mo.tr = 200000; // Default 20 lakh
         }
         
         sanitized.mo.tv = parseInt(sanitized.mo.tv) || 0;
@@ -344,7 +344,7 @@ sanitizePlanData(plan) {
     if (sanitized.ws) {
         Object.keys(sanitized.ws).forEach(week => {
             if (typeof sanitized.ws[week].revenue_target === 'string') {
-                sanitized.ws[week].revenue_target = Math.round(2000000 / 4); // 5 lakh per week
+                sanitized.ws[week].revenue_target = Math.round(200000 / 4); // 5 lakh per week
             }
         });
     }
