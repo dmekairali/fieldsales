@@ -119,8 +119,7 @@ class WeeklyRevisionService {
                     "dcrDate",
                     "areaName",
                     "sampleGiven",
-                    "visitType",
-                    "orderValue"
+                    "visitType"
                 `)
                 .eq('empName', mrName)
                 .gte('dcrDate', weekDates.start)
@@ -156,7 +155,7 @@ class WeeklyRevisionService {
             uniqueCustomers.add(visit.clientName);
             
             // Revenue calculation
-            const revenue = parseFloat(visit.amountOfSale) || parseFloat(visit.orderValue) || 0;
+            const revenue = parseFloat(visit.amountOfSale) || 0;
             totalRevenue += revenue;
             
             // Conversion tracking
@@ -194,7 +193,7 @@ class WeeklyRevisionService {
                 customer: v.clientName,
                 area: v.areaName,
                 date: v.dcrDate,
-                revenue: parseFloat(v.amountOfSale) || parseFloat(v.orderValue) || 0,
+                revenue: parseFloat(v.amountOfSale) || 0,
                 sample_given: v.sampleGiven
             }))
         };
