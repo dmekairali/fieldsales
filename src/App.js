@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import TourPlanSidebar from './components/TourPlanSidebar';
 import MonthlyTourPlanDashboard from './components/MonthlyTourPlanDashboard';
+import MonthlyPlanningDashboard from './components/MonthlyPlanningDashboard'; // Add this import
 import EmergencyDashboard from './components/EmergencyDashboard';
 import VisitQualityMonitor from './components/VisitQualityMonitor';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
 import RouteOptimizationDashboard from './components/RouteOptimizationDashboard';
 import AITourPlanDashboard from './components/AITourPlanDashboard';
 import GeocodingDashboard from './components/GeocodingDashboard';
+import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 
 function App() {
   const [activeTab, setActiveTab] = useState('monthly-tour');
   const [selectedMR, setSelectedMR] = useState(null);
   const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
-  const [mrList, setMrList] = useState([]);
-  const [mrLoading, setMrLoading] = useState(true);
-  const [mrError, setMrError] = useState(null);
-  const [totalMRs, setTotalMRs] = useState(0);
+  
+  const { mrList, loading: mrLoading, error: mrError, totalMRs } = useMedicalRepresentatives();
 
   // Handle sidebar navigation
   const handleSidebarNavigation = (path) => {
@@ -34,30 +34,6 @@ function App() {
     const newTab = tabMapping[path] || 'dashboard';
     setActiveTab(newTab);
   };
-
-  // Load MR data
-  useEffect(() => {
-    const loadMRData = async () => {
-      try {
-        setMrLoading(true);
-        // Your existing MR loading logic here
-        // const response = await fetch('/api/mrs');
-        // const data = await response.json();
-        // setMrList(data);
-        // setTotalMRs(data.length);
-        
-        // Mock data for now
-        setMrList([]);
-        setTotalMRs(0);
-        setMrLoading(false);
-      } catch (error) {
-        setMrError(error.message);
-        setMrLoading(false);
-      }
-    };
-
-    loadMRData();
-  }, []);
 
   const handleMRChange = (e) => {
     const selectedValue = e.target.value;
@@ -103,7 +79,7 @@ function App() {
       case 'ai-tour':
         return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'monthly-tour':
-        return <MonthlyTourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+        return <MonthlyPlanningDashboard />; // Use the new component
       case 'geocoding':
         return <GeocodingDashboard />;
       case 'settings':
@@ -182,33 +158,35 @@ function App() {
               </p>
             </div>
             
-            {/* MR Selector */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <label className="text-gray-700 font-medium text-sm">Active MR:</label>
-                <select 
-                  value={selectedMRName} 
-                  onChange={handleMRChange}
-                  className="bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-48 text-sm"
-                  disabled={mrList.length === 0}
-                >
-                  <option value="ALL_MRS">All MRs ({totalMRs})</option>
-                  {mrList.map((mr) => (
-                    <option key={mr.id} value={mr.name}>
-                      {mr.name} - {mr.territory}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              {selectedMR && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                  <div className="text-xs text-blue-600 font-medium">
-                    {selectedMR.territory} | Target: ₹{selectedMR.monthly_target?.toLocaleString()}
-                  </div>
+            {/* MR Selector - Only show for tabs that need it */}
+            {['quality', 'nbd', 'routes', 'ai-tour'].includes(activeTab) && (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-700 font-medium text-sm">Active MR:</label>
+                  <select 
+                    value={selectedMRName} 
+                    onChange={handleMRChange}
+                    className="bg-white border border-gray-300 text-gray-800 px-4 py-2 rounded-lg font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-48 text-sm"
+                    disabled={mrList.length === 0}
+                  >
+                    <option value="ALL_MRS">All MRs ({totalMRs})</option>
+                    {mrList.map((mr) => (
+                      <option key={mr.id} value={mr.name}>
+                        {mr.name} - {mr.territory}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </div>
+                
+                {selectedMR && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                    <div className="text-xs text-blue-600 font-medium">
+                      {selectedMR.territory} | Target: ₹{selectedMR.monthly_target?.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
