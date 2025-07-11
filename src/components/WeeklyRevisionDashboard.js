@@ -2,10 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, TrendingDown, Target, Users, MapPin, DollarSign, AlertTriangle, CheckCircle, Clock, BarChart3, RefreshCw } from 'lucide-react';
 import { weeklyRevisionService } from '../services/WeeklyRevisionService';
 
-const WeeklyRevisionDashboard = () => {
-  const [mrName, setMrName] = useState('John Doe');
-  const [selectedMonth, setSelectedMonth] = useState(7);
-  const [selectedYear, setSelectedYear] = useState(2025);
+const WeeklyRevisionDashboard = ({ 
+  mrName: propMrName, 
+  selectedMonth: propMonth, 
+  selectedYear: propYear,
+  monthlyPlan: propMonthlyPlan 
+}) => {
+  // Use props for main data, but allow override if props not provided
+  const [mrName] = useState(propMrName || 'John Doe');
+  const [selectedMonth] = useState(propMonth || 7);
+  const [selectedYear] = useState(propYear || 2025);
   const [currentWeek, setCurrentWeek] = useState(2);
   const [isLoading, setIsLoading] = useState(false);
   const [isRevising, setIsRevising] = useState(false);
@@ -13,14 +19,20 @@ const WeeklyRevisionDashboard = () => {
   // Real data from backend
   const [dashboardData, setDashboardData] = useState(null);
   const [weeklyData, setWeeklyData] = useState({});
-  const [monthlyPlan, setMonthlyPlan] = useState(null);
+  const [monthlyPlan, setMonthlyPlan] = useState(propMonthlyPlan || null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-
   const [revisionForm, setRevisionForm] = useState({
     weekNumber: 1,
     additional_context: ''
   });
+
+  // Update monthlyPlan when prop changes
+  useEffect(() => {
+    if (propMonthlyPlan) {
+      setMonthlyPlan(propMonthlyPlan);
+    }
+  }, [propMonthlyPlan]);
 
   // Load dashboard data on component mount
   useEffect(() => {
