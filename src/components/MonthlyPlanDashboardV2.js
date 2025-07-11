@@ -467,8 +467,6 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                                     </div>
                                     <div className="p-6 space-y-4">
                                         {expandedPlan.mo && (
-                                            <>
-                                {expandedPlan.mo && (
                                     <>
                                         {/* Plan Status - More descriptive */}
                                         <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
