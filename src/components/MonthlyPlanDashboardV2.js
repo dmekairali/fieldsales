@@ -507,17 +507,21 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                                     </div>
                                 )}
 
-                               
-{/* Weekly Revision Tab */}
-                               
-{activeTab === 'revision' && (
-    <WeeklyRevisionDashboard 
-        mrName={mrName}
-        selectedMonth={selectedMonth}
-        selectedYear={selectedYear}
-        monthlyPlan={monthlyPlan}
-    />
-)}
+                                {/* Weekly Revision Tab */}
+                                {activeTab === 'revision' && (
+                                    <div className="space-y-6">
+                                        <WeeklyRevisionDashboard 
+                                            mrName={mrName}
+                                            selectedMonth={selectedMonth}
+                                            selectedYear={selectedYear}
+                                            monthlyPlan={monthlyPlan}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Loading State */}
                 {isGenerating && (
