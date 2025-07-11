@@ -2,7 +2,7 @@
 // Complete V2 dashboard updated for enhanced storage and decompression
 
 import React, { useState, useEffect } from 'react';
-import MonthlyPlanServiceV2 from '../services/MonthlyPlanServiceV2';
+import { MonthlyPlanServiceV2 } from '../services/MonthlyPlanServiceV2';
 import MonthlyPlanDecompressionService from '../services/MonthlyPlanDecompressionService';
 
 const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
