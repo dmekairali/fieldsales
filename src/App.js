@@ -6,8 +6,6 @@ import RouteOptimizationDashboard from './components/RouteOptimizationDashboard'
 import GeocodingDashboard from './components/GeocodingDashboard';
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
-import AITourPlanDashboard from './components/AITourPlanDashboard';
-import MonthlyTourPlanDashboard from './components/MonthlyTourPlanDashboard';
 import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
 
 
@@ -66,22 +64,6 @@ function App() {
       color: 'blue',
       gradient: 'from-blue-500 to-blue-600'
     },
-    {
-      id: 'ai-tour',
-      name: 'AI Tour Plans',
-      icon: '🤖',
-      description: 'AI-generated daily tours',
-      color: 'indigo',
-      gradient: 'from-indigo-500 to-indigo-600'
-    },
-    {
-  id: 'monthly-tour',
-  name: 'Monthly Planning',
-  icon: '📅',
-  description: 'AI monthly tour planning',
-  color: 'indigo',
-  gradient: 'from-indigo-500 to-indigo-600'
-},
   {
     id: 'monthly-tour-v2',
     name: 'Monthly Planning V2',
@@ -157,10 +139,6 @@ function App() {
         />;
       case 'routes':
         return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
-      case 'ai-tour':
-        return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
-      case 'monthly-tour':
-        return <MonthlyTourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
       case 'monthly-tour-v2': 
         return (
           <MonthlyPlanDashboardV2
