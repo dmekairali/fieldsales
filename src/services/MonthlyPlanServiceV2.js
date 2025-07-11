@@ -370,7 +370,7 @@ sanitizePlanData(plan) {
         try {
             console.log(`🤖 [V2] Calling monthly plan API for ${mrName}`);
 
-            const response = await fetch('/api/openai/monthly-plan-persistentV2', {
+            const response = await fetch('/api/openai/monthly-plan-v2-enhanced', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
