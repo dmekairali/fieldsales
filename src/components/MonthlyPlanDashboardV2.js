@@ -3,6 +3,13 @@
 
 import React, { useState, useEffect } from 'react';
 import MonthlyPlanServiceV2 from '../services/MonthlyPlanServiceV2';
+import WeeklyCalendarView from './WeeklyCalendarView'; // Import the calendar view
+
+// FullCalendar CSS - ensure these are loaded
+import '@fullcalendar/core/main.css';
+import '@fullcalendar/daygrid/main.css';
+import '@fullcalendar/timegrid/main.css';
+
 
 const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
     const [monthlyPlan, setMonthlyPlan] = useState(null);
@@ -18,6 +25,11 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
     
     // Revision states
     const [revisionWeek, setRevisionWeek] = useState(1);
+    // Modal state for event details
+    const [showEventModal, setShowEventModal] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [currentCalendarWeekContext, setCurrentCalendarWeekContext] = useState(null);
+
     const [actualPerformance, setActualPerformance] = useState({
         visits_completed: '',
         revenue_achieved: '',
@@ -39,12 +51,94 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
 
     const mrName = selectedMR?.mrName || selectedMRName;
 
+    const transformDataForCalendar = (planData) => {
+        if (!planData || !planData.expanded_cvs || !planData.mo) {
+            return [];
+        }
+        const events = [];
+        const year = planData.mo.y;
+        const month = planData.mo.m -1; // JavaScript months are 0-indexed
+        const tiers = ['TIER_1_CHAMPION', 'TIER_2_PERFORMER', 'TIER_3_DEVELOPER', 'TIER_4_PROSPECT']; // Example tiers
+
+        let customerCounter = 0; // To cycle through tiers for demo purposes
+
+        for (const customerCode in planData.expanded_cvs) {
+            const schedule = planData.expanded_cvs[customerCode];
+            // DEMO: Assign a tier cyclically for styling. Replace with actual tier data.
+            const demoTier = tiers[customerCounter % tiers.length];
+            customerCounter++;
+
+            schedule.dates.forEach(ddmm => {
+                if (ddmm && ddmm.length === 4) {
+                    const day = parseInt(ddmm.substring(0, 2), 10);
+                    const eventDate = new Date(year, month, day);
+
+                    events.push({
+                        title: customerCode,
+                        start: eventDate,
+                        allDay: true,
+                        extendedProps: {
+                            customerCode: customerCode,
+                            tier: demoTier, // Using demo tier
+                            visitPurpose: "Routine Check-in", // Placeholder
+                            priorityReason: "Scheduled Visit" // Placeholder
+                        }
+                    });
+                }
+            });
+        }
+        return events;
+    };
+
+    const handleDatesSet = (dateInfo) => {
+        if (!expandedPlan || !expandedPlan.wp || !expandedPlan.mo) {
+            setCurrentCalendarWeekContext(null);
+            return;
+        }
+
+        const viewStart = dateInfo.start; // This is the start of the displayed range in the calendar
+        const planMonthStart = new Date(expandedPlan.mo.y, expandedPlan.mo.m - 1, 1);
+
+        // Calculate week number based on viewStart relative to the plan's month start
+        // This is a simplified calculation and might need refinement for edge cases (e.g., weeks spanning month boundaries)
+        const diffTime = Math.abs(viewStart - planMonthStart);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        let weekNumber = Math.floor(diffDays / 7) + 1;
+
+        // Ensure weekNumber is within the bounds of the weekly plan array
+        weekNumber = Math.max(1, Math.min(weekNumber, expandedPlan.wp.length));
+
+        const contextWeekData = expandedPlan.wp.find(w => w.w === weekNumber);
+
+        if (contextWeekData) {
+            console.log(`Setting calendar context for week: ${weekNumber}`, contextWeekData);
+            setCurrentCalendarWeekContext(contextWeekData);
+        } else {
+            console.log(`No weekly plan data found for calculated week number: ${weekNumber} from viewStart: ${viewStart}`);
+            // If no exact match, try to find a week that contains the viewStart
+            const fallbackWeek = expandedPlan.wp.find(w => {
+                // Assuming w.sd and w.ed are like "0107" (DDMM) - this needs robust parsing based on actual data structure
+                // For now, this part is a placeholder for more robust week matching logic
+                // This example assumes w.sd is day of month, which is not what's in the V2 plan structure.
+                // The V2 structure is { w: 1, sd: 1, ed: 7, ... } where sd/ed are day numbers.
+                const weekStartDate = new Date(expandedPlan.mo.y, expandedPlan.mo.m - 1, w.sd);
+                const weekEndDate = new Date(expandedPlan.mo.y, expandedPlan.mo.m - 1, w.ed);
+                return viewStart >= weekStartDate && viewStart <= weekEndDate;
+            });
+            setCurrentCalendarWeekContext(fallbackWeek || null);
+            if(fallbackWeek) console.log(`Fallback calendar context for week: ${fallbackWeek.w}`, fallbackWeek);
+
+        }
+    };
+
     // Load existing plan on component mount or when MR/month changes
     useEffect(() => {
         if (mrName && mrName !== 'ALL_MRS') {
             loadExistingPlan();
             loadWeeklyRevisions();
         }
+        // Reset context when MR/Month/Year changes
+        setCurrentCalendarWeekContext(null);
     }, [mrName, selectedMonth, selectedYear]);
 
     const loadExistingPlan = async () => {
@@ -374,55 +468,78 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                                     <div className="p-6 space-y-4">
                                         {expandedPlan.mo && (
                                             <>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="bg-blue-50 p-4 rounded-lg">
-                                                        <div className="text-2xl font-bold text-blue-600">
-                                                            {expandedPlan.mo.tv || 0}
+                                {expandedPlan.mo && (
+                                    <>
+                                        {/* Plan Status - More descriptive */}
+                                        <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                                            <h4 className="font-semibold text-indigo-700">Current Plan Status:</h4>
+                                            {/* This status would be dynamic based on current date and revision state */}
+                                            <p className="text-indigo-600 text-sm">
+                                                Baseline Plan Active - Week {Math.min(Math.ceil(new Date().getDate() / 7), 4)} of 4 (Example)
+                                            </p>
+                                            <p className="text-xs text-indigo-500">Version: {monthlyPlan.plan_version || '2.0'}.{monthlyPlan.current_revision || 0}</p>
                                                         </div>
-                                                        <div className="text-sm text-gray-600">Total Visits</div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-blue-50 p-4 rounded-lg">
+                                                <div className="text-2xl font-bold text-blue-600">
+                                                    {expandedPlan.mo.tv || 0}
+                                                </div>
+                                                <div className="text-sm text-gray-600">Total Planned Visits</div>
+                                            </div>
+                                            <div className="bg-green-50 p-4 rounded-lg">
+                                                <div className="text-2xl font-bold text-green-600">
+                                                    ₹{(expandedPlan.mo.tr || 0).toLocaleString()}
+                                                </div>
+                                                <div className="text-sm text-gray-600">Target Revenue</div>
+                                            </div>
+                                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-purple-50 p-4 rounded-lg">
+                                                <div className="text-sm text-purple-700">Working Days</div>
+                                                <div className="text-xl font-bold text-purple-600">
+                                                    {expandedPlan.mo.wd || 0}
+                                                </div>
+                                                            </div>
+                                            <div className="bg-orange-50 p-4 rounded-lg">
+                                                <div className="text-sm text-orange-700">NBD Target (Visits)</div>
+                                                <div className="text-xl font-bold text-orange-600">
+                                                    {expandedPlan.mo.nt || 0}
+                                                </div>
+                                                            </div>
+                                        </div>
+
+                                        {/* Placeholder for KPIs */}
+                                        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                            <h4 className="font-semibold text-gray-700 mb-2">Key Performance Indicators (Monthly)</h4>
+                                            <div className="space-y-1 text-sm text-gray-600">
+                                                <p>Overall Achievement: <span className="font-medium text-gray-800">XX%</span> (Visits: YY%, Revenue: ZZ%)</p>
+                                                <p>Plan Adherence: <span className="font-medium text-gray-800">XX%</span></p>
+                                                <p>Revision Effectiveness: <span className="font-medium text-gray-800">Data N/A until revisions occur</span></p>
+                                                            </div>
+                                                        </div>
+
+                                        {expandedPlan.mo.td && (
+                                            <div className="bg-gray-50 p-4 rounded-lg mt-4">
+                                                <h4 className="font-semibold text-gray-900 mb-2">Planned Tier Distribution (Visits)</h4>
+                                                <div className="grid grid-cols-3 gap-2 text-sm">
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-lg">{expandedPlan.mo.td[0] || 0}</div>
+                                                        <div className="text-gray-600">TIER_2</div>
                                                     </div>
-                                                    <div className="bg-green-50 p-4 rounded-lg">
-                                                        <div className="text-2xl font-bold text-green-600">
-                                                            ₹{(expandedPlan.mo.tr || 0).toLocaleString()}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Target Revenue</div>
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-lg">{expandedPlan.mo.td[1] || 0}</div>
+                                                        <div className="text-gray-600">TIER_3</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="font-bold text-lg">{expandedPlan.mo.td[2] || 0}</div>
+                                                        <div className="text-gray-600">TIER_4</div>
                                                     </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="bg-purple-50 p-4 rounded-lg">
-                                                        <div className="text-2xl font-bold text-purple-600">
-                                                            {expandedPlan.mo.wd || 0}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">Working Days</div>
-                                                    </div>
-                                                    <div className="bg-orange-50 p-4 rounded-lg">
-                                                        <div className="text-2xl font-bold text-orange-600">
-                                                            {expandedPlan.mo.nt || 0}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600">NBD Target</div>
-                                                    </div>
-                                                </div>
-                                                {expandedPlan.mo.td && (
-                                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                                        <h4 className="font-semibold text-gray-900 mb-2">Tier Distribution</h4>
-                                                        <div className="grid grid-cols-3 gap-2 text-sm">
-                                                            <div className="text-center">
-                                                                <div className="font-bold text-lg">{expandedPlan.mo.td[0] || 0}</div>
-                                                                <div className="text-gray-600">TIER_2</div>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <div className="font-bold text-lg">{expandedPlan.mo.td[1] || 0}</div>
-                                                                <div className="text-gray-600">TIER_3</div>
-                                                            </div>
-                                                            <div className="text-center">
-                                                                <div className="font-bold text-lg">{expandedPlan.mo.td[2] || 0}</div>
-                                                                <div className="text-gray-600">TIER_4</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </>
+                                            </div>
                                         )}
+                                    </>
+                                                )}
                                     </div>
                                 </div>
 
@@ -469,60 +586,58 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                         {/* Weekly Plans Tab */}
                         {activeTab === 'weekly' && (
                             <div className="space-y-6">
-                                {expandedPlan.wp?.map((week) => (
-                                    <div key={week.w} className="bg-white rounded-xl shadow-sm border border-gray-200">
-                                        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-xl">
-                                            <div className="flex justify-between items-center">
-                                                <div>
-                                                    <h3 className="text-xl font-bold">Week {week.w} Plan</h3>
-                                                    <p className="text-green-100 mt-2">
-                                                        Days {week.sd}-{week.ed} • Target: {week.tv} visits • Revenue: ₹{(week.tr || 0).toLocaleString()}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center space-x-2">
-                                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                                        getWeekStatus(week.w) === 'completed' ? 'bg-green-100 text-green-800' :
-                                                        getWeekStatus(week.w) === 'active' ? 'bg-yellow-100 text-yellow-800' :
-                                                        getWeekStatus(week.w) === 'revised' ? 'bg-blue-100 text-blue-800' :
-                                                        'bg-gray-100 text-gray-600'
-                                                    }`}>
-                                                        {getWeekStatus(week.w)}
-                                                    </span>
+                                <WeeklyCalendarView
+                                    events={transformDataForCalendar(expandedPlan)}
+                                    onDateClick={(arg) => {
+                                        console.log('Date clicked:', arg.dateStr);
+                                    }}
+                                    onEventClick={(arg) => {
+                                        setSelectedEvent(arg.event);
+                                        setShowEventModal(true);
+                                    }}
+                                    onDatesSet={handleDatesSet}
+                                />
+                                {currentCalendarWeekContext && (
+                                    <div className="mt-6 p-4 bg-sky-50 rounded-lg border border-sky-200">
+                                        <h4 className="text-lg font-semibold text-sky-700 mb-3">
+                                            Context: Week {currentCalendarWeekContext.w} (Days {currentCalendarWeekContext.sd} - {currentCalendarWeekContext.ed})
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <p className="text-gray-600">Target Visits: <span className="font-medium text-gray-800">{currentCalendarWeekContext.tv}</span></p>
+                                                <p className="text-gray-600">Target Revenue: <span className="font-medium text-gray-800">₹{(currentCalendarWeekContext.tr || 0).toLocaleString()}</span></p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-600 font-medium">Focus Areas:</p>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {currentCalendarWeekContext.fa?.map((area, index) => (
+                                                        <span key={index} className="px-2 py-0.5 bg-sky-200 text-sky-800 rounded-full text-xs">{area}</span>
+                                                    ))}
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div className="p-6">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900 mb-3">Focus Areas</h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {week.fa?.map((area, index) => (
-                                                            <span key={index} className="px-3 py-1 bg-green-100 text-green-800 rounded-lg text-sm">
-                                                                {area}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900 mb-3">Priority Customers</h4>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {week.pc?.map((priority, index) => (
-                                                            <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg text-sm">
-                                                                {priority}
-                                                            </span>
-                                                        ))}
-                                                    </div>
+                                            <div className="md:col-span-2">
+                                                <p className="text-gray-600 font-medium">Priority Customers/Segments:</p>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                {currentCalendarWeekContext.pc?.map((priority, index) => (
+                                                    <span key={index} className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs">{priority}</span>
+                                                ))}
                                                 </div>
                                             </div>
-                                            {week.strategy && (
-                                                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                                    <h5 className="font-medium text-gray-900 mb-2">Week Strategy</h5>
-                                                    <p className="text-gray-700 text-sm">{week.strategy}</p>
+                                            {currentCalendarWeekContext.strategy && (
+                                                <div className="md:col-span-2 mt-2 p-3 bg-gray-100 rounded">
+                                                    <p className="text-gray-600 font-medium">Strategy:</p>
+                                                    <p className="text-gray-700 text-xs">{currentCalendarWeekContext.strategy}</p>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                )}
+                                {/* Original weekly plan list (can be kept or removed based on final UI design) */}
+                                {/* {expandedPlan.wp?.map((week) => (
+                                    <div key={week.w} className="bg-white rounded-xl shadow-sm border border-gray-200">
+                                        ... (original weekly plan rendering) ...
+                                    </div>
+                                ))} */}
                             </div>
                         )}
 
@@ -795,6 +910,65 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                         </div>
                     </div>
                 )}
+
+                {/* Event Detail Modal */}
+                {showEventModal && selectedEvent && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ease-in-out">
+                        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 transform transition-all duration-300 ease-in-out scale-100">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-xl font-semibold text-gray-800">Visit Details</h3>
+                                <button
+                                    onClick={() => setShowEventModal(false)}
+                                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
+
+                            <div className="border-t border-gray-200 pt-4 space-y-3 text-sm">
+                                <div>
+                                    <span className="font-medium text-gray-500">Customer:</span>
+                                    <span className="ml-2 text-gray-700 font-semibold">{selectedEvent.title} ({selectedEvent.extendedProps.customerCode})</span>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500">Date:</span>
+                                    <span className="ml-2 text-gray-700">{selectedEvent.start.toLocaleDateString()}</span>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500">Tier:</span>
+                                    <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        selectedEvent.extendedProps.tier === 'TIER_1_CHAMPION' ? 'bg-purple-100 text-purple-800' :
+                                        selectedEvent.extendedProps.tier === 'TIER_2_PERFORMER' ? 'bg-blue-100 text-blue-800' :
+                                        selectedEvent.extendedProps.tier === 'TIER_3_DEVELOPER' ? 'bg-green-100 text-green-800' :
+                                        selectedEvent.extendedProps.tier === 'TIER_4_PROSPECT' ? 'bg-gray-100 text-gray-800' :
+                                        'bg-sky-100 text-sky-800'
+                                    }`}>
+                                        {selectedEvent.extendedProps.tier?.replace('_', ' ') || 'N/A'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500">Visit Purpose:</span>
+                                    <span className="ml-2 text-gray-700">{selectedEvent.extendedProps.visitPurpose || 'Not specified'}</span>
+                                </div>
+                                <div>
+                                    <span className="font-medium text-gray-500">Priority Reason:</span>
+                                    <span className="ml-2 text-gray-700">{selectedEvent.extendedProps.priorityReason || 'Not specified'}</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex justify-end space-x-3">
+                                <button
+                                    onClick={() => setShowEventModal(false)}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                                >
+                                    Close
+                                </button>
+                                {/* Add other actions like "Edit Visit" or "View Customer Details" here */}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     );
