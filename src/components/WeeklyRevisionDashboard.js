@@ -8,7 +8,7 @@ const WeeklyRevisionDashboard = ({
   selectedYear: propYear,
   monthlyPlan: propMonthlyPlan 
 }) => {
-  // Use props for main data, but allow override if props not provided
+  
   const [mrName] = useState(propMrName || 'John Doe');
   const [selectedMonth] = useState(propMonth || 7);
   const [selectedYear] = useState(propYear || 2025);
