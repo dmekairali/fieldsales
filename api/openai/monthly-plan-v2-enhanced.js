@@ -65,15 +65,20 @@ export default async function handler(req, res) {
                 data_quality_score: comprehensivePlan.plan_metadata.data_quality_score
             }
         });
-
-    } catch (error) {
-        console.error('❌ Enhanced API failed:', error);
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        });
-    }
+} catch (error) {
+    console.error('❌ API Error Details:', {
+        message: error.message,
+        stack: error.stack,
+        type: error.constructor.name
+    });
+    
+    return res.status(500).json({
+        success: false,
+        error: error.message,
+        details: error.stack
+    });
+}
+   
 }
 
 // ================================================================
