@@ -19,39 +19,39 @@ class MonthlyPlanDecompressionService {
      * Get and decompress monthly plan for dashboard
      */
     async getMonthlyPlanForDashboard(mrName, month, year) {
-        const cacheKey = `dashboard_${mrName}_${month}_${year}`;
-        const cached = this.cache.get(cacheKey);
-        
-        if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
-            console.log('📋 Using cached dashboard data');
-            return cached.data;
-        }
-
-        try {
-            console.log(`🔍 Loading monthly plan for dashboard: ${mrName} ${month}/${year}`);
-            
-            const storedPlan = await this.getStoredPlan(mrName, month, year);
-            if (!storedPlan) {
-                return null;
-            }
-
-            const decompressed = this.decompressForDashboard(storedPlan);
-            
-            // Cache results
-            this.cache.set(cacheKey, {
-                data: decompressed,
-                timestamp: Date.now()
-            });
-
-            console.log(`✅ Dashboard data loaded: ${decompressed.summary_metrics.total_customers} customers`);
-            return decompressed;
-
-        } catch (error) {
-            console.error('❌ Dashboard decompression failed:', error);
-            throw error;
-        }
+    const cacheKey = `dashboard_${mrName}_${month}_${year}`;
+    const cached = this.cache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+        console.log('📋 Using cached dashboard data');
+        return cached.data;
     }
 
+    try {
+        console.log(`🔍 Loading monthly plan for dashboard: ${mrName} ${month}/${year}`);
+        
+        const storedPlan = await this.getStoredPlan(mrName, month, year);
+        if (!storedPlan) {
+            console.log('ℹ️ No plan found in database');
+            return null;
+        }
+
+        const decompressed = await this.decompressForDashboard(storedPlan);
+        
+        // Cache results
+        this.cache.set(cacheKey, {
+            data: decompressed,
+            timestamp: Date.now()
+        });
+
+        console.log(`✅ Dashboard data loaded: ${decompressed.summary_metrics.total_customers} customers`);
+        return decompressed;
+
+    } catch (error) {
+        console.error('❌ Dashboard decompression failed:', error);
+        throw error;
+    }
+}
     /**
      * Get customer schedule with full details
      */
