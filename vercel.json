@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/openai/monthly-plan-persistent.js": {
+    "api/openai/monthly-plan-v2-enhanced.js": {
       "maxDuration": 180
     }
   }
