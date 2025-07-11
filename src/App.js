@@ -1,16 +1,21 @@
-// App.js - Updated with new sidebar
 import React, { useState, useEffect } from 'react';
-import TourPlanSidebar from './components/TourPlanSidebar'; // Import the new sidebar
+import TourPlanSidebar from './components/TourPlanSidebar';
 import MonthlyTourPlanDashboard from './components/MonthlyTourPlanDashboard';
 import EmergencyDashboard from './components/EmergencyDashboard';
 import VisitQualityMonitor from './components/VisitQualityMonitor';
-// ... other imports
+import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
+import RouteOptimizationDashboard from './components/RouteOptimizationDashboard';
+import AITourPlanDashboard from './components/AITourPlanDashboard';
+import GeocodingDashboard from './components/GeocodingDashboard';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('monthly-planning');
+  const [activeTab, setActiveTab] = useState('monthly-tour');
   const [selectedMR, setSelectedMR] = useState(null);
   const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
-  // ... other state variables
+  const [mrList, setMrList] = useState([]);
+  const [mrLoading, setMrLoading] = useState(true);
+  const [mrError, setMrError] = useState(null);
+  const [totalMRs, setTotalMRs] = useState(0);
 
   // Handle sidebar navigation
   const handleSidebarNavigation = (path) => {
@@ -30,7 +35,101 @@ function App() {
     setActiveTab(newTab);
   };
 
-  // ... existing useEffect and functions
+  // Load MR data
+  useEffect(() => {
+    const loadMRData = async () => {
+      try {
+        setMrLoading(true);
+        // Your existing MR loading logic here
+        // const response = await fetch('/api/mrs');
+        // const data = await response.json();
+        // setMrList(data);
+        // setTotalMRs(data.length);
+        
+        // Mock data for now
+        setMrList([]);
+        setTotalMRs(0);
+        setMrLoading(false);
+      } catch (error) {
+        setMrError(error.message);
+        setMrLoading(false);
+      }
+    };
+
+    loadMRData();
+  }, []);
+
+  const handleMRChange = (e) => {
+    const selectedValue = e.target.value;
+    setSelectedMRName(selectedValue);
+    
+    if (selectedValue === 'ALL_MRS') {
+      setSelectedMR(null);
+    } else {
+      const mrData = mrList.find(mr => mr.name === selectedValue);
+      setSelectedMR(mrData);
+    }
+  };
+
+  // Helper function to get page title
+  const getPageTitle = (tab) => {
+    const titles = {
+      'dashboard': 'Dashboard Overview',
+      'monthly-tour': 'Monthly Planning',
+      'weekly-revision': 'Weekly Revision',
+      'analytics': 'Performance Analytics',
+      'emergency': 'Emergency Territory',
+      'quality': 'Visit Quality Analysis',
+      'nbd': 'NBD Performance',
+      'reports': 'Reports & Analytics',
+      'settings': 'Settings'
+    };
+    return titles[tab] || 'Dashboard';
+  };
+
+  // Render tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'emergency':
+        return <EmergencyDashboard />;
+      case 'quality':
+        return <VisitQualityMonitor mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} />;
+      case 'nbd':
+        return <NBDPerformanceDashboard 
+          mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
+        />;
+      case 'routes':
+        return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'ai-tour':
+        return <AITourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'monthly-tour':
+        return <MonthlyTourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'geocoding':
+        return <GeocodingDashboard />;
+      case 'settings':
+        return (
+          <div className="min-h-screen bg-slate-50 p-6">
+            <div className="max-w-5xl mx-auto">
+              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Settings</h2>
+                <p className="text-gray-600">Dashboard configuration options coming soon...</p>
+              </div>
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="min-h-screen bg-slate-50 p-6">
+            <div className="max-w-7xl mx-auto">
+              <div className="text-center py-20">
+                <h2 className="text-3xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
+                <p className="text-gray-600 text-lg">Select a module from the sidebar to get started</p>
+              </div>
+            </div>
+          </div>
+        );
+    }
+  };
 
   if (mrLoading) {
     return (
@@ -63,15 +162,15 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* New Sidebar Component */}
+      {/* Sidebar */}
       <TourPlanSidebar 
         onNavigate={handleSidebarNavigation}
         activeItem={activeTab}
       />
       
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Header with MR Selector */}
+        {/* Header */}
         <div className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -113,44 +212,13 @@ function App() {
           </div>
         </div>
 
-        {/* Content Area */}
+        {/* Content */}
         <div className="flex-1 overflow-auto">
           {renderTabContent()}
         </div>
       </div>
     </div>
   );
-
-  // Helper function to get page title
-  function getPageTitle(tab) {
-    const titles = {
-      'dashboard': 'Dashboard Overview',
-      'monthly-tour': 'Monthly Planning',
-      'weekly-revision': 'Weekly Revision',
-      'analytics': 'Performance Analytics',
-      'emergency': 'Emergency Territory',
-      'quality': 'Visit Quality Analysis',
-      'nbd': 'NBD Performance',
-      'reports': 'Reports & Analytics',
-      'settings': 'Settings'
-    };
-    return titles[tab] || 'Dashboard';
-  }
-
-  // Your existing renderTabContent function stays the same
-  function renderTabContent() {
-    switch (activeTab) {
-      case 'emergency':
-        return <EmergencyDashboard />;
-      case 'quality':
-        return <VisitQualityMonitor mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} />;
-      case 'monthly-tour':
-        return <MonthlyTourPlanDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
-      // ... other cases
-      default:
-        return <div>Select a tab</div>;
-    }
-  }
-
-  // ... rest of your existing functions
 }
+
+export default App;
