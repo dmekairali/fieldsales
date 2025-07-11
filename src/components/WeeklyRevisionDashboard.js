@@ -16,7 +16,7 @@ const WeeklyRevisionDashboard = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isRevising, setIsRevising] = useState(false);
   
-  // Real data from backend
+  // Real data from backend supabase
   const [dashboardData, setDashboardData] = useState(null);
   const [weeklyData, setWeeklyData] = useState({});
   const [monthlyPlan, setMonthlyPlan] = useState(propMonthlyPlan || null);
