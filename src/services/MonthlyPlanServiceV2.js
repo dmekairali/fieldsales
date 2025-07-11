@@ -325,6 +325,46 @@ class MonthlyPlanServiceV2 {
         return summary;
     }
 
+
+    // Add this method to MonthlyPlanServiceV2.js after the calculateTerritorySummary method
+
+/**
+ * Sanitize plan data before saving to database
+ */
+sanitizePlanData(plan) {
+    // Ensure numeric values are actually numbers
+    const sanitized = { ...plan };
+    
+    if (sanitized.mo) {
+        // Convert revenue target to number, default to 0 if invalid
+        if (typeof sanitized.mo.tr === 'string') {
+            const parsed = parseInt(sanitized.mo.tr.replace(/[^\d]/g, ''));
+            sanitized.mo.tr = isNaN(parsed) ? 0 : parsed;
+        }
+        
+        // Ensure other numeric fields are numbers
+        sanitized.mo.tv = parseInt(sanitized.mo.tv) || 0;
+        sanitized.mo.wd = parseInt(sanitized.mo.wd) || 0;
+        sanitized.mo.m = parseInt(sanitized.mo.m) || 1;
+        sanitized.mo.y = parseInt(sanitized.mo.y) || new Date().getFullYear();
+    }
+    
+    // Sanitize weekly data
+    if (sanitized.ws) {
+        Object.keys(sanitized.ws).forEach(week => {
+            if (sanitized.ws[week].revenue_target) {
+                const parsed = parseInt(sanitized.ws[week].revenue_target.toString().replace(/[^\d]/g, ''));
+                sanitized.ws[week].revenue_target = isNaN(parsed) ? 0 : parsed;
+            }
+            if (sanitized.ws[week].customers) {
+                sanitized.ws[week].customers = parseInt(sanitized.ws[week].customers) || 0;
+            }
+        });
+    }
+    
+    return sanitized;
+}
+
     // ===================================================================
     // API CALLS
     // ===================================================================
@@ -376,20 +416,30 @@ class MonthlyPlanServiceV2 {
      */
     async saveMonthlyPlan(mrName, month, year, plan, threadId) {
         try {
-            console.log(`💾 [V2] Saving monthly plan for ${mrName}`);
+           console.log(`💾 [V2] Saving monthly plan for ${mrName}`);
 
-            const planData = {
-                mr_name: mrName,
-                plan_month: month,
-                plan_year: year,
-                original_plan_json: plan,
-                current_plan_json: plan,
-                current_revision: 0,
-                status: 'ACTIVE',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                thread_id: threadId
-            };
+        // Sanitize plan data before saving
+        const sanitizedPlan = this.sanitizePlanData(plan);
+        
+        const planData = {
+            mr_name: mrName,
+            plan_month: month,
+            plan_year: year,
+            original_plan_json: sanitizedPlan,
+            current_plan_json: sanitizedPlan,
+            current_revision: 0,
+            status: 'ACTIVE',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            thread_id: threadId,
+            // Add metadata for quick queries
+            total_customers: Object.keys(sanitizedPlan.cvs || {}).length,
+            total_planned_visits: sanitizedPlan.mo?.tv || 0,
+            total_revenue_target: sanitizedPlan.mo?.tr || 0,
+            generation_method: 'ai_complete_v2_enhanced',
+            tokens_used: 0, // Will be updated when we get the actual value
+            data_quality_score: 0.95
+        };
 
             // Check if plan already exists
             const { data: existingPlan } = await supabase
