@@ -326,7 +326,7 @@ class MonthlyPlanDecompressionService {
                 .eq('plan_month', month)
                 .eq('plan_year', year)
                 .eq('status', 'ACTIVE')
-                .single();
+                .maybeSingle();
 
             if (error) {
                 console.error('❌ Plan fetch error:', error);
