@@ -5,6 +5,10 @@ import React, { useState, useEffect } from 'react';
 import MonthlyPlanServiceV2 from '../services/MonthlyPlanServiceV2';
 import MonthlyPlanDecompressionService from '../services/MonthlyPlanDecompressionService';
 
+// Add to imports at top of MonthlyPlanDashboardV2.js
+import WeeklyRevisionDashboard from './WeeklyRevisionDashboard';
+import { weeklyRevisionService } from '../services/WeeklyRevisionService';
+
 const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
     const [monthlyPlan, setMonthlyPlan] = useState(null);
     const [expandedPlan, setExpandedPlan] = useState(null);
@@ -504,77 +508,15 @@ const MonthlyPlanDashboardV2 = ({ selectedMR, selectedMRName }) => {
                                 )}
 
                                 {/* Weekly Revision Tab */}
-                                {activeTab === 'revision' && (
-                                    <div className="space-y-6">
-                                        <h3 className="text-lg font-semibold text-gray-900">Weekly Performance Revision</h3>
-                                        
-                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                            <div className="text-sm text-blue-700">
-                                                <strong>Thread ID:</strong> {monthlyPlan.thread_id || 'Not available'}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Week Number</label>
-                                                <select
-                                                    value={revisionWeek}
-                                                    onChange={(e) => setRevisionWeek(parseInt(e.target.value))}
-                                                    className="border border-gray-300 rounded-lg px-3 py-2 w-full"
-                                                >
-                                                    {[1, 2, 3, 4].map(week => (
-                                                        <option key={week} value={week}>Week {week}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Visits Completed</label>
-                                                    <input
-                                                        type="number"
-                                                        value={actualPerformance.visits_completed}
-                                                        onChange={(e) => setActualPerformance(prev => ({...prev, visits_completed: e.target.value}))}
-                                                        className="border border-gray-300 rounded-lg px-3 py-2 w-full"
-                                                        placeholder="0"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Revenue Achieved</label>
-                                                    <input
-                                                        type="number"
-                                                        value={actualPerformance.revenue_achieved}
-                                                        onChange={(e) => setActualPerformance(prev => ({...prev, revenue_achieved: e.target.value}))}
-                                                        className="border border-gray-300 rounded-lg px-3 py-2 w-full"
-                                                        placeholder="0"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Revision Reason</label>
-                                                <textarea
-                                                    value={revisionReason}
-                                                    onChange={(e) => setRevisionReason(e.target.value)}
-                                                    className="border border-gray-300 rounded-lg px-3 py-2 w-full h-24"
-                                                    placeholder="Explain why this revision is needed..."
-                                                />
-                                            </div>
-
-                                            <button
-                                                onClick={handleWeeklyRevision}
-                                                disabled={isRevising}
-                                                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400"
-                                            >
-                                                {isRevising ? '🔄 Processing Revision...' : '🔄 Perform Revision'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                               
+{activeTab === 'revision' && (
+    <WeeklyRevisionDashboard 
+        mrName={mrName}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        monthlyPlan={monthlyPlan}
+    />
+)}
 
                 {/* Loading State */}
                 {isGenerating && (
