@@ -4,7 +4,10 @@ const Sidebar = ({ isOpen, toggle, tabs, activeTab, setActiveTab, getTabColorCla
   return (
     <div className={`fixed top-0 left-0 h-full bg-slate-800 text-white transition-all duration-300 ${isOpen ? 'w-64' : 'w-20'}`}>
       <div className="flex items-center justify-between p-4">
-        <h1 className={`text-2xl font-bold ${isOpen ? 'block' : 'hidden'}`}>Kairali</h1>
+        <div className={`${isOpen ? 'block' : 'hidden'}`}>
+          <h1 className="text-lg font-bold">Kairali Analytics</h1>
+          <p className="text-xs text-slate-400">Master Dashboard</p>
+        </div>
         <button onClick={toggle} className="text-white focus:outline-none">
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

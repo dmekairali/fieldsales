@@ -13,19 +13,9 @@ const Header = ({
   selectedMR,
 }) => {
   return (
-    <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-blue-900 text-white shadow-2xl">
-      <div className="max-w-7xl mx-auto px-6 py-6">
+    <div className="bg-white shadow-md">
+      <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center">
-                <span className="text-xl">🏥</span>
-              </div>
-              Kairali Analytics - Master Dashboard
-            </h1>
-            <p className="text-blue-100 text-lg">Advanced field sales analytics and territory management system</p>
-          </div>
-
           <div className="flex items-center gap-6">
             {/* MR Selector */}
             <div className="flex items-center gap-3">

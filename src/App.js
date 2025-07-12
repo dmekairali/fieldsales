@@ -404,7 +404,7 @@ function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
-      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}>
+      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'}`} style={{ paddingTop: '80px' }}>
         <Header
           selectedMRName={selectedMRName}
           handleMRChange={handleMRChange}
