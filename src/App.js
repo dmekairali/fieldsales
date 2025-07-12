@@ -1,20 +1,47 @@
+// Fixed App.js - Proper Weekly Revision Integration
+
 import React, { useState, useEffect } from 'react';
 import EmergencyDashboard from './components/EmergencyDashboard';
 import VisitQualityMonitor from './components/VisitQualityMonitor';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
 import RouteOptimizationDashboard from './components/RouteOptimizationDashboard';
 import GeocodingDashboard from './components/GeocodingDashboard';
+import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
+import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
+
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
-import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
-
+import { 
+  Calendar, 
+  TrendingUp, 
+  MapPin, 
+  AlertTriangle, 
+  BarChart3, 
+  Users, 
+  Settings, 
+  Target,
+  Activity,
+  DollarSign,
+  Navigation,
+  FileText,
+  Bell,
+  User,
+  ChevronDown,
+  Search,
+  Filter
+} from 'lucide-react';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('emergency');
+  const [activeTab, setActiveTab] = useState('overview');
   const [selectedMR, setSelectedMR] = useState(null);
-  const [selectedMRName, setSelectedMRName] = useState('ALL_MRS'); // Add state for MR name filter
-  const [nbdDateRange, setNbdDateRange] = useState(30); // NBD specific filters
+  const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
+  const [nbdDateRange, setNbdDateRange] = useState(30);
   const [nbdPerformanceFilter, setNbdPerformanceFilter] = useState('all');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Shared state for month/year - used by both Monthly Planning and Weekly Revision
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const { 
     mrList, 
@@ -31,87 +58,82 @@ function App() {
     }
   }, [mrList, selectedMR]);
 
-  const tabs = [
+  const navigationItems = [
+    {
+      id: 'overview',
+      name: 'Dashboard Overview',
+      icon: BarChart3,
+      description: 'Key metrics and insights',
+      color: 'blue'
+    },
+    {
+      id: 'monthly-planning',
+      name: 'Monthly Planning',
+      icon: Calendar,
+      description: 'AI-powered tour planning',
+      color: 'violet',
+      badge: 'NEW'
+    },
+    {
+      id: 'weekly-revision',
+      name: 'Weekly Revision',
+      icon: Activity,
+      description: 'Performance tracking',
+      color: 'green',
+      count: 3
+    },
     {
       id: 'emergency',
-      name: 'Emergency Fixes',
-      icon: '🚨',
+      name: 'Emergency Territory',
+      icon: AlertTriangle,
       description: 'Critical territory management',
       color: 'red',
-      gradient: 'from-red-500 to-red-600'
+      count: 2
     },
     {
       id: 'quality',
       name: 'Visit Quality',
-      icon: '📊',
-      description: 'Quality monitoring & analysis',
+      icon: Target,
+      description: 'Quality monitoring',
       color: 'purple',
-      gradient: 'from-purple-500 to-purple-600'
+      count: 5
     },
     {
       id: 'nbd',
       name: 'NBD Performance',
-      icon: '📈',
+      icon: TrendingUp,
       description: 'New business development',
-      color: 'green',
-      gradient: 'from-green-500 to-green-600'
+      color: 'emerald'
     },
     {
       id: 'routes',
       name: 'Route Optimization',
-      icon: '🗺️',
-      description: 'AI-powered route planning',
-      color: 'blue',
-      gradient: 'from-blue-500 to-blue-600'
+      icon: Navigation,
+      description: 'AI route planning',
+      color: 'blue'
     },
-  {
-    id: 'monthly-tour-v2',
-    name: 'Monthly Planning V2',
-    icon: '🚀',
-    description: 'Advanced AI monthly planning',
-    color: 'violet',
-    gradient: 'from-violet-500 to-violet-600'
-  },
     {
       id: 'analytics',
       name: 'Analytics',
-      icon: '📊',
-      description: 'Performance insights & trends',
-      color: 'indigo',
-      gradient: 'from-indigo-500 to-indigo-600'
+      icon: BarChart3,
+      description: 'Performance insights',
+      color: 'indigo'
     },
     {
       id: 'geocoding',
       name: 'Geocoding',
-      icon: '📍',
-      description: 'GPS coordinate management',
-      color: 'teal',
-      gradient: 'from-teal-500 to-teal-600'
+      icon: MapPin,
+      description: 'GPS management',
+      color: 'teal'
     },
     {
       id: 'reports',
       name: 'Reports',
-      icon: '📋',
-      description: 'Detailed territory reports',
-      color: 'amber',
-      gradient: 'from-amber-500 to-amber-600'
-    },
-    {
-      id: 'settings',
-      name: 'Settings',
-      icon: '⚙️',
-      description: 'Dashboard configuration',
-      color: 'gray',
-      gradient: 'from-gray-500 to-gray-600'
+      icon: FileText,
+      description: 'Territory reports',
+      color: 'amber'
     }
   ];
-
-  const getTabColorClasses = (tab, isActive) => {
-    if (isActive) {
-      return `border-${tab.color}-500 text-${tab.color}-600 bg-${tab.color}-50`;
-    }
-    return `border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50`;
-  };
 
   const handleMRChange = (e) => {
     const selectedValue = e.target.value;
@@ -125,258 +147,106 @@ function App() {
     }
   };
 
+  const getIconColor = (color, isActive) => {
+    const colors = {
+      blue: isActive ? 'text-blue-600' : 'text-gray-400',
+      violet: isActive ? 'text-violet-600' : 'text-gray-400',
+      green: isActive ? 'text-green-600' : 'text-gray-400',
+      red: isActive ? 'text-red-600' : 'text-gray-400',
+      purple: isActive ? 'text-purple-600' : 'text-gray-400',
+      emerald: isActive ? 'text-emerald-600' : 'text-gray-400',
+      indigo: isActive ? 'text-indigo-600' : 'text-gray-400',
+      teal: isActive ? 'text-teal-600' : 'text-gray-400',
+      amber: isActive ? 'text-amber-600' : 'text-gray-400'
+    };
+    return colors[color] || 'text-gray-400';
+  };
+
+  const getBadgeColor = (color) => {
+    const colors = {
+      blue: 'bg-blue-100 text-blue-700',
+      violet: 'bg-violet-100 text-violet-700',
+      green: 'bg-green-100 text-green-700',
+      red: 'bg-red-100 text-red-700',
+      purple: 'bg-purple-100 text-purple-700',
+      emerald: 'bg-emerald-100 text-emerald-700',
+      indigo: 'bg-indigo-100 text-indigo-700',
+      teal: 'bg-teal-100 text-teal-700',
+      amber: 'bg-amber-100 text-amber-700'
+    };
+    return colors[color] || 'bg-gray-100 text-gray-700';
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'overview':
+        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+      
+      case 'monthly-planning':
+        return (
+          <MonthlyPlanDashboardV2
+            selectedMR={selectedMR}
+            selectedMRName={selectedMRName}
+            // Pass shared month/year state
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            onMonthChange={setSelectedMonth}
+            onYearChange={setSelectedYear}
+          />
+        );
+      
+      case 'weekly-revision':
+        // FIXED: Pass the correct props
+        return (
+          <WeeklyRevisionDashboard 
+            mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}  // Pass string, not null for ALL_MRS
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            mrData={selectedMR}  // Pass full MR object for context
+            onRevisionComplete={(result) => {
+              console.log('✅ Revision completed:', result);
+              // Optional: Show success message or refresh other components
+            }}
+          />
+        );
+      
       case 'emergency':
         return <EmergencyDashboard />;
+      
       case 'quality':
         return <VisitQualityMonitor mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} />;
+      
       case 'nbd':
         return <NBDPerformanceDashboard 
           mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
           dateRange={nbdDateRange}
           performanceFilter={nbdPerformanceFilter}
         />;
+      
       case 'routes':
         return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
-     
-      case 'monthly-tour-v2': 
-        return (
-          <MonthlyPlanDashboardV2
-            selectedMR={selectedMR}
-            selectedMRName={selectedMRName}
-          />
-        );
+      
       case 'geocoding':
         return <GeocodingDashboard />;
+      
       case 'analytics':
-        return (
-          <div className="min-h-screen bg-slate-50 p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="text-center py-20">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                  <span className="text-3xl text-white">📊</span>
-                </div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">Advanced Analytics Dashboard</h2>
-                <p className="text-gray-600 text-lg mb-8">Comprehensive performance insights and predictive analytics</p>
-                
-                {/* Show MR-specific preview */}
-                {selectedMR && (
-                  <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto border border-gray-200">
-                    <h3 className="text-xl font-semibold text-gray-800 mb-6">MR Analytics Preview</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                      <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
-                        <h4 className="font-semibold text-indigo-800 mb-2">Territory Performance</h4>
-                        <div className="space-y-2 text-sm text-indigo-700">
-                          <p><span className="font-medium">Territory:</span> {selectedMR.territory}</p>
-                          <p><span className="font-medium">Monthly Target:</span> ₹{selectedMR.monthly_target?.toLocaleString()}</p>
-                          <p><span className="font-medium">Manager:</span> {selectedMR.manager_name || 'Not assigned'}</p>
-                        </div>
-                      </div>
-                      <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                        <h4 className="font-semibold text-green-800 mb-2">Coming Soon</h4>
-                        <div className="space-y-1 text-sm text-green-700">
-                          <p>• Revenue trend analysis</p>
-                          <p>• Customer behavior insights</p>
-                          <p>• Predictive performance modeling</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-                  <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                      <span className="text-white text-xl">📈</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 mb-3">Territory Performance Trends</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">Historical performance analysis with predictive forecasting and trend identification</p>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                      <span className="text-white text-xl">🎯</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 mb-3">MR Efficiency Metrics</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">Individual performance tracking, ranking systems, and efficiency optimization recommendations</p>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                      <span className="text-white text-xl">💡</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 mb-3">Revenue Optimization</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">Territory reallocation suggestions and optimization strategies based on data insights</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
+        return <AnalyticsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+      
       case 'reports':
-        return (
-          <div className="min-h-screen bg-slate-50 p-6">
-            <div className="max-w-7xl mx-auto">
-              <div className="text-center py-20">
-                <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                  <span className="text-3xl text-white">📋</span>
-                </div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-4">Comprehensive Reports Center</h2>
-                <p className="text-gray-600 text-lg mb-8">Advanced reporting system with data exports and insights</p>
-                
-                {/* MR-specific reports */}
-                {selectedMR && (
-                  <div className="bg-amber-50 rounded-xl p-6 max-w-2xl mx-auto mb-8 border border-amber-200">
-                    <h3 className="font-semibold text-amber-800 mb-3">Reports for {selectedMR.name}</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="text-amber-700">
-                        <span className="font-medium">Territory:</span> {selectedMR.territory}
-                      </div>
-                      <div className="text-amber-700">
-                        <span className="font-medium">Employee ID:</span> {selectedMR.employee_id}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                  <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                      <span className="text-white text-xl">📊</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 mb-4">Monthly Territory Reports</h3>
-                    <p className="text-gray-600 text-sm mb-6 leading-relaxed">Detailed performance summaries with KPI analysis and trend comparisons</p>
-                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-                      Generate Report
-                    </button>
-                  </div>
-                  <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                      <span className="text-white text-xl">🔍</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 mb-4">Visit Quality Analysis</h3>
-                    <p className="text-gray-600 text-sm mb-6 leading-relaxed">Comprehensive quality metrics and suspicious activity detection reports</p>
-                    <button className="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-                      Export Data
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 'settings':
-        return (
-          <div className="min-h-screen bg-slate-50 p-6">
-            <div className="max-w-5xl mx-auto">
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="w-12 h-12 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl flex items-center justify-center">
-                    <span className="text-white text-xl">⚙️</span>
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Dashboard Settings</h2>
-                    <p className="text-gray-600">Configure alerts, thresholds, and system preferences</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-8">
-                  <div className="border-b border-gray-200 pb-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Alert Thresholds</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Visit Duration (minutes)</label>
-                          <input type="number" defaultValue="2" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                          <p className="text-xs text-gray-500 mt-1">Visits shorter than this trigger alerts</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Maximum Visit Duration (hours)</label>
-                          <input type="number" defaultValue="3" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                          <p className="text-xs text-gray-500 mt-1">Visits longer than this trigger review</p>
-                        </div>
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Zero ROI Visit Threshold</label>
-                          <input type="number" defaultValue="10" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                          <p className="text-xs text-gray-500 mt-1">Territory flagged after this many zero-outcome visits</p>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Low Revenue per Visit (₹)</label>
-                          <input type="number" defaultValue="100" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                          <p className="text-xs text-gray-500 mt-1">Revenue threshold for performance alerts</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="border-b border-gray-200 pb-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Notification Preferences</h3>
-                    <div className="space-y-4">
-                      <label className="flex items-center">
-                        <input type="checkbox" defaultChecked className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                        <span className="text-gray-700">Email alerts for critical territories</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="checkbox" defaultChecked className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                        <span className="text-gray-700">Real-time suspicious visit notifications</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="checkbox" className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                        <span className="text-gray-700">Daily performance summary reports</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="checkbox" defaultChecked className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
-                        <span className="text-gray-700">Weekly territory performance updates</span>
-                      </label>
-                    </div>
-                  </div>
-                  
-                  <div className="border-b border-gray-200 pb-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Data Refresh Settings</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-3">Dashboard Refresh Rate</label>
-                        <div className="space-y-2">
-                          <label className="flex items-center">
-                            <input type="radio" name="refresh" defaultChecked className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                            <span className="text-gray-700">Auto-refresh every 30 minutes</span>
-                          </label>
-                          <label className="flex items-center">
-                            <input type="radio" name="refresh" className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                            <span className="text-gray-700">Auto-refresh every hour</span>
-                          </label>
-                          <label className="flex items-center">
-                            <input type="radio" name="refresh" className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500" />
-                            <span className="text-gray-700">Manual refresh only</span>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="pt-6">
-                    <button className="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors shadow-sm">
-                      Save All Settings
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
+        return <ReportsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+      
       default:
-        return <EmergencyDashboard />;
+        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} />;
     }
   };
 
   if (mrLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg font-medium">Loading Medical Representatives...</p>
-          <p className="text-gray-500 text-sm mt-2">Connecting to database</p>
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading TourPlan Pro</h2>
+          <p className="text-gray-600">Connecting to territory management system...</p>
         </div>
       </div>
     );
@@ -384,10 +254,12 @@ function App() {
 
   if (mrError) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center p-8 bg-white rounded-xl shadow-lg max-w-md border border-gray-200">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Database Connection Error</h2>
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="h-8 w-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h2>
           <p className="text-gray-600 mb-4">{mrError}</p>
           <button 
             onClick={() => window.location.reload()}
@@ -400,30 +272,123 @@ function App() {
     );
   }
 
+  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
   return (
-    <div className="App min-h-screen bg-slate-100">
-      {/* Header with Live MR Selector */}
-      <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-blue-900 text-white shadow-2xl">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center">
-                  <span className="text-xl">🏥</span>
-                </div>
-                Kairali Analytics - Master Dashboard
-              </h1>
-              <p className="text-blue-100 text-lg">Advanced field sales analytics and territory management system</p>
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
+      {/* Sidebar */}
+      <div className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
+        sidebarCollapsed ? 'w-16' : 'w-64'
+      }`}>
+        {/* Logo & Collapse Button */}
+        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
+          {!sidebarCollapsed && (
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-violet-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">TP</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="font-bold text-gray-900 truncate">TourPlan Pro</h1>
+                <p className="text-xs text-gray-500 truncate">Territory Management</p>
+              </div>
             </div>
+          )}
+          <button 
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${sidebarCollapsed ? 'rotate-90' : '-rotate-90'}`} />
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
             
-            <div className="flex items-center gap-6">
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200 group ${
+                  isActive 
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                title={sidebarCollapsed ? item.name : ''}
+              >
+                <Icon className={`h-5 w-5 ${getIconColor(item.color, isActive)} transition-colors flex-shrink-0`} />
+                {!sidebarCollapsed && (
+                  <>
+                    <div className="ml-3 flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{item.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{item.description}</div>
+                    </div>
+                    <div className="flex items-center space-x-2 flex-shrink-0">
+                      {item.badge && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                      {item.count && (
+                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getBadgeColor(item.color)}`}>
+                          {item.count}
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* User Profile */}
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <User className="h-4 w-4 text-white" />
+            </div>
+            {!sidebarCollapsed && (
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm text-gray-900 truncate">Admin User</div>
+                <div className="text-xs text-gray-500 truncate">Territory Manager</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+        {/* Fixed Top Section */}
+        <div className="fixed top-0 right-0 bg-white border-b border-gray-200 z-20" style={{ left: sidebarCollapsed ? '64px' : '256px' }}>
+          {/* Top Header */}
+          <header className="h-16 flex items-center justify-between px-4 lg:px-6">
+            <div className="flex items-center space-x-4">
+              <h2 className="text-lg lg:text-xl font-bold text-gray-900 truncate">
+                {navigationItems.find(item => item.id === activeTab)?.name || 'Dashboard'}
+              </h2>
+              <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-500">
+                <Calendar className="h-4 w-4" />
+                <span>{new Date().toLocaleDateString('en-US', { 
+                  weekday: 'short', 
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric' 
+                })}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 lg:space-x-4">
               {/* MR Selector */}
-              <div className="flex items-center gap-3">
-                <label className="text-blue-100 font-medium text-sm">Active MR:</label>
+              <div className="flex items-center space-x-2 lg:space-x-3">
+                <label className="hidden lg:block text-sm font-medium text-gray-700">Medical Rep:</label>
                 <select 
                   value={selectedMRName} 
                   onChange={handleMRChange}
-                  className="bg-white text-gray-800 px-4 py-2 rounded-lg border-0 font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 min-w-48 text-sm"
+                  className="bg-white border border-gray-300 rounded-lg px-2 lg:px-3 py-2 text-xs lg:text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-32 lg:min-w-48"
                   disabled={mrList.length === 0}
                 >
                   <option value="ALL_MRS">All MRs ({totalMRs})</option>
@@ -438,158 +403,183 @@ function App() {
                   )}
                 </select>
               </div>
-              
-              {/* NBD Specific Filters - Show only when NBD tab is active */}
-              {activeTab === 'nbd' && (
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-blue-100 font-medium text-sm">Date Range:</label>
-                    <select 
-                      value={nbdDateRange} 
-                      onChange={(e) => setNbdDateRange(e.target.value)}
-                      className="bg-white text-gray-800 px-3 py-2 rounded-lg border-0 font-medium shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
-                    >
-                      <option value={7}>Last 7 days</option>
-                      <option value={30}>Last 30 days</option>
-                      <option value={90}>Last 90 days</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-blue-100 font-medium text-sm">Performance:</label>
-                    <select 
-                      value={nbdPerformanceFilter} 
-                      onChange={(e) => setNbdPerformanceFilter(e.target.value)}
-                      className="bg-white text-gray-800 px-3 py-2 rounded-lg border-0 font-medium shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
-                    >
-                      <option value="all">All Performance</option>
-                      <option value="good">Good Performers</option>
-                      <option value="insufficient">Insufficient Focus</option>
-                      <option value="poor">Poor Conversion</option>
-                    </select>
-                  </div>
+
+              {/* Month/Year Selectors - Show for Monthly Planning and Weekly Revision */}
+              {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
+                <div className="flex items-center space-x-2">
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                    className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {monthNames.slice(1).map((month, index) => (
+                      <option key={index + 1} value={index + 1}>
+                        {month}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {[2024, 2025, 2026].map(year => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
-              
-              {/* Stats */}
-              <div className="text-right">
-                <div className="text-sm text-blue-100">Total Active MRs</div>
-                <div className="font-semibold text-xl">{totalMRs}</div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-1 lg:space-x-2">
+                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <Search className="h-4 w-4 lg:h-5 lg:w-5" />
+                </button>
+                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
+                </button>
+                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
+                </button>
               </div>
             </div>
-          </div>
-          
-          {/* MR Details */}
+          </header>
+
+          {/* MR Details Bar */}
           {selectedMR && selectedMRName !== 'ALL_MRS' && (
-            <div className="mt-4 flex items-center gap-6 text-sm">
-              <div className="bg-blue-500 bg-opacity-30 px-3 py-1 rounded-full border border-blue-400">
-                <span className="text-blue-100">Territory: </span>
-                <span className="font-semibold text-white">{selectedMR.territory}</span>
-              </div>
-              <div className="bg-green-500 bg-opacity-30 px-3 py-1 rounded-full border border-green-400">
-                <span className="text-green-100">Target: </span>
-                <span className="font-semibold text-white">₹{selectedMR.monthly_target?.toLocaleString() || 'N/A'}</span>
-              </div>
-              {selectedMR.manager_name && (
-                <div className="bg-yellow-500 bg-opacity-30 px-3 py-1 rounded-full border border-yellow-400">
-                  <span className="text-yellow-100">Manager: </span>
-                  <span className="font-semibold text-white">{selectedMR.manager_name}</span>
+            <div className="bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 px-4 lg:px-6 py-3">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
+                <div className="flex flex-wrap items-center gap-3 lg:gap-6">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="font-semibold text-gray-900 text-sm lg:text-base">{selectedMR.name}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
+                    <div className="flex items-center space-x-1">
+                      <MapPin className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
+                      <span className="text-gray-700">{selectedMR.territory}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Target className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
+                      <span className="text-gray-700">₹{selectedMR.monthly_target?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    {selectedMR.manager_name && (
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
+                        <span className="text-gray-700">{selectedMR.manager_name}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-              <div className="bg-purple-500 bg-opacity-30 px-3 py-1 rounded-full border border-purple-400">
-                <span className="text-purple-100">Joined: </span>
-                <span className="font-semibold text-white">
-                  {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}
-                </span>
+                <div className="flex items-center space-x-2 lg:space-x-3 text-xs lg:text-sm text-gray-600">
+                  <span>Joined: {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}</span>
+                  <span className="hidden lg:inline">•</span>
+                  <span>ID: {selectedMR.employee_id}</span>
+                  {/* Show current month/year for planning tabs */}
+                  {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
+                    <>
+                      <span className="hidden lg:inline">•</span>
+                      <span>{monthNames[selectedMonth]} {selectedYear}</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
-          
+
           {/* All MRs Summary */}
           {selectedMRName === 'ALL_MRS' && (
-            <div className="mt-4 flex items-center gap-6 text-sm">
-              <div className="bg-blue-500 bg-opacity-30 px-3 py-1 rounded-full border border-blue-400">
-                <span className="text-blue-100">Viewing: </span>
-                <span className="font-semibold text-white">All {totalMRs} Active MRs</span>
-              </div>
-              <div className="bg-green-500 bg-opacity-30 px-3 py-1 rounded-full border border-green-400">
-                <span className="text-green-100">Mode: </span>
-                <span className="font-semibold text-white">Comprehensive Analysis</span>
+            <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-100 px-4 lg:px-6 py-3">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
+                <div className="flex items-center space-x-2 lg:space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
+                    <span className="font-semibold text-gray-900 text-sm lg:text-base">Comprehensive Analysis</span>
+                  </div>
+                  <span className="text-gray-600 text-xs lg:text-sm">Viewing all {totalMRs} active Medical Representatives</span>
+                </div>
+                <div className="flex items-center space-x-2 lg:space-x-4 text-xs lg:text-sm text-gray-600">
+                  <span>Total Territories: {totalMRs}</span>
+                  <span className="hidden lg:inline">•</span>
+                  <span>System-wide Overview</span>
+                </div>
               </div>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Professional Tab Navigation */}
-      <div className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex space-x-0 overflow-x-auto scrollbar-hide">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`group relative px-6 py-4 text-sm font-medium transition-all duration-300 border-b-3 whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? `border-${tab.color}-500 text-${tab.color}-600 bg-${tab.color}-50`
-                    : `border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50`
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span className="text-lg">{tab.icon}</span>
-                  <div className="text-left">
-                    <div className="font-semibold">{tab.name}</div>
-                    <div className="text-xs text-gray-400 mt-0.5 hidden lg:block">
-                      {tab.description}
-                    </div>
-                  </div>
-                </div>
-                {activeTab === tab.id && (
-                  <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${tab.gradient} rounded-t-full`}></div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Tab Content */}
-      <div className="tab-content">
-        {renderTabContent()}
-      </div>
-
-      {/* Enhanced Status Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-slate-800 text-white px-6 py-3 text-sm shadow-2xl border-t border-slate-700">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-6">
-            <span className="flex items-center">
-              <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-              Connected to Live Database
-            </span>
-            {selectedMRName !== 'ALL_MRS' && selectedMR && (
-              <span className="hidden md:block text-slate-300">
-                Active MR: {selectedMR.name} ({selectedMR.employee_id})
-              </span>
-            )}
-            {selectedMRName === 'ALL_MRS' && (
-              <span className="hidden md:block text-slate-300">
-                Viewing: All {totalMRs} Active MRs
-              </span>
-            )}
-            <span className="text-slate-400">Last Updated: {new Date().toLocaleTimeString()}</span>
-          </div>
-          <div className="flex items-center space-x-6">
-            <span className="hidden md:block text-slate-300">
-              Active Tab: {tabs.find(t => t.id === activeTab)?.name}
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              <span className="text-slate-400">Kairali Field Sales Analytics v2.1</span>
-            </div>
-          </div>
-        </div>
+        {/* Tab Content with proper top spacing */}
+        <main className="pt-32 lg:pt-28 p-4 lg:p-6">
+          {renderTabContent()}
+        </main>
       </div>
     </div>
   );
 }
+
+// Dashboard Overview Component
+const DashboardOverview = ({ selectedMR, selectedMRName }) => (
+  <div className="space-y-6">
+    <div className="text-center py-20">
+      <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+        <BarChart3 className="h-10 w-10 text-white" />
+      </div>
+      <h2 className="text-3xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
+      <p className="text-gray-600 text-lg mb-8">
+        {selectedMR ? `Territory insights for ${selectedMR.name}` : 'Complete territory management overview'}
+      </p>
+      <div className="bg-blue-50 rounded-xl p-6 max-w-md mx-auto border border-blue-200">
+        <h3 className="font-semibold text-blue-900 mb-2">Coming Soon</h3>
+        <p className="text-blue-700 text-sm">
+          Advanced dashboard overview with KPIs, charts, and performance metrics
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+// Analytics View Component  
+const AnalyticsView = ({ selectedMR, selectedMRName }) => (
+  <div className="space-y-6">
+    <div className="text-center py-20">
+      <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+        <BarChart3 className="h-10 w-10 text-white" />
+      </div>
+      <h2 className="text-3xl font-bold text-gray-900 mb-4">Advanced Analytics</h2>
+      <p className="text-gray-600 text-lg mb-8">
+        Comprehensive performance insights and predictive analytics
+      </p>
+      <div className="bg-indigo-50 rounded-xl p-6 max-w-md mx-auto border border-indigo-200">
+        <h3 className="font-semibold text-indigo-900 mb-2">Coming Soon</h3>
+        <p className="text-indigo-700 text-sm">
+          Advanced analytics dashboard with trends and forecasting
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+// Reports View Component
+const ReportsView = ({ selectedMR, selectedMRName }) => (
+  <div className="space-y-6">
+    <div className="text-center py-20">
+      <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+        <FileText className="h-10 w-10 text-white" />
+      </div>
+      <h2 className="text-3xl font-bold text-gray-900 mb-4">Reports Center</h2>
+      <p className="text-gray-600 text-lg mb-8">
+        Comprehensive reports and data exports
+      </p>
+      <div className="bg-amber-50 rounded-xl p-6 max-w-md mx-auto border border-amber-200">
+        <h3 className="font-semibold text-amber-900 mb-2">Coming Soon</h3>
+        <p className="text-amber-700 text-sm">
+          Advanced reporting system with custom exports
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
 export default App;
