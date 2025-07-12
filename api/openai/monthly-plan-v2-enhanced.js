@@ -65,7 +65,7 @@ async function handleNewPlan(req, res) {
        
        // STEP 3: Build comprehensive plan structure
        const comprehensivePlan = await buildComprehensivePlan(
-           aiPlan, 
+            aiPlan.plan, 
            compressedInput, 
            territoryContext.customers,
            mrName, 
@@ -239,11 +239,20 @@ Return the revised plan in the exact same JSON format as the original plan.
        // Poll for completion
        let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
        
-       while (runStatus.status === 'running' || runStatus.status === 'queued') {
-           await new Promise(resolve => setTimeout(resolve, 1000));
-           runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
-           console.log(`🔄 Revision status: ${runStatus.status}`);
+       while (runStatus.status === 'running' || runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+       await new Promise(resolve => setTimeout(resolve, 1000));
+       runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+       console.log(`🔄 Status: ${runStatus.status}`);
        }
+       
+       // Add this check after the while loop:
+     if (runStatus.status !== 'completed') {
+     console.error('❌ Run status:', runStatus.status);
+      if (runStatus.status === 'failed') {
+        throw new Error(`OpenAI run failed: ${runStatus.last_error?.message}`);
+      }
+     throw new Error(`Unexpected run status: ${runStatus.status}`);
+      }
 
        if (runStatus.status === 'failed') {
            throw new Error(`AI revision failed: ${runStatus.last_error?.message}`);
@@ -306,11 +315,22 @@ async function generateAICompleteSchedule(assistantId, mrName, month, year, comp
        let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
        console.log(`🏃 Run created: ${run.id}, Status: ${runStatus.status}`);
        
-       while (runStatus.status === 'running' || runStatus.status === 'queued') {
-           await new Promise(resolve => setTimeout(resolve, 1000));
-           runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-           console.log(`🔄 Status: ${runStatus.status}`);
+       
+       
+       while (runStatus.status === 'running' || runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+       await new Promise(resolve => setTimeout(resolve, 1000));
+       runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+       console.log(`🔄 Status: ${runStatus.status}`);
        }
+       
+       // Add this check after the while loop:
+    if (runStatus.status !== 'completed') {
+    console.error('❌ Run status:', runStatus.status);
+    if (runStatus.status === 'failed') {
+        throw new Error(`OpenAI run failed: ${runStatus.last_error?.message}`);
+    }
+    throw new Error(`Unexpected run status: ${runStatus.status}`);
+    }
        
        if (runStatus.status === 'failed') {
            console.error('❌ Run failed:', runStatus.last_error);
