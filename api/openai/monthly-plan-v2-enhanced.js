@@ -241,7 +241,7 @@ Return the revised plan in the exact same JSON format as the original plan.
        
        while (runStatus.status === 'running' || runStatus.status === 'queued' || runStatus.status === 'in_progress') {
        await new Promise(resolve => setTimeout(resolve, 1000));
-       runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+       runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
        console.log(`🔄 Status: ${runStatus.status}`);
        }
        
