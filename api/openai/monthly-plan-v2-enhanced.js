@@ -209,6 +209,11 @@ CRITICAL INSTRUCTIONS:
 4. Focus on high-priority customers who were missed
 5. Maintain month-end revenue targets
 6. Return in EXACT same format: mo, cvs, ws structure
+7. NEVER schedule visits on SUNDAYS - Sunday is non-working day
+8. Working days: Monday-Saturday only (6 days/week)
+9. Calculate working days: Total days - Sundays - holidays
+10. Validate: NO visit dates should resolve to Sunday
+11. If Sunday detected: Redistribute to nearest weekday immediately
 
 REVISION TASKS:
 - Analyze gaps from Week ${weekNumber}
@@ -450,6 +455,11 @@ REQUIREMENTS:
 5. Balance weekly workload (target: ~${Math.floor(customerCount/4)} customers per week)
 6. Format dates as DDMM (e.g., "0107" for July 1st)
 7. Provide strategic weekly focus
+8. NEVER schedule visits on SUNDAYS - Sunday is non-working day
+9. Working days: Monday-Saturday only (6 days/week)
+10. Calculate working days: Total days - Sundays - holidays
+11. Validate: NO visit dates should resolve to Sunday
+12. If Sunday detected: Redistribute to nearest weekday immediately
 
 EXACT OUTPUT FORMAT REQUIRED - Use this structure exactly:
 {
