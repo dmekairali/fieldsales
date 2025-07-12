@@ -195,7 +195,7 @@ async decompressForDashboard(storedPlan) {
                area_name: customerInfo.area_name || 'Area',
                total_visits: visitDates.length,
                visit_dates: visitDates.map(date => `${storedPlan.plan_year}-${storedPlan.plan_month.toString().padStart(2, '0')}-${date.substring(0, 2)}`),
-               estimated_revenue: Math.round((storedPlan.total_revenue_target || 2000000) / (storedPlan.total_customers || 90)),
+               estimated_revenue: Math.round((storedPlan.total_revenue_target || 200000) / (storedPlan.total_customers || 90)),
                priority_reason: 'Scheduled visit'
            };
        }),
@@ -206,9 +206,9 @@ async decompressForDashboard(storedPlan) {
        },
        metadata: { thread_id: storedPlan.thread_id, tokens_used: storedPlan.tokens_used },
        quick_stats: {
-           customers_per_day: Math.round((storedPlan.total_customers || 90) / (aiPlan.mo.wd || 26)),
+           customers_per_day: Math.round((aiPlan.mo.tv || 0) / (aiPlan.mo.wd || 26)),
            revenue_per_customer: Math.round((aiPlan.mo.tr || 0) / (storedPlan.total_customers || 1)),
-           areas_covered: Object.keys(aiPlan.cvs || {}).length,
+           areas_covered: new Set((customerData || []).map(c => c.area_name)).size,
            highest_tier_count: storedPlan.total_customers || 90
        }
    };
