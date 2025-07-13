@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Filter,
   ChevronDown,
+  ChevronUp,
   Eye,
   UserMinus,
   UserCheck,
@@ -19,7 +20,11 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Zap
+  Zap,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 
 const EmergencyDashboard = () => {
@@ -29,7 +34,9 @@ const EmergencyDashboard = () => {
     const [error, setError] = useState(null);
     const [selectedFilter, setSelectedFilter] = useState('all');
     const [sortBy, setSortBy] = useState('visits');
+    const [sortDirection, setSortDirection] = useState('desc');
     const [showFilters, setShowFilters] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         fetchTerritoryData();
@@ -116,8 +123,7 @@ const EmergencyDashboard = () => {
                     ...territory,
                     revenue_per_visit: territory.total_visits_90d > 0 ? territory.total_sales_90d / territory.total_visits_90d : 0,
                     conversion_rate: territory.total_visits_90d > 0 ? (territory.converting_visits / territory.total_visits_90d) * 100 : 0
-                })).filter(t => t.total_sales_90d === 0 || t.revenue_per_visit < 100)
-                  .sort((a, b) => b.total_visits_90d - a.total_visits_90d);
+                })).filter(t => t.total_sales_90d === 0 || t.revenue_per_visit < 100);
 
                 setZeroROITerritories(processed);
                 calculateTerritoryStats(processed);
@@ -137,6 +143,22 @@ const EmergencyDashboard = () => {
         };
         
         setTerritoryStats(stats);
+    };
+
+    const handleSort = (column) => {
+        if (sortBy === column) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(column);
+            setSortDirection('desc');
+        }
+    };
+
+    const getSortIcon = (column) => {
+        if (sortBy !== column) return <ArrowUpDown className="h-4 w-4 text-gray-400" />;
+        return sortDirection === 'asc' ? 
+            <ArrowUp className="h-4 w-4 text-blue-600" /> : 
+            <ArrowDown className="h-4 w-4 text-blue-600" />;
     };
 
     const flagTerritory = async (territory, action) => {
@@ -185,19 +207,66 @@ const EmergencyDashboard = () => {
     const getFilteredTerritories = () => {
         let filtered = [...zeroROITerritories];
 
+        // Apply filter
         if (selectedFilter === 'zero_sales') {
             filtered = filtered.filter(t => (t.total_sales_90d || 0) === 0);
         } else if (selectedFilter === 'low_performance') {
             filtered = filtered.filter(t => t.revenue_per_visit > 0 && t.revenue_per_visit < 100);
         }
 
-        if (sortBy === 'visits') {
-            filtered = filtered.sort((a, b) => b.total_visits_90d - a.total_visits_90d);
-        } else if (sortBy === 'revenue') {
-            filtered = filtered.sort((a, b) => (b.total_sales_90d || 0) - (a.total_sales_90d || 0));
-        } else if (sortBy === 'conversion') {
-            filtered = filtered.sort((a, b) => (a.conversion_rate || 0) - (b.conversion_rate || 0));
+        // Apply search filter
+        if (searchTerm.trim()) {
+            const search = searchTerm.toLowerCase();
+            filtered = filtered.filter(t => 
+                (t.territory || '').toLowerCase().includes(search) ||
+                (t.mr_name || '').toLowerCase().includes(search) ||
+                t.total_visits_90d.toString().includes(search) ||
+                t.total_sales_90d.toString().includes(search) ||
+                t.revenue_per_visit.toFixed(2).includes(search) ||
+                t.conversion_rate.toFixed(1).includes(search)
+            );
         }
+
+        // Apply sorting
+        filtered.sort((a, b) => {
+            let aValue, bValue;
+            
+            switch (sortBy) {
+                case 'territory':
+                    aValue = (a.territory || '').toLowerCase();
+                    bValue = (b.territory || '').toLowerCase();
+                    break;
+                case 'mr_name':
+                    aValue = (a.mr_name || '').toLowerCase();
+                    bValue = (b.mr_name || '').toLowerCase();
+                    break;
+                case 'visits':
+                    aValue = a.total_visits_90d || 0;
+                    bValue = b.total_visits_90d || 0;
+                    break;
+                case 'revenue':
+                    aValue = a.total_sales_90d || 0;
+                    bValue = b.total_sales_90d || 0;
+                    break;
+                case 'revenue_per_visit':
+                    aValue = a.revenue_per_visit || 0;
+                    bValue = b.revenue_per_visit || 0;
+                    break;
+                case 'conversion':
+                    aValue = a.conversion_rate || 0;
+                    bValue = b.conversion_rate || 0;
+                    break;
+                default:
+                    aValue = a.total_visits_90d || 0;
+                    bValue = b.total_visits_90d || 0;
+            }
+
+            if (typeof aValue === 'string') {
+                return sortDirection === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+            } else {
+                return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+            }
+        });
 
         return filtered;
     };
@@ -406,19 +475,6 @@ const EmergencyDashboard = () => {
                         
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-2">
-                                <span className="text-sm font-medium text-gray-700">Sort by:</span>
-                                <select 
-                                    value={sortBy} 
-                                    onChange={(e) => setSortBy(e.target.value)}
-                                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
-                                >
-                                    <option value="visits">Visit Count</option>
-                                    <option value="revenue">Revenue</option>
-                                    <option value="conversion">Conversion Rate</option>
-                                </select>
-                            </div>
-                            
-                            <div className="flex items-center space-x-2">
                                 <button
                                     onClick={() => bulkAction('REASSIGN')}
                                     className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -440,9 +496,9 @@ const EmergencyDashboard = () => {
             )}
 
             {/* Territory Analysis Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
                 <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                         <div>
                             <h2 className="text-xl font-bold flex items-center space-x-3">
                                 <Zap className="h-6 w-6" />
@@ -450,126 +506,241 @@ const EmergencyDashboard = () => {
                             </h2>
                             <p className="text-red-100 mt-2">Territories requiring immediate attention and intervention</p>
                         </div>
-                        <div className="text-right">
-                            <div className="text-sm text-red-200">Priority Actions Required</div>
-                            <div className="text-2xl font-bold">{filteredTerritories.filter(t => (t.total_sales_90d || 0) === 0).length}</div>
+                        
+                        {/* Search Box */}
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Search className="h-5 w-5 text-red-300" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search territories, MRs, values..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="block w-full pl-10 pr-3 py-2 border border-red-300 bg-white bg-opacity-20 placeholder-red-200 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                            />
                         </div>
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Territory</th>
-                                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MR Name</th>
-                                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Visits (90d)</th>
-                                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total Sales</th>
-                                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue/Visit</th>
-                                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion %</th>
-                                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {filteredTerritories.length === 0 ? (
+                {/* Table with fixed height and scroll */}
+                <div className="overflow-hidden">
+                    <div className="max-h-96 overflow-y-auto">
+                        <table className="w-full">
+                            <thead className="bg-gray-50 sticky top-0 z-10">
                                 <tr>
-                                    <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
-                                        <div className="text-center">
-                                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                <CheckCircle className="h-8 w-8 text-green-600" />
-                                            </div>
-                                            <h3 className="text-lg font-medium text-gray-900 mb-2">No Critical Territories Found!</h3>
-                                            <p className="text-gray-600">All territories are performing well for the selected filter.</p>
+                                    <th 
+                                        className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                                        onClick={() => handleSort('territory')}
+                                    >
+                                        <div className="flex items-center space-x-1">
+                                            <span>Territory</span>
+                                            <span className="group-hover:text-blue-600">
+                                                {getSortIcon('territory')}
+                                            </span>
                                         </div>
-                                    </td>
+                                    </th>
+                                    <th 
+                                        className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                                        onClick={() => handleSort('mr_name')}
+                                    >
+                                        <div className="flex items-center space-x-1">
+                                            <span>MR Name</span>
+                                            <span className="group-hover:text-blue-600">
+                                                {getSortIcon('mr_name')}
+                                            </span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                                    <th 
+                                        className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                                        onClick={() => handleSort('visits')}
+                                    >
+                                        <div className="flex items-center justify-center space-x-1">
+                                            <span>Visits (90d)</span>
+                                            <span className="group-hover:text-blue-600">
+                                                {getSortIcon('visits')}
+                                            </span>
+                                        </div>
+                                    </th>
+                                    <th 
+                                        className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                                        onClick={() => handleSort('revenue')}
+                                    >
+                                        <div className="flex items-center justify-center space-x-1">
+                                            <span>Total Sales</span>
+                                            <span className="group-hover:text-blue-600">
+                                                {getSortIcon('revenue')}
+                                            </span>
+                                        </div>
+                                    </th>
+                                    <th 
+                                        className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                                        onClick={() => handleSort('revenue_per_visit')}
+                                    >
+                                        <div className="flex items-center justify-center space-x-1">
+                                            <span>Revenue/Visit</span>
+                                            <span className="group-hover:text-blue-600">
+                                                {getSortIcon('revenue_per_visit')}
+                                            </span>
+                                        </div>
+                                    </th>
+                                    <th 
+                                        className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors group"
+                                        onClick={() => handleSort('conversion')}
+                                    >
+                                        <div className="flex items-center justify-center space-x-1">
+                                            <span>Conversion %</span>
+                                            <span className="group-hover:text-blue-600">
+                                                {getSortIcon('conversion')}
+                                            </span>
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                 </tr>
-                            ) : (
-                                filteredTerritories.map((territory, index) => {
-                                    const priorityBadge = getPriorityBadge(territory);
-                                    const PriorityIcon = priorityBadge.icon;
-                                    
-                                    return (
-                                        <tr key={index} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center space-x-3">
-                                                    <MapPin className="h-4 w-4 text-gray-400" />
-                                                    <span className="font-medium text-gray-900">{territory.territory || 'Unknown Territory'}</span>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredTerritories.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
+                                            <div className="text-center">
+                                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <CheckCircle className="h-8 w-8 text-green-600" />
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center space-x-3">
-                                                    <Users className="h-4 w-4 text-gray-400" />
-                                                    <span className="text-gray-700 font-medium">{territory.mr_name || 'Unknown MR'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold border ${priorityBadge.color}`}>
-                                                    <PriorityIcon className="h-3 w-3" />
-                                                    <span>{priorityBadge.label}</span>
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
-                                                    {territory.total_visits_90d || 0}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold ${
-                                                    (territory.total_sales_90d || 0) === 0 
-                                                        ? 'bg-red-100 text-red-800' 
-                                                        : 'bg-green-100 text-green-800'
-                                                }`}>
-                                                    ₹{(territory.total_sales_90d || 0).toLocaleString()}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className="text-sm font-semibold text-gray-900">
-                                                    ₹{(territory.revenue_per_visit || 0).toFixed(2)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                                                    (territory.conversion_rate || 0) === 0 
-                                                        ? 'bg-red-100 text-red-800' 
-                                                        : (territory.conversion_rate || 0) < 10 
-                                                        ? 'bg-yellow-100 text-yellow-800'
-                                                        : 'bg-green-100 text-green-800'
-                                                }`}>
-                                                    {(territory.conversion_rate || 0).toFixed(1)}%
-                                                </span>
-                                            </td>
-                                           <td className="px-6 py-4 text-center">
-    <div className="flex items-center justify-center space-x-2">
-        <button 
-            onClick={() => flagTerritory(territory.territory, 'INVESTIGATE')}
-            className="flex items-center space-x-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-        >
-            <Eye className="h-3 w-3" />
-            <span>Investigate</span>
-        </button>
-        <button 
-            onClick={() => flagTerritory(territory.territory, 'REASSIGN')}
-            className="flex items-center space-x-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-        >
-            <UserCheck className="h-3 w-3" />
-            <span>Reassign</span>
-        </button>
-        <button 
-            onClick={() => flagTerritory(territory.territory, 'REMOVE')}
-            className="flex items-center space-x-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-        >
-            <UserMinus className="h-3 w-3" />
-            <span>Remove</span>
-        </button>
-    </div>
-</td>
-                                        </tr>
-                                    );
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                                                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                                    {searchTerm ? 'No matching territories found' : 'No Critical Territories Found!'}
+                                                </h3>
+                                                <p className="text-gray-600">
+                                                    {searchTerm 
+                                                        ? `No territories match "${searchTerm}". Try adjusting your search.`
+                                                        : 'All territories are performing well for the selected filter.'
+                                                    }
+                                                </p>
+                                                {searchTerm && (
+                                                    <button
+                                                        onClick={() => setSearchTerm('')}
+                                                        className="mt-3 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                                    >
+                                                        Clear search
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredTerritories.map((territory, index) => {
+                                        const priorityBadge = getPriorityBadge(territory);
+                                        const PriorityIcon = priorityBadge.icon;
+                                        
+                                        return (
+                                            <tr key={index} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <MapPin className="h-4 w-4 text-gray-400" />
+                                                        <span className="font-medium text-gray-900">{territory.territory || 'Unknown Territory'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <Users className="h-4 w-4 text-gray-400" />
+                                                        <span className="text-gray-700 font-medium">{territory.mr_name || 'Unknown MR'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-bold border ${priorityBadge.color}`}>
+                                                        <PriorityIcon className="h-3 w-3" />
+                                                        <span>{priorityBadge.label}</span>
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                                                        {territory.total_visits_90d || 0}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-bold ${
+                                                        (territory.total_sales_90d || 0) === 0 
+                                                            ? 'bg-red-100 text-red-800' 
+                                                            : 'bg-green-100 text-green-800'
+                                                    }`}>
+                                                        ₹{(territory.total_sales_90d || 0).toLocaleString()}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="text-sm font-semibold text-gray-900">
+                                                        ₹{(territory.revenue_per_visit || 0).toFixed(2)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                                                        (territory.conversion_rate || 0) === 0 
+                                                            ? 'bg-red-100 text-red-800' 
+                                                            : (territory.conversion_rate || 0) < 10 
+                                                            ? 'bg-yellow-100 text-yellow-800'
+                                                            : 'bg-green-100 text-green-800'
+                                                    }`}>
+                                                        {(territory.conversion_rate || 0).toFixed(1)}%
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className="flex items-center justify-center space-x-2">
+                                                        <button 
+                                                            onClick={() => flagTerritory(territory.territory, 'INVESTIGATE')}
+                                                            className="flex items-center space-x-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                                        >
+                                                            <Eye className="h-3 w-3" />
+                                                            <span>Investigate</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => flagTerritory(territory.territory, 'REASSIGN')}
+                                                            className="flex items-center space-x-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                                        >
+                                                            <UserCheck className="h-3 w-3" />
+                                                            <span>Reassign</span>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => flagTerritory(territory.territory, 'REMOVE')}
+                                                            className="flex items-center space-x-1 bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                                                        >
+                                                            <UserMinus className="h-3 w-3" />
+                                                            <span>Remove</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {/* Table Footer with Results Info */}
+                    {filteredTerritories.length > 0 && (
+                        <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                            <div className="flex items-center justify-between text-sm text-gray-700">
+                                <div>
+                                    Showing {filteredTerritories.length} of {zeroROITerritories.length} territories
+                                    {searchTerm && (
+                                        <span className="ml-2 text-blue-600">
+                                            (filtered by "{searchTerm}")
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <span>Sorted by: {sortBy.replace('_', ' ')} ({sortDirection})</span>
+                                    {searchTerm && (
+                                        <button
+                                            onClick={() => setSearchTerm('')}
+                                            className="text-blue-600 hover:text-blue-800 font-medium"
+                                        >
+                                            Clear search
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
