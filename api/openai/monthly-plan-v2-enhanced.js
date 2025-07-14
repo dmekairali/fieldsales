@@ -714,7 +714,7 @@ function sanitizeAiPlan(aiPlan) {
    // Sanitize monetary values
    if (sanitized.mo) {
        if (typeof sanitized.mo.tr === 'string') {
-           sanitized.mo.tr = 2000000; // Default 20 lakh
+           sanitized.mo.tr = 200000; // Default 20 lakh
        }
        sanitized.mo.tv = parseInt(sanitized.mo.tv) || 0;
        sanitized.mo.wd = parseInt(sanitized.mo.wd) || 0;
@@ -726,7 +726,7 @@ function sanitizeAiPlan(aiPlan) {
    if (sanitized.ws) {
        Object.keys(sanitized.ws).forEach(week => {
            if (typeof sanitized.ws[week].revenue_target === 'string') {
-               sanitized.ws[week].revenue_target = Math.round(2000000 / 4); // 5 lakh per week
+               sanitized.ws[week].revenue_target = Math.round(200000 / 4); // 5 lakh per week
            }
            sanitized.ws[week].customers = parseInt(sanitized.ws[week].customers) || 0;
        });
