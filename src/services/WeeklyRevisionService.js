@@ -1,5 +1,5 @@
 // src/services/WeeklyRevisionService.js
-// Complete backend integration for weekly revision system
+// Complete backend integration for weekly revision system with real database ID mapping
 
 import { supabase } from '../supabaseClient';
 
@@ -11,7 +11,135 @@ class WeeklyRevisionService {
     }
 
     // ===================================================================
-    // AI-POWERED WEEKLY REVISION
+    // REAL DATABASE ID MAPPING METHODS
+    // ===================================================================
+
+    /**
+     * Extract ID mapping from monthly plan
+     */
+    extractIdMappingFromPlan(monthlyPlan) {
+        try {
+            // Try to get mapping from stored plan data
+            const planJson = monthlyPlan.current_plan_json || monthlyPlan.original_plan_json;
+            
+            if (planJson?.decompression_data?.customer_master) {
+                // Enhanced plan format - reconstruct real ID mapping
+                const customerMaster = planJson.decompression_data.customer_master;
+                const idMapping = {};
+                const reverseMapping = {};
+                
+                // If customer master has real IDs stored
+                Object.entries(customerMaster).forEach(([customerCode, customerData]) => {
+                    if (customerData.id) {
+                        const realId = customerData.id.toString();
+                        idMapping[realId] = customerCode;
+                        reverseMapping[customerCode] = realId;
+                    }
+                });
+                
+                if (Object.keys(idMapping).length > 0) {
+                    console.log(`🔗 Extracted REAL ID mapping for ${Object.keys(idMapping).length} customers`);
+                    return { idMapping, reverseMapping };
+                }
+            }
+            
+            // Legacy plan format - need to reconstruct by fetching current customer data
+            if (planJson?.cvs) {
+                return this.reconstructIdMappingFromDatabase(Object.keys(planJson.cvs));
+            }
+            
+            console.warn('⚠️ No customer data found in plan for ID mapping');
+            return { idMapping: {}, reverseMapping: {} };
+            
+        } catch (error) {
+            console.error('❌ Error extracting ID mapping:', error);
+            return { idMapping: {}, reverseMapping: {} };
+        }
+    }
+
+    /**
+     * Reconstruct ID mapping from database
+     */
+    async reconstructIdMappingFromDatabase(customerCodes) {
+        try {
+            console.log(`🔍 Reconstructing ID mapping for ${customerCodes.length} customers from database`);
+            
+            const { data: customers, error } = await supabase
+                .from('customer_tiers')
+                .select('id, customer_code')
+                .in('customer_code', customerCodes);
+                
+            if (error) {
+                console.error('❌ Error fetching customer IDs:', error);
+                return { idMapping: {}, reverseMapping: {} };
+            }
+            
+            const idMapping = {};
+            const reverseMapping = {};
+            
+            customers?.forEach(customer => {
+                const realId = customer.id.toString();
+                const customerCode = customer.customer_code;
+                idMapping[realId] = customerCode;
+                reverseMapping[customerCode] = realId;
+            });
+            
+            console.log(`✅ Reconstructed REAL ID mapping for ${Object.keys(idMapping).length} customers`);
+            return { idMapping, reverseMapping };
+            
+        } catch (error) {
+            console.error('❌ Failed to reconstruct ID mapping:', error);
+            return { idMapping: {}, reverseMapping: {} };
+        }
+    }
+
+    /**
+     * Compress performance data with ID mapping
+     */
+    compressPerformanceDataWithIds(performanceData, reverseMapping) {
+        const compressedVisitDetails = performanceData.visit_details?.map(visit => {
+            const customerId = reverseMapping[visit.customer] || visit.customer;
+            return `${customerId}|${visit.area}|${visit.revenue}|${visit.date}`;
+        }).join(';') || '';
+        
+        const compressedAreaBreakdown = Object.entries(performanceData.area_breakdown || {}).map(([area, data]) => 
+            `${area}:${data.visits}:${data.revenue}`
+        ).join(',');
+        
+        return {
+            week_performance: `${performanceData.week_dates?.start}|${performanceData.week_dates?.end}|${performanceData.total_visits}|${performanceData.total_revenue}|${performanceData.unique_customers}|${performanceData.conversion_rate}`,
+            areas_covered: performanceData.areas_covered?.join(',') || '',
+            visit_details: compressedVisitDetails,
+            area_breakdown: compressedAreaBreakdown,
+            daily_summary: Object.entries(performanceData.daily_breakdown || {}).map(([date, data]) => 
+                `${date}:${data.visits}:${data.revenue}`
+            ).join(';'),
+            performance_metrics: {
+                avg_revenue_per_visit: performanceData.avg_revenue_per_visit || 0,
+                sample_distribution: performanceData.sample_distribution || 0,
+                working_days_utilized: Object.keys(performanceData.daily_breakdown || {}).length
+            }
+        };
+    }
+
+    /**
+     * Calculate token savings
+     */
+    calculateTokenSavings(originalVisitDetails, compressedVisitDetails) {
+        if (!originalVisitDetails || originalVisitDetails.length === 0) return 0;
+        
+        const originalTokens = originalVisitDetails.reduce((sum, visit) => {
+            return sum + (visit.customer?.length || 10);
+        }, 0);
+        
+        // Estimate compressed tokens (assuming ~4 chars per ID vs ~15 chars per customer code)
+        const estimatedCompressedTokens = originalVisitDetails.length * 4;
+        
+        return Math.round((1 - (estimatedCompressedTokens / originalTokens)) * 100);
+    }
+
+    // ===================================================================
+    // AI-POWERED WEEKLY REVISION WITH ID MAPPING
     // ===================================================================
 
     /**
@@ -28,7 +156,22 @@ class WeeklyRevisionService {
                 has_context: !!revisionData.additional_context
             });
 
-            // Step 1: Fetch actual visit data from database
+            // Step 1: Get current monthly plan first (needed for ID mapping)
+            const currentPlan = await this.getCurrentMonthlyPlan(
+                revisionData.mr_name, 
+                revisionData.month, 
+                revisionData.year
+            );
+
+            if (!currentPlan) {
+                throw new Error('No active monthly plan found for revision');
+            }
+
+            // Step 2: Extract ID mapping from the plan
+            const { idMapping, reverseMapping } = await this.extractIdMappingFromPlan(currentPlan);
+            console.log(`🔗 Extracted ID mapping for ${Object.keys(idMapping).length} customers`);
+
+            // Step 3: Fetch actual visit data from database
             const actualData = await this.fetchActualVisitData(
                 revisionData.mr_name, 
                 revisionData.month, 
@@ -43,27 +186,21 @@ class WeeklyRevisionService {
                 areas_covered: actualData.areas_covered?.length || 0
             });
 
-            // Step 2: Get current monthly plan
-            const currentPlan = await this.getCurrentMonthlyPlan(
-                revisionData.mr_name, 
-                revisionData.month, 
-                revisionData.year
-            );
+            // Step 4: Compress performance data with ID mapping
+            const compressedPerformance = this.compressPerformanceDataWithIds(actualData, reverseMapping);
 
-            if (!currentPlan) {
-                throw new Error('No active monthly plan found for revision');
-            }
-
-            // Step 3: Call AI revision API with complete context
-            const aiRevisionResult = await this.callAIRevisionAPI({
+            // Step 5: Call AI revision API with ID mapping context
+            const aiRevisionResult = await this.callAIRevisionAPIWithMapping({
                 thread_id: revisionData.thread_id,
                 week_number: revisionData.week_number,
-                actual_performance: actualData,
+                actual_performance: compressedPerformance,
                 current_plan: currentPlan,
-                additional_context: revisionData.additional_context || ''
+                additional_context: revisionData.additional_context || '',
+                id_mapping: idMapping,
+                reverse_mapping: reverseMapping
             });
 
-            // Step 4: Save revision to database
+            // Step 6: Save revision to database
             const savedRevision = await this.saveWeeklyRevision(
                 currentPlan.id,
                 revisionData.week_number,
@@ -72,7 +209,7 @@ class WeeklyRevisionService {
                 revisionData.additional_context
             );
 
-            // Step 5: Update current plan in monthly_tour_plans
+            // Step 7: Update current plan in monthly_tour_plans
             await this.updateCurrentPlan(
                 currentPlan.id,
                 aiRevisionResult.revised_plan,
@@ -87,7 +224,13 @@ class WeeklyRevisionService {
                 analysis: aiRevisionResult.analysis,
                 revised_plan: aiRevisionResult.revised_plan,
                 actual_data: actualData,
-                ai_recommendations: aiRevisionResult.recommendations
+                ai_recommendations: aiRevisionResult.recommendations,
+                compression_stats: {
+                    customers_mapped: Object.keys(idMapping).length,
+                    format_sent_to_ai: 'customer_ids',
+                    format_saved_to_db: 'customer_codes',
+                    tokens_saved: this.calculateTokenSavings(actualData.visit_details || [], compressedPerformance.visit_details)
+                }
             };
 
         } catch (error) {
@@ -98,6 +241,125 @@ class WeeklyRevisionService {
             };
         }
     }
+
+    /**
+     * Call AI revision API with mapping
+     */
+    async callAIRevisionAPIWithMapping(revisionPayload) {
+        try {
+            console.log('🤖 Calling AI revision API with ID mapping...');
+            console.log(`🔗 Using ${Object.keys(revisionPayload.id_mapping || {}).length} ID mappings`);
+            
+            const response = await fetch('/api/openai/monthly-plan-v2-enhanced', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'revise_weekly',
+                    threadId: revisionPayload.thread_id,
+                    weekNumber: revisionPayload.week_number,
+                    actualPerformance: revisionPayload.actual_performance,
+                    currentPlan: revisionPayload.current_plan,
+                    revisionReason: revisionPayload.additional_context,
+                    assistantId: this.assistantId,
+                    // Include ID mapping for conversion
+                    idMapping: revisionPayload.id_mapping,
+                    reverseMapping: revisionPayload.reverse_mapping
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`AI API call failed: ${response.status} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'AI revision failed');
+            }
+
+            console.log('✅ AI revision completed with ID mapping');
+            console.log('📊 AI Results Summary:', {
+                has_revised_plan: !!result.revised_plan,
+                has_analysis: !!result.analysis,
+                recommendations_count: result.recommendations?.length || 0,
+                tokens_used: result.tokens_used || 0,
+                customers_converted: result.compression_stats?.customers_converted || 0
+            });
+
+            return {
+                revised_plan: result.revised_plan, // Already converted back to customer codes
+                analysis: result.analysis,
+                recommendations: result.recommendations || [],
+                tokens_used: result.tokens_used || 0,
+                ai_insights: result.ai_insights || '',
+                compression_stats: result.compression_stats
+            };
+
+        } catch (error) {
+            console.error('❌ AI revision API call failed:', error);
+            throw new Error(`AI revision failed: ${error.message}`);
+        }
+    }
+
+    // ===================================================================
+    // LEGACY API SUPPORT (for backward compatibility)
+    // ===================================================================
+
+    /**
+     * Legacy AI revision API call (fallback)
+     */
+    async callAIRevisionAPI(revisionPayload) {
+        try {
+            console.log('🤖 Calling legacy AI revision API...');
+            
+            const response = await fetch('/api/openai/monthly-plan-v2-enhanced', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'revise_weekly',
+                    threadId: revisionPayload.thread_id,
+                    weekNumber: revisionPayload.week_number,
+                    actualPerformance: revisionPayload.actual_performance,
+                    currentPlan: revisionPayload.current_plan,
+                    revisionReason: revisionPayload.additional_context,
+                    assistantId: this.assistantId
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`AI API call failed: ${response.status} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.error || 'AI revision failed');
+            }
+
+            console.log('✅ Legacy AI revision completed');
+            return {
+                revised_plan: result.revised_plan,
+                analysis: result.analysis,
+                recommendations: result.recommendations || [],
+                tokens_used: result.tokens_used || 0,
+                ai_insights: result.ai_insights || ''
+            };
+
+        } catch (error) {
+            console.error('❌ Legacy AI revision API call failed:', error);
+            throw new Error(`AI revision failed: ${error.message}`);
+        }
+    }
+
+    // ===================================================================
+    // DATA FETCHING METHODS
+    // ===================================================================
 
     /**
      * Fetch actual visit data from database for specific week
@@ -145,14 +407,17 @@ class WeeklyRevisionService {
      */
     processActualVisitData(visits, weekDates) {
         const uniqueCustomers = new Set();
+        const customerCodeMap = new Map(); // Track full customer names
         const areaBreakdown = {};
         const dailyBreakdown = {};
         let totalRevenue = 0;
         let convertingVisits = 0;
 
         visits.forEach(visit => {
-            // Customer tracking
-            uniqueCustomers.add(visit.clientName);
+            // Store customer name for later ID mapping
+            const customerKey = visit.clientName;
+            uniqueCustomers.add(customerKey);
+            customerCodeMap.set(customerKey, customerKey); // Will be mapped to IDs later
             
             // Revenue calculation
             const revenue = parseFloat(visit.amountOfSale) || 0;
@@ -190,12 +455,13 @@ class WeeklyRevisionService {
             daily_breakdown: dailyBreakdown,
             sample_distribution: visits.filter(v => v.sampleGiven).length,
             visit_details: visits.map(v => ({
-                customer: v.clientName,
+                customer: v.clientName, // Will be converted to ID when compressed
                 area: v.areaName,
                 date: v.dcrDate,
                 revenue: parseFloat(v.amountOfSale) || 0,
                 sample_given: v.sampleGiven
-            }))
+            })),
+            customer_code_map: customerCodeMap // For debugging/tracking
         };
     }
 
@@ -226,66 +492,14 @@ class WeeklyRevisionService {
         }
     }
 
-    /**
-     * Call AI revision API
-     */
-    async callAIRevisionAPI(revisionPayload) {
-        try {
-            console.log('🤖 Calling AI revision API...');
-            
-            const response = await fetch('/api/openai/monthly-plan-v2-enhanced', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'revise_weekly',
-                    threadId: revisionPayload.thread_id,
-                    weekNumber: revisionPayload.week_number,
-                    actualPerformance: revisionPayload.actual_performance,
-                    currentPlan: revisionPayload.current_plan,
-                    revisionReason: revisionPayload.additional_context,
-                    assistantId: this.assistantId
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`AI API call failed: ${response.status} - ${errorText}`);
-            }
-
-            const result = await response.json();
-            
-            if (!result.success) {
-                throw new Error(result.error || 'AI revision failed');
-            }
-
-            console.log('✅ AI revision completed');
-            console.log('📊 AI Results Summary:', {
-                has_revised_plan: !!result.revised_plan,
-                has_analysis: !!result.analysis,
-                recommendations_count: result.recommendations?.length || 0,
-                tokens_used: result.tokens_used || 0
-            });
-
-            return {
-                revised_plan: result.revised_plan,
-                analysis: result.analysis,
-                recommendations: result.recommendations || [],
-                tokens_used: result.tokens_used || 0,
-                ai_insights: result.ai_insights || ''
-            };
-
-        } catch (error) {
-            console.error('❌ AI revision API call failed:', error);
-            throw new Error(`AI revision failed: ${error.message}`);
-        }
-    }
+    // ===================================================================
+    // DATABASE OPERATIONS
+    // ===================================================================
 
     /**
      * Save weekly revision to database
      */
-     async saveWeeklyRevision(monthlyPlanId, weekNumber, revisedPlan, analysis, additionalContext) {
+    async saveWeeklyRevision(monthlyPlanId, weekNumber, revisedPlan, analysis, additionalContext) {
         try {
             const version = `1.${weekNumber}`;
             
@@ -480,7 +694,7 @@ class WeeklyRevisionService {
      */
     extractPlannedDataForWeek(planJson, weekNumber) {
         try {
-            const weekPlan = planJson.weekly_plans?.find(w => w.week_number === weekNumber);
+            const weekPlan = planJson.ws?.[weekNumber.toString()];
             if (!weekPlan) {
                 return {
                     visits: 0,
@@ -491,9 +705,9 @@ class WeeklyRevisionService {
             }
 
             return {
-                visits: weekPlan.target_visits || 0,
-                revenue: weekPlan.target_revenue || 0,
-                customers: weekPlan.planned_customers?.length || 0,
+                visits: weekPlan.customers || 0,
+                revenue: weekPlan.revenue_target || 0,
+                customers: weekPlan.customers || 0,
                 areas: weekPlan.focus_areas || []
             };
 
