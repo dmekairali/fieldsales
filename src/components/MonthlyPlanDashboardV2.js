@@ -526,10 +526,20 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
   };
 
   const navigateWeek = (direction) => {
+    const year = selectedYear;
+    const month = selectedMonth;
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const lastDayOfMonth = new Date(year, month, 0);
+    const numWeeks = Math.ceil((lastDayOfMonth.getDate() + firstDayOfMonth.getDay()) / 7);
+
     if (direction === 'next') {
-      setSelectedWeek(selectedWeek + 1);
+      if (selectedWeek < numWeeks) {
+        setSelectedWeek(selectedWeek + 1);
+      }
     } else {
-      setSelectedWeek(selectedWeek - 1);
+      if (selectedWeek > 1) {
+        setSelectedWeek(selectedWeek - 1);
+      }
     }
   };
 
