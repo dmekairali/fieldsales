@@ -253,6 +253,7 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [activeView, setActiveView] = useState('overview');
   const [calendarView, setCalendarView] = useState('month');
+  const [areaView, setAreaView] = useState('customer');
   const [selectedWeek, setSelectedWeek] = useState(1);
 
   // New state for enhanced features
@@ -484,7 +485,6 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
     { id: 'calendar', name: 'Calendar View', icon: Calendar, description: 'Daily visit schedule' },
     { id: 'weekly', name: 'Weekly Plans', icon: Clock, description: 'Week-wise breakdown' },
     { id: 'customers', name: 'Customer List', icon: Users, description: 'All planned customers' },
-    { id: 'area-visit-planner', name: 'Area Visit Planner', icon: MapPin, description: 'Plan visits by area' },
     { id: 'changelog', name: 'Project Changes', icon: Activity, description: 'Input/Output tracking & logs' }
   ];
 
@@ -520,9 +520,17 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
     for (let i = 0; i < 7; i++) {
       const day = new Date(firstDayOfWeek);
       day.setDate(firstDayOfWeek.getDate() + i);
-      weekDays.push(day.getDate());
+      weekDays.push(day);
     }
     return weekDays;
+  };
+
+  const navigateWeek = (direction) => {
+    if (direction === 'next') {
+      setSelectedWeek(selectedWeek + 1);
+    } else {
+      setSelectedWeek(selectedWeek - 1);
+    }
   };
 
   const getVisitsForDay = (day) => {
@@ -530,9 +538,17 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
     
     const dateStr = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
     
-    return expandedPlan.customer_summary.filter(customer => 
+    const visits = expandedPlan.customer_summary.filter(customer =>
       customer.visit_dates && customer.visit_dates.includes(dateStr)
     );
+
+    if (areaView === 'area') {
+      const areas = visits.map(visit => visit.area_name);
+      const uniqueAreas = [...new Set(areas)];
+      return uniqueAreas.map(area => ({ area_name: area }));
+    }
+
+    return visits;
   };
 
   return (
@@ -1203,23 +1219,43 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Daily Visit Schedule - {selectedPlanMR}</h3>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setCalendarView('month')}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      calendarView === 'month' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    Month
-                  </button>
-                  <button
-                    onClick={() => setCalendarView('week')}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      calendarView === 'week' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    Week
-                  </button>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setCalendarView('month')}
+                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                        calendarView === 'month' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      Month
+                    </button>
+                    <button
+                      onClick={() => setCalendarView('week')}
+                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                        calendarView === 'week' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      Week
+                    </button>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setAreaView('customer')}
+                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                        areaView === 'customer' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      Customer
+                    </button>
+                    <button
+                      onClick={() => setAreaView('area')}
+                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
+                        areaView === 'area' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      Area
+                    </button>
+                  </div>
                 </div>
               </div>
               
@@ -1256,7 +1292,7 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
                                   <div className="space-y-1">
                                     {visits.slice(0, 2).map((visit, i) => (
                                       <div key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded truncate">
-                                        {visit.customer_name}
+                                        {areaView === 'customer' ? visit.customer_name : visit.area_name}
                                       </div>
                                     ))}
                                     {visits.length > 2 && (
@@ -1273,38 +1309,51 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
                       })}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-7 gap-4">
-                      {getWeekCalendarDays().map((day, index) => {
-                        const visits = getVisitsForDay(day);
-                        const isToday = day === new Date().getDate() &&
-                                       selectedMonth === new Date().getMonth() + 1 &&
-                                       selectedYear === new Date().getFullYear();
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <button onClick={() => navigateWeek('prev')} className="p-2 rounded-lg hover:bg-gray-200">
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <h4 className="text-lg font-semibold">
+                          Week {selectedWeek}
+                        </h4>
+                        <button onClick={() => navigateWeek('next')} className="p-2 rounded-lg hover:bg-gray-200">
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-7 gap-4">
+                        {getWeekCalendarDays().map((day, index) => {
+                          const visits = getVisitsForDay(day.getDate());
+                          const isToday = day.getDate() === new Date().getDate() &&
+                                         day.getMonth() + 1 === new Date().getMonth() + 1 &&
+                                         day.getFullYear() === new Date().getFullYear();
 
-                        return (
-                          <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
-                            day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
-                          } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                            {day && (
-                              <>
-                                <div className={`text-sm font-medium mb-2 ${
-                                  isToday ? 'text-blue-700' : 'text-gray-900'
-                                }`}>
-                                  {day}
-                                </div>
-                                {visits.length > 0 && (
-                                  <div className="space-y-1">
-                                    {visits.map((visit, i) => (
-                                      <div key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded truncate">
-                                        {visit.customer_name}
-                                      </div>
-                                    ))}
+                          return (
+                            <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
+                              day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
+                            } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                              {day && (
+                                <>
+                                  <div className={`text-sm font-medium mb-2 ${
+                                    isToday ? 'text-blue-700' : 'text-gray-900'
+                                  }`}>
+                                    {day.getDate()}
                                   </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
+                                  {visits.length > 0 && (
+                                    <div className="space-y-1">
+                                      {visits.map((visit, i) => (
+                                        <div key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded truncate">
+                                          {areaView === 'customer' ? visit.customer_name : visit.area_name}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1312,116 +1361,86 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
             </div>
           )}
 
-          {/* Area Visit Planner View */}
-          {activeView === 'area-visit-planner' && selectedPlanMR && expandedPlan && (
+          {/* Weekly Plans View */}
+          {activeView === 'weekly' && selectedPlanMR && expandedPlan && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Area Visit Planner - {selectedPlanMR}</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Weekly Strategic Plans - {selectedPlanMR}</h3>
                 <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setCalendarView('month')}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      calendarView === 'month' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
-                    }`}
+                  <label className="text-sm font-medium text-gray-700">Week:</label>
+                  <select
+                    value={selectedWeek}
+                    onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                   >
-                    Month
-                  </button>
-                  <button
-                    onClick={() => setCalendarView('week')}
-                    className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                      calendarView === 'week' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
-                    }`}
-                  >
-                    Week
-                  </button>
+                    {[1,2,3,4].map(week => (
+                      <option key={week} value={week}>Week {week}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="bg-gray-50 border-b border-gray-200 p-4">
-                  <div className="grid grid-cols-7 gap-4 text-center text-sm font-medium text-gray-700">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                      <div key={day}>{day}</div>
-                    ))}
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {expandedPlan.weekly_summary?.map((week, index) => {
+                  const weekNumber = index + 1;
+                  const isSelected = selectedWeek === weekNumber;
 
-                <div className="p-4">
-                  {calendarView === 'month' ? (
-                    <div className="grid grid-cols-7 gap-4">
-                      {getCalendarDays().map((day, index) => {
-                        const visits = getVisitsForDay(day);
-                        const isToday = day === new Date().getDate() &&
-                                       selectedMonth === new Date().getMonth() + 1 &&
-                                       selectedYear === new Date().getFullYear();
+                  return (
+                    <div key={weekNumber} className={`rounded-xl border-2 p-6 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-violet-500 bg-violet-50 shadow-lg'
+                        : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                    }`} onClick={() => setSelectedWeek(weekNumber)}>
+                      <div className="flex justify-between items-start mb-4">
+                        <h4 className={`text-lg font-semibold ${isSelected ? 'text-violet-900' : 'text-gray-900'}`}>
+                          Week {weekNumber}
+                        </h4>
+                        <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {week.dates?.join(' - ') || 'N/A'}
+                        </span>
+                      </div>
 
-                        return (
-                          <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
-                            day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
-                          } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                            {day && (
-                              <>
-                                <div className={`text-sm font-medium mb-2 ${
-                                  isToday ? 'text-blue-700' : 'text-gray-900'
-                                }`}>
-                                  {day}
-                                </div>
-                                {visits.length > 0 && (
-                                  <div className="space-y-1">
-                                    {visits.slice(0, 2).map((visit, i) => (
-                                      <div key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded truncate">
-                                        {visit.customer_name}
-                                      </div>
-                                    ))}
-                                    {visits.length > 2 && (
-                                      <div className="text-xs text-gray-500">
-                                        +{visits.length - 2} more
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </>
-                            )}
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="text-center">
+                          <div className={`text-2xl font-bold ${isSelected ? 'text-violet-700' : 'text-gray-900'}`}>
+                            {week.customers || 0}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-7 gap-4">
-                      {getWeekCalendarDays().map((day, index) => {
-                        const visits = getVisitsForDay(day);
-                        const isToday = day === new Date().getDate() &&
-                                       selectedMonth === new Date().getMonth() + 1 &&
-                                       selectedYear === new Date().getFullYear();
-
-                        return (
-                          <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
-                            day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
-                          } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                            {day && (
-                              <>
-                                <div className={`text-sm font-medium mb-2 ${
-                                  isToday ? 'text-blue-700' : 'text-gray-900'
-                                }`}>
-                                  {day}
-                                </div>
-                                {visits.length > 0 && (
-                                  <div className="space-y-1">
-                                    {visits.map((visit, i) => (
-                                      <div key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded truncate">
-                                        {visit.customer_name}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </>
-                            )}
+                          <div className="text-sm text-gray-600">Customers</div>
+                        </div>
+                        <div className="text-center">
+                          <div className={`text-2xl font-bold ${isSelected ? 'text-violet-700' : 'text-gray-900'}`}>
+                            ₹{((week.revenue_target || 0) / 1000).toFixed(0)}K
                           </div>
-                        );
-                      })}
+                          <div className="text-sm text-gray-600">Revenue Target</div>
+                        </div>
+                      </div>
+
+                      <div className={`p-3 rounded-lg ${isSelected ? 'bg-white border border-violet-200' : 'bg-gray-50'}`}>
+                        <div className="text-sm text-gray-600 mb-1">Strategic Focus</div>
+                        <div className={`text-sm font-medium ${isSelected ? 'text-violet-800' : 'text-gray-900'}`}>
+                          {week.focus || 'Balanced territory coverage'}
+                        </div>
+                      </div>
+
+                      {week.expanded_data?.area_coverage && (
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {week.expanded_data.area_coverage.slice(0, 3).map((area, i) => (
+                            <span key={i} className={`text-xs px-2 py-1 rounded-full ${
+                              isSelected ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {area}
+                            </span>
+                          ))}
+                          {week.expanded_data.area_coverage.length > 3 && (
+                            <span className="text-xs text-gray-500">
+                              +{week.expanded_data.area_coverage.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
             </div>
           )}
