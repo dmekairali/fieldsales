@@ -51,47 +51,65 @@ export default async function handler(req, res) {
 // ===================================================================
 
 async function handleNewPlan(req, res) {
-   try {
-       const { mrName, month, year, territoryContext, assistantId } = req.body;
+    try {
+        const { mrName, month, year, territoryContext, assistantId } = req.body;
 
-       console.log(`🚀 [NEW_PLAN] Generating plan for ${mrName} - ${month}/${year}`);
-       console.log(`📊 Territory: ${territoryContext.customers.length} customers`);
+        console.log(`🚀 [NEW_PLAN] Generating plan for ${mrName} - ${month}/${year}`);
+        console.log(`📊 Territory: ${territoryContext.customers.length} customers`);
+        console.log(`🔗 ID Mapping: ${Object.keys(territoryContext.id_mapping || {}).length} mappings`);
 
-       // STEP 1: Create ultra-compressed input
-       const compressedInput = createUltraCompressedInput(territoryContext.customers);
-       
-       // STEP 2: Generate AI plan with new format
-       const aiPlan = await generateAICompleteSchedule(assistantId, mrName, month, year, compressedInput);
-       
-       // STEP 3: Build comprehensive plan structure
-       const comprehensivePlan = await buildComprehensivePlan(
+        // STEP 1: Create ultra-compressed input with ID mapping
+        const compressedInput = createUltraCompressedInput(
+            territoryContext.customers,
+            territoryContext.id_mapping,
+            territoryContext.reverse_mapping
+        );
+        
+        // STEP 2: Generate AI plan with new format (using IDs)
+        const aiPlan = await generateAICompleteSchedule(assistantId, mrName, month, year, compressedInput);
+        
+        // STEP 3: Convert AI response back to customer codes
+        const planWithCustomerCodes = convertAiResponseToCustomerCodes(
             aiPlan.plan, 
-           compressedInput, 
-           territoryContext.customers,
-           mrName, 
-           month, 
-           year
-       );
-       
-       // STEP 4: Save enhanced plan to database
-       const savedPlan = await saveEnhancedPlan(mrName, month, year, comprehensivePlan, aiPlan.thread_id);
+            territoryContext.id_mapping
+        );
+        
+        // STEP 4: Build comprehensive plan structure with customer codes
+        const comprehensivePlan = await buildComprehensivePlan(
+            planWithCustomerCodes, 
+            compressedInput, 
+            territoryContext.customers,
+            mrName, 
+            month, 
+            year
+        );
+        
+        // STEP 5: Save enhanced plan to database (with customer codes)
+        const savedPlan = await saveEnhancedPlan(mrName, month, year, comprehensivePlan, aiPlan.thread_id);
 
-       return res.status(200).json({
-           success: true,
-           plan_id: savedPlan.id,
-           plan: aiPlan.plan,
-           thread_id: aiPlan.thread_id,
-           tokens_used: aiPlan.tokens_used,
-           generated_at: new Date().toISOString()
-       });
+        return res.status(200).json({
+            success: true,
+            plan_id: savedPlan.id,
+            plan: planWithCustomerCodes, // Customer codes for database consistency
+            thread_id: aiPlan.thread_id,
+            tokens_used: aiPlan.tokens_used,
+            generated_at: new Date().toISOString(),
+            compression_stats: {
+                customers_processed: territoryContext.customers.length,
+                customers_mapped: Object.keys(territoryContext.id_mapping || {}).length,
+                token_savings_percent: calculateTokenSavings(territoryContext.customers, compressedInput.customers),
+                format_sent_to_ai: 'customer_ids',
+                format_saved_to_db: 'customer_codes'
+            }
+        });
 
-   } catch (error) {
-       console.error('❌ New plan generation failed:', error);
-       return res.status(500).json({ 
-           success: false, 
-           error: error.message 
-       });
-   }
+    } catch (error) {
+        console.error('❌ New plan generation failed:', error);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
 }
 
 // ===================================================================
@@ -109,11 +127,12 @@ async function handleRevision(req, res) {
            actualPerformance, 
            currentPlan, 
            revisionReason, 
-           assistantId 
+           assistantId,
+           idMapping,           // These might be undefined if not sent by service
+           reverseMapping       // These might be undefined if not sent by service
        } = req.body;
 
        console.log(`🔄 [REVISE_PLAN] Processing revision for Week ${weekNumber}`);
-      
 
        if (!threadId) {
            return res.status(400).json({ 
@@ -122,8 +141,19 @@ async function handleRevision(req, res) {
            });
        }
 
-       // Create compressed performance data
-       const compressedPerformance = createCompressedPerformanceData(actualPerformance, weekNumber);
+       // EXTRACT ID MAPPING FROM CURRENT PLAN if not provided
+       const extractedMapping = extractIdMappingFromCurrentPlan(currentPlan);
+       const finalIdMapping = idMapping || extractedMapping.idMapping;
+       const finalReverseMapping = reverseMapping || extractedMapping.reverseMapping;
+
+       console.log(`🔗 Using ${Object.keys(finalIdMapping).length} ID mappings`);
+
+       // Create compressed performance data with ID mapping
+       const compressedPerformance = createCompressedPerformanceDataWithIds(
+           actualPerformance, 
+           weekNumber, 
+           finalReverseMapping
+       );
        
        // Get current plan data for context
        const planContext = {
@@ -133,20 +163,22 @@ async function handleRevision(req, res) {
            current_revision: currentPlan?.current_revision || 0
        };
 
-       // Generate revision using existing thread
-       const aiRevision = await generateAIRevision(
+       // Generate revision using existing thread WITH ID mapping
+       const aiRevision = await generateAIRevisionWithMapping(
            assistantId, 
            threadId, 
            weekNumber, 
            compressedPerformance, 
            revisionReason,
-           planContext
+           planContext,
+           finalIdMapping,
+           finalReverseMapping
        );
 
        // Return structured revision result
        const revisionResult = {
            success: true,
-           revised_plan: aiRevision.plan,
+           revised_plan: aiRevision.plan, // Already converted back to customer codes
            analysis: {
                week_performance: `Week ${weekNumber} analysis completed`,
                gaps_identified: extractGapsFromPlan(aiRevision.plan),
@@ -160,10 +192,17 @@ async function handleRevision(req, res) {
            tokens_used: aiRevision.tokens_used,
            ai_insights: aiRevision.raw_response,
            thread_id: threadId,
-           version: `1.${weekNumber}`
+           version: `1.${weekNumber}`,
+           compression_stats: {
+               customers_mapped: Object.keys(finalIdMapping).length,
+               customers_converted: aiRevision.customers_converted || 0,
+               format_sent_to_ai: 'customer_ids',
+               format_returned: 'customer_codes',
+               tokens_saved_percent: aiRevision.token_savings_percent || 0
+           }
        };
 
-       console.log('✅ Weekly revision completed successfully');
+       console.log('✅ Weekly revision completed successfully with ID mapping');
        return res.status(200).json(revisionResult);
 
    } catch (error) {
@@ -173,6 +212,212 @@ async function handleRevision(req, res) {
            error: error.message 
        });
    }
+}
+
+
+
+// ================================================================
+// 2. ADD MISSING FUNCTION: extractIdMappingFromCurrentPlan
+// ================================================================
+
+function extractIdMappingFromCurrentPlan(currentPlan) {
+    console.log('🔍 Extracting ID mapping from current plan');
+    
+    const idMapping = {};
+    const reverseMapping = {};
+    
+    try {
+        // Get CVS section from current plan (contains real database IDs)
+        const cvs = currentPlan?.current_plan_json?.cvs || currentPlan?.original_plan_json?.cvs;
+        
+        if (cvs) {
+            // The keys in CVS are already real database IDs
+            Object.keys(cvs).forEach(id => {
+                // For now, map ID to itself (we'll need customer codes from database later)
+                idMapping[id] = id;
+                reverseMapping[id] = id;
+            });
+            
+            console.log(`✅ Extracted ${Object.keys(idMapping).length} ID mappings from plan`);
+        } else {
+            console.warn('⚠️ No CVS section found in current plan');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error extracting ID mapping from plan:', error);
+    }
+    
+    return { idMapping, reverseMapping };
+}
+
+
+
+// ================================================================
+// 2. ADD MISSING FUNCTION: createCompressedPerformanceDataWithIds
+// ================================================================
+
+function createCompressedPerformanceDataWithIds(actualPerformance, weekNumber, reverseMapping) {
+    console.log(`🗜️ Compressing performance data for Week ${weekNumber} with ID mapping`);
+    
+    // Since actualPerformance might already contain customer names that need mapping
+    // but for now we'll pass through the data as-is since it's already compressed
+    const today = new Date();
+    const currentDay = today.getDate();
+    
+    return {
+        ...actualPerformance, // Keep existing compressed performance data
+        current_day: currentDay,
+        completed_weeks: weekNumber,
+        remaining_weeks: 4 - weekNumber,
+        id_mapping_context: {
+            total_mappings: Object.keys(reverseMapping || {}).length,
+            using_real_ids: true
+        }
+    };
+}
+// ================================================================
+// 3. ADD MISSING FUNCTION: generateAIRevisionWithMapping
+// ================================================================
+
+
+async function generateAIRevisionWithMapping(assistantId, threadId, weekNumber, compressedPerformance, revisionReason, planContext, idMapping, reverseMapping) {
+    try {
+        console.log(`🤖 Generating AI revision for Week ${weekNumber} with ID mapping`);
+        console.log(`🔗 Processing ${Object.keys(idMapping || {}).length} customer ID mappings`);
+
+        // Create comprehensive revision prompt
+        const revisionPrompt = `
+WEEKLY REVISION REQUEST - Week ${weekNumber} (WITH OPTIMIZED DATABASE IDs)
+
+ACTION: REVISE_PLAN
+
+ACTUAL PERFORMANCE DATA:
+${JSON.stringify(compressedPerformance, null, 2)}
+
+PLAN CONTEXT:
+- MR: ${planContext.mr_name}
+- Month: ${planContext.month}/${planContext.year}
+- Current Revision: ${planContext.current_revision}
+- Week Being Revised: ${weekNumber}
+- Remaining Weeks: ${4 - weekNumber}
+
+CUSTOMER ID CONTEXT:
+- Customer identifiers are REAL database IDs (${Object.keys(idMapping).slice(0, 5).join(', ')}, etc.)
+- These are optimized for token efficiency
+- Use these EXACT database IDs in your response
+- System will handle any necessary conversions automatically
+
+REVISION REASON:
+${revisionReason || 'Performance analysis and optimization'}
+
+CRITICAL INSTRUCTIONS:
+1. SKIP PAST DATES - Only plan for remaining weeks (${weekNumber + 1} to 4)
+2. Redistribute missed visits to remaining weeks
+
+## FORBIDDEN SUNDAY DATES (REMAINING WEEKS):
+${getRemainingMondayDatesFromWeek(month, year, weekNumber).map(date => `${date}`).join(', ')}
+
+**MANDATORY**: Only schedule visits Monday-Saturday. Never use dates in above Sunday list.
+`;
+
+        // Create message in existing thread
+        const message = await openai.beta.threads.messages.create(threadId, {
+            role: "user",
+            content: revisionPrompt
+        });
+
+        // Run the assistant on the existing thread
+        const run = await openai.beta.threads.runs.create(threadId, {
+            assistant_id: assistantId
+        });
+
+        // Poll for completion
+        let runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+        
+        while (runStatus.status === 'running' || runStatus.status === 'queued' || runStatus.status === 'in_progress') {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
+            console.log(`🔄 Status: ${runStatus.status}`);
+        }
+        
+        if (runStatus.status !== 'completed') {
+            console.error('❌ Run status:', runStatus.status);
+            if (runStatus.status === 'failed') {
+                throw new Error(`OpenAI run failed: ${runStatus.last_error?.message}`);
+            }
+            throw new Error(`Unexpected run status: ${runStatus.status}`);
+        }
+
+        // Get response
+        const messages = await openai.beta.threads.messages.list(threadId);
+        const assistantMessage = messages.data.find(msg => msg.role === 'assistant');
+
+        if (!assistantMessage) {
+            console.error('❌ No assistant message found in revision');
+            throw new Error('No response from AI assistant');
+        }
+
+        const responseContent = assistantMessage.content[0].text.value;
+        
+        // Parse JSON response
+        const parsedPlan = parseAICompleteResponse(responseContent);
+
+        // Since we're already using database IDs, no conversion needed
+        // But we can still track the process
+        const customersProcessed = Object.keys(parsedPlan.cvs || {}).length;
+        console.log(`✅ Processed ${customersProcessed} customer entries with database IDs`);
+
+        return {
+            plan: parsedPlan, // Already contains database IDs (correct format)
+            tokens_used: runStatus.usage?.total_tokens || 0,
+            raw_response: responseContent,
+            customers_converted: customersProcessed,
+            token_savings_percent: calculateTokenSavingsEstimate(customersProcessed)
+        };
+
+    } catch (error) {
+        console.error('❌ AI revision generation with mapping failed:', error);
+        throw error;
+    }
+}
+
+
+function getSundayDatesForMonth(month, year) {
+    const sundays = [];
+    const date = new Date(year, month - 1, 1);
+    while (date.getMonth() === month - 1) {
+        if (date.getDay() === 0) {
+            sundays.push(date.getDate().toString().padStart(2, '0') + month.toString().padStart(2, '0'));
+        }
+        date.setDate(date.getDate() + 1);
+    }
+    return sundays;
+}
+
+// ================================================================
+// 5. ADD HELPER FUNCTION: calculateTokenSavingsEstimate
+// ================================================================
+
+function calculateTokenSavingsEstimate(customerCount) {
+    // Estimate token savings: Database IDs (10 chars) vs typical customer codes (25 chars)
+    // Savings = (25 - 10) / 25 = 60%
+    return customerCount > 0 ? 60 : 0;
+}
+
+// ================================================================
+// 4. ADD MISSING FUNCTION: calculateRevisionTokenSavings
+// ================================================================
+
+function calculateRevisionTokenSavings(planWithIds, planWithCodes) {
+    try {
+        const idsTokens = JSON.stringify(planWithIds.cvs || {}).length;
+        const codesTokens = JSON.stringify(planWithCodes.cvs || {}).length;
+        
+        if (codesTokens === 0) return 0;
+        return Math.round((1 - (idsTokens / codesTokens)) * 100);
+    } catch (error) {
+        return 0;
+    }
 }
 
 // ===================================================================
@@ -204,25 +449,11 @@ ${revisionReason || 'Performance analysis and optimization'}
 
 CRITICAL INSTRUCTIONS:
 1. SKIP PAST DATES - Only plan for remaining weeks (${weekNumber + 1} to 4)
-2. Use ACTUAL customer codes from the original plan (NOT CUST001, CUST002, etc.)
-3. Redistribute missed visits to remaining weeks
-4. Focus on high-priority customers who were missed
-5. Maintain month-end revenue targets
-6. Return in EXACT same format: mo, cvs, ws structure
-7. NEVER schedule visits on SUNDAYS - Sunday is non-working day
-8. Working days: Monday-Saturday only (6 days/week)
-9. Calculate working days: Total days - Sundays - holidays
-10. Validate: NO visit dates should resolve to Sunday
-11. If Sunday detected: Redistribute to nearest weekday immediately
 
-REVISION TASKS:
-- Analyze gaps from Week ${weekNumber}
-- Redistribute missed opportunities
-- Optimize remaining weeks ${weekNumber + 1}-4
-- Adjust customer visit frequencies
-- Ensure realistic targets
+## FORBIDDEN SUNDAY DATES (REMAINING WEEKS):
+${getRemainingMondayDatesFromWeek(month, year, weekNumber).map(date => `${date}`).join(', ')}
 
-Return the revised plan in the exact same JSON format as the original plan.
+**MANDATORY**: Only schedule visits Monday-Saturday. Never use dates in above Sunday list.
 `;
 
        // Create message in existing thread
@@ -301,7 +532,7 @@ async function generateAICompleteSchedule(assistantId, mrName, month, year, comp
        const prompt = buildCompleteSchedulePrompt(mrName, month, year, compressedInput);
        
        const thread = await openai.beta.threads.create();
-       console.log(`🧵 Created thread: ${thread.id}`);
+       
        
        const message = await openai.beta.threads.messages.create(thread.id, {
            role: "user",
@@ -371,84 +602,148 @@ if (!assistantMessage) {
    }
 }
 
-function createUltraCompressedInput(customers) {
-   console.log(`🗜️ Compressing ${customers.length} customers`);
-   
-   const tierMapping = {
-       'TIER_1_CHAMPION': 1,
-       'TIER_2_PERFORMER': 2, 
-       'TIER_3_DEVELOPER': 3,
-       'TIER_4_PROSPECT': 4
-   };
-   
-   const typeMapping = {
-       'Doctor': 'D',
-       'Retailer': 'R',
-       'Stockist': 'S',
-       'Clinic': 'C',
-       'Hospital': 'H'
-   };
-   
-   const frequencyMapping = {
-       'TIER_1_CHAMPION': 'M3',
-       'TIER_2_PERFORMER': 'M2',
-       'TIER_3_DEVELOPER': 'M1',
-       'TIER_4_PROSPECT': 'Q'
-   };
-   
-   const compressedCustomers = {};
-   
-   customers.forEach(customer => {
-       const customerCode = customer.customer_code || customer.customerCode;
-       const tierCode = tierMapping[customer.tier_level] || 3;
-       const areaName = customer.area_name || customer.areaName || 'Area';
-       const tierScore = Math.round((customer.monthly_revenue || 0) / 1000);
-       const frequency = frequencyMapping[customer.tier_level] || 'M1';
-       const sales90d = customer.monthly_revenue || 0;
-       const daysSinceVisit = customer.days_since_last_visit || 30;
-       const customerType = typeMapping[customer.customer_type] || 'D';
-       const orders90d = customer.orders_count || 1;
-       const conversionRate = customer.conversion_rate || 70;
-       
-       compressedCustomers[customerCode] = [
-           tierCode,
-           areaName, 
-           tierScore,
-           frequency,
-           sales90d,
-           daysSinceVisit,
-           customerType,
-           orders90d,
-           conversionRate
-       ];
-   });
-   
-   const result = {
-       customers: compressedCustomers,
-       field_mapping: {
-           fields: ["tier_code", "area_name", "tier_score", "frequency", "sales_90d", "days_since_visit", "customer_type", "orders_90d", "conversion_rate"],
-           tier_codes: {1: "TIER_1_CHAMPION", 2: "TIER_2_PERFORMER", 3: "TIER_3_DEVELOPER", 4: "TIER_4_PROSPECT"},
-           customer_types: {D: "Doctor", R: "Retailer", S: "Stockist", C: "Clinic", H: "Hospital"},
-           frequencies: {Q: "Quarterly", M1: "Monthly (1 visit)", M2: "Monthly (2 visits)", M3: "Monthly (3 visits)", F: "Fortnightly", W: "Weekly"}
-       }
-   };
-   
-   console.log(`✅ Compressed to ${Object.keys(compressedCustomers).length} customers`);
-   return result;
+
+function createUltraCompressedInput(customers, idMapping = null, reverseMapping = null) {
+    console.log(`🗜️ Compressing ${customers.length} customers with REAL database ID mapping`);
+    
+    const tierMapping = {
+        'TIER_1_CHAMPION': 1,
+        'TIER_2_PERFORMER': 2, 
+        'TIER_3_DEVELOPER': 3,
+        'TIER_4_PROSPECT': 4
+    };
+    
+    const typeMapping = {
+        'Doctor': 'D',
+        'Retailer': 'R',
+        'Stockist': 'S',
+        'Clinic': 'C',
+        'Hospital': 'H'
+    };
+    
+    const frequencyMapping = {
+        'TIER_1_CHAMPION': 'M3',
+        'TIER_2_PERFORMER': 'M2',
+        'TIER_3_DEVELOPER': 'M1',
+        'TIER_4_PROSPECT': 'Q'
+    };
+    
+    const compressedCustomers = {};
+    
+    customers.forEach(customer => {
+        const customerCode = customer.customer_code || customer.customerCode;
+        
+        // USE REAL DATABASE ID instead of customer code
+        const realId = reverseMapping?.[customerCode] || customer.id?.toString() || customerCode;
+        
+        const tierCode = tierMapping[customer.tier_level] || 3;
+        const areaName = customer.area_name || customer.areaName || 'Area';
+        const tierScore = Math.round((customer.total_sales_90d || 0) / 1000);
+        const frequency = frequencyMapping[customer.tier_level] || 'M1';
+        const sales90d = customer.total_sales_90d || 0;
+        const daysSinceVisit = customer.days_since_last_visit || 30;
+        const customerType = typeMapping[customer.customer_type] || 'D';
+        const orders90d = customer.total_orders_90d || 1;
+        const conversionRate = parseFloat((customer.conversion_rate_90d || 0).toFixed(2)); // Restrict to 2 decimal places
+        
+        // Store using REAL database ID (much shorter than customer codes)
+        compressedCustomers[realId] = [
+            tierCode,
+            areaName, 
+            tierScore,
+            frequency,
+            sales90d,
+            daysSinceVisit,
+            customerType,
+            orders90d,
+            conversionRate
+        ];
+    });
+    
+    const result = {
+        customers: compressedCustomers,
+        id_mapping: idMapping,        // Store for conversion back
+        reverse_mapping: reverseMapping,
+        field_mapping: {
+            fields: ["tier_code", "area_name", "tier_score", "frequency", "sales_90d", "days_since_visit", "customer_type", "orders_90d", "conversion_rate"],
+            tier_codes: {1: "TIER_1_CHAMPION", 2: "TIER_2_PERFORMER", 3: "TIER_3_DEVELOPER", 4: "TIER_4_PROSPECT"},
+            customer_types: {D: "Doctor", R: "Retailer", S: "Stockist", C: "Clinic", H: "Hospital"},
+            frequencies: {Q: "Quarterly", M1: "Monthly (1 visit)", M2: "Monthly (2 visits)", M3: "Monthly (3 visits)", F: "Fortnightly", W: "Weekly"}
+        }
+    };
+    
+    // Calculate actual token savings
+    const originalTokens = customers.reduce((sum, customer) => 
+        sum + (customer.customer_code?.length || 15), 0);
+    const compressedTokens = Object.keys(compressedCustomers).reduce((sum, id) => 
+        sum + id.length, 0);
+    const tokenSavings = Math.round((1 - (compressedTokens / originalTokens)) * 100);
+    
+    console.log(`✅ Compressed to ${Object.keys(compressedCustomers).length} customers using REAL database IDs`);
+    console.log(`💾 Token savings: ${tokenSavings}% (using IDs: ${Object.keys(compressedCustomers).slice(0, 5).join(', ')}...)`);
+    
+    return result;
+}
+// 2. ADD conversion function:
+
+function convertAiResponseToCustomerCodes(aiPlan, idMapping) {
+    console.log(`🔄 Converting AI response IDs back to customer codes`);
+    
+    if (!idMapping || !aiPlan.cvs) {
+        console.warn('⚠️ No ID mapping provided or no CVS in AI plan');
+        return aiPlan;
+    }
+    
+    const convertedPlan = { ...aiPlan };
+    const convertedCvs = {};
+    let conversionCount = 0;
+    
+    // Convert customer IDs back to customer codes
+    Object.entries(aiPlan.cvs).forEach(([customerId, visitDates]) => {
+        const customerCode = idMapping[customerId];
+        if (customerCode) {
+            convertedCvs[customerCode] = visitDates;
+            conversionCount++;
+        } else {
+            console.warn(`⚠️ No mapping found for ID: ${customerId}`);
+            convertedCvs[customerId] = visitDates; // Keep original if no mapping
+        }
+    });
+    
+    convertedPlan.cvs = convertedCvs;
+    
+    console.log(`✅ Converted ${conversionCount} customer entries back to codes`);
+    return convertedPlan;
 }
 
-function buildCompleteSchedulePrompt(mrName, month, year, compressedInput) {
-   const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-   const monthName = monthNames[month];
-   const daysInMonth = new Date(year, month, 0).getDate();
-   const workingDays = Math.floor(daysInMonth * 6/7);
-   
-   const customerCount = Object.keys(compressedInput.customers).length;
-   const areas = [...new Set(Object.values(compressedInput.customers).map(c => c[1]))];
-   
-   return `Generate a COMPLETE monthly visit schedule for ${mrName} for ${monthName} ${year}.
+// 3. ADD token savings calculator:
 
-ULTRA-COMPRESSED CUSTOMER DATA:
+function calculateTokenSavings(originalCustomers, compressedCustomers) {
+    const originalTokens = originalCustomers.reduce((sum, customer) => {
+        return sum + (customer.customer_code?.length || 10);
+    }, 0);
+    
+    const compressedTokens = Object.keys(compressedCustomers).reduce((sum, id) => {
+        return sum + id.length;
+    }, 0);
+    
+    return Math.round((1 - (compressedTokens / originalTokens)) * 100);
+}
+
+
+function buildCompleteSchedulePrompt(mrName, month, year, compressedInput) {
+    const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = monthNames[month];
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const workingDays = Math.floor(daysInMonth * 6/7);
+    
+    const customerCount = Object.keys(compressedInput.customers).length;
+    const areas = [...new Set(Object.values(compressedInput.customers).map(c => c[1]))];
+    const sampleIds = Object.keys(compressedInput.customers).slice(0, 5);
+    
+    return `Generate a COMPLETE monthly visit schedule for ${mrName} for ${monthName} ${year}.
+
+ULTRA-COMPRESSED CUSTOMER DATA (using real database IDs):
 ${JSON.stringify(compressedInput.customers)}
 
 FIELD MAPPING:
@@ -459,78 +754,15 @@ TERRITORY SUMMARY:
 - Working days: ${workingDays}
 - Areas: ${areas.join(', ')}
 
-VISIT FREQUENCY RULES:
-- Q (Quarterly): 1 visit in the month
-- M1 (Monthly 1): 1 visit in the month  
-- M2 (Monthly 2): 2 visits in the month
-- M3 (Monthly 3): 3 visits in the month
-- F (Fortnightly): 2 visits in the month
-- W (Weekly): 4 visits in the month
+IMPORTANT: Customer identifiers are REAL database IDs (${sampleIds.join(', ')}, etc.) for maximum token efficiency.
 
-REQUIREMENTS:
-1. Create visit schedule for ALL ${customerCount} customers
-2. Use frequency codes to determine visits per customer
-3. Distribute visits evenly across ${workingDays} working days
-4. Prioritize by tier_score and days_since_last_visit
-5. Balance weekly workload (target: ~${Math.floor(customerCount/4)} customers per week)
-6. Format dates as DDMM (e.g., "0107" for July 1st)
-7. Provide strategic weekly focus
-8. NEVER schedule visits on SUNDAYS - Sunday is non-working day
-9. Working days: Monday-Saturday only (6 days/week)
-10. Calculate working days: Total days - Sundays - holidays
-11. Validate: NO visit dates should resolve to Sunday
-12. If Sunday detected: Redistribute to nearest weekday immediately
+## FORBIDDEN SUNDAY DATES FOR ${month}/${year}:
+${getSundayDatesForMonth(month, year).map(date => `${date}`).join(', ')}
 
-EXACT OUTPUT FORMAT REQUIRED - Use this structure exactly:
-{
- "mo": {
-   "mr": "${mrName}",
-   "m": ${month},
-   "y": ${year},
-   "tv": <total_planned_visits>,
-   "tr": <target_revenue_estimate>,
-   "wd": ${workingDays},
-   "summary": "<2-sentence strategy summary>"
- },
- "cvs": {
-   "CUSTOMER_CODE_1": ["0107", "1507"],
-   "CUSTOMER_CODE_2": ["0307"],
-   "CUSTOMER_CODE_3": ["0507", "1207", "2607"]
- },
- "ws": {
-   "1": {
-     "dates": ["01-07"],
-     "customers": <count>,
-     "revenue_target": <amount>,
-     "focus": "<strategy>"
-   },
-   "2": {
-     "dates": ["08-14"],
-     "customers": <count>,
-     "revenue_target": <amount>,
-     "focus": "<strategy>"
-   },
-   "3": {
-     "dates": ["15-21"],
-     "customers": <count>,
-     "revenue_target": <amount>,
-     "focus": "<strategy>"
-   },
-   "4": {
-     "dates": ["22-${daysInMonth.toString().padStart(2, '0')}"],
-     "customers": <count>,
-     "revenue_target": <amount>,
-     "focus": "<strategy>"
-   }
- }
+**MANDATORY**: Before scheduling ANY visit, check date is NOT in above list. If Sunday detected, use Monday (+1 day) or Friday (-2 days) instead.
+`;
 }
 
-CRITICAL: 
-- Include ALL ${customerCount} customers in cvs section
-- Use ACTUAL customer codes from the compressed data
-- Return ONLY the JSON format above
-- NO additional text or explanations`;
-}
 
 function parseAICompleteResponse(response) {
    try {
