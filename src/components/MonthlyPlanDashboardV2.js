@@ -310,7 +310,7 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
       const plans = [];
       
       // Load plans for all MRs
-      for (const mr of mrList.slice(0, 10)) { // Limit to first 10 for demo
+      for (const mr of mrList) { // Limit to first 10 for demo
         try {
           const dashboardData = await planService.getDashboardData(mr.name, selectedMonth, selectedYear);
           
