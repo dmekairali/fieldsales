@@ -817,6 +817,7 @@ ${getSundayDatesForMonth(month, year).map(date => `${date}`).join(', ')}
 
 
 function parseAICompleteResponse(response) {
+   console.log(response)
    try {
        let cleaned = response.replace(/```json\n?|\n?```/g, '').trim();
        const firstBrace = cleaned.indexOf('{');
