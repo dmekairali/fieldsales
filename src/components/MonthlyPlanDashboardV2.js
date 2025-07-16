@@ -759,6 +759,12 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
               </div>
               
               {/* Horizontal Scrollable Plan Cards */}
+              {mrLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-600">Loading MRs...</span>
+                </div>
+              ) : (
               <div className="overflow-x-auto pb-4">
                 <div className="flex space-x-4 min-w-max">
                   {allPlans.map((plan) => {
@@ -851,6 +857,7 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
                   })}
                 </div>
               </div>
+              )}
 
               {/* Selected Plan Details */}
               {selectedPlanMR && monthlyPlan && expandedPlan && (
