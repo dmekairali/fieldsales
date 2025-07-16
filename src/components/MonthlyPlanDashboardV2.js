@@ -252,8 +252,6 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [activeView, setActiveView] = useState('overview');
-  const [calendarView, setCalendarView] = useState('month');
-  const [areaView, setAreaView] = useState('customer');
   const [selectedWeek, setSelectedWeek] = useState(1);
 
   // New state for enhanced features
@@ -310,7 +308,7 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
       const plans = [];
       
       // Load plans for all MRs
-      for (const mr of mrList) { // Limit to first 10 for demo
+      for (const mr of mrList) { // Fixed: removed extra closing parenthesis
         try {
           const dashboardData = await planService.getDashboardData(mr.name, selectedMonth, selectedYear);
           
@@ -323,13 +321,15 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
               targetRevenue: dashboardData.monthly_overview?.target_revenue || 0,
               totalCustomers: dashboardData.summary_metrics?.total_customers || 0,
               generatedAt: dashboardData.metadata?.generated_at,
-              status: 'active'
+              status: 'active',
+              hasDashboardData: true // Add flag for sorting
             });
           } else {
             plans.push({
               mrName: mr.name,
               territory: mr.territory,
-              status: 'no_plan'
+              status: 'no_plan',
+              hasDashboardData: false // Add flag for sorting
             });
           }
         } catch (error) {
@@ -337,16 +337,29 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
           plans.push({
             mrName: mr.name,
             territory: mr.territory,
-            status: 'error'
+            status: 'error',
+            hasDashboardData: false // Add flag for sorting
           });
         }
       }
       
-      setAllPlans(plans);
+      // Sort plans: those with dashboardData first, then by mrName
+      const sortedPlans = plans.sort((a, b) => {
+        // First, sort by whether they have dashboard data (true first)
+        if (a.hasDashboardData !== b.hasDashboardData) {
+          return b.hasDashboardData - a.hasDashboardData;
+        }
+        
+        // Then sort alphabetically by mrName
+        return a.mrName.localeCompare(b.mrName);
+      });
+      
+      setAllPlans(sortedPlans);
     } catch (error) {
       console.error('Failed to load all plans:', error);
     }
   };
+
 
   const loadPlanDetails = async (mrName) => {
     try {
@@ -509,56 +522,14 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
     return days;
   };
 
-  const getWeekCalendarDays = () => {
-    const year = selectedYear;
-    const month = selectedMonth;
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const firstDayOfWeek = new Date(firstDayOfMonth);
-    firstDayOfWeek.setDate(firstDayOfMonth.getDate() + (selectedWeek - 1) * 7 - firstDayOfMonth.getDay());
-
-    const weekDays = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(firstDayOfWeek);
-      day.setDate(firstDayOfWeek.getDate() + i);
-      weekDays.push(day);
-    }
-    return weekDays;
-  };
-
-  const navigateWeek = (direction) => {
-    const year = selectedYear;
-    const month = selectedMonth;
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const lastDayOfMonth = new Date(year, month, 0);
-    const numWeeks = Math.ceil((lastDayOfMonth.getDate() + firstDayOfMonth.getDay()) / 7);
-
-    if (direction === 'next') {
-      if (selectedWeek < numWeeks) {
-        setSelectedWeek(selectedWeek + 1);
-      }
-    } else {
-      if (selectedWeek > 1) {
-        setSelectedWeek(selectedWeek - 1);
-      }
-    }
-  };
-
   const getVisitsForDay = (day) => {
     if (!expandedPlan?.customer_summary || !day) return [];
     
     const dateStr = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
     
-    const visits = expandedPlan.customer_summary.filter(customer =>
+    return expandedPlan.customer_summary.filter(customer => 
       customer.visit_dates && customer.visit_dates.includes(dateStr)
     );
-
-    if (areaView === 'area') {
-      const areas = visits.map(visit => visit.area_name);
-      const uniqueAreas = [...new Set(areas)];
-      return uniqueAreas.map(area => ({ area_name: area }));
-    }
-
-    return visits;
   };
 
   return (
@@ -1229,43 +1200,8 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Daily Visit Schedule - {selectedPlanMR}</h3>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setCalendarView('month')}
-                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                        calendarView === 'month' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
-                      }`}
-                    >
-                      Month
-                    </button>
-                    <button
-                      onClick={() => setCalendarView('week')}
-                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                        calendarView === 'week' ? 'bg-violet-600 text-white' : 'bg-gray-200 text-gray-700'
-                      }`}
-                    >
-                      Week
-                    </button>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setAreaView('customer')}
-                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                        areaView === 'customer' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
-                      }`}
-                    >
-                      Customer
-                    </button>
-                    <button
-                      onClick={() => setAreaView('area')}
-                      className={`px-3 py-1 text-sm font-medium rounded-lg ${
-                        areaView === 'area' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'
-                      }`}
-                    >
-                      Area
-                    </button>
-                  </div>
+                <div className="text-sm text-gray-500">
+                  Total: {expandedPlan.summary_metrics?.total_planned_visits || 0} visits planned
                 </div>
               </div>
               
@@ -1279,182 +1215,196 @@ const EnhancedMonthlyPlanningDashboard = ({ selectedMR, selectedMRName }) => {
                 </div>
                 
                 <div className="p-4">
-                  {calendarView === 'month' ? (
-                    <div className="grid grid-cols-7 gap-4">
-                      {getCalendarDays().map((day, index) => {
-                        const visits = getVisitsForDay(day);
-                        const isToday = day === new Date().getDate() &&
-                                       selectedMonth === new Date().getMonth() + 1 &&
-                                       selectedYear === new Date().getFullYear();
-
-                        return (
-                          <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
-                            day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
-                          } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                            {day && (
-                              <>
-                                <div className={`text-sm font-medium mb-2 ${
-                                  isToday ? 'text-blue-700' : 'text-gray-900'
-                                }`}>
-                                  {day}
-                                </div>
-                                {visits.length > 0 && (
-                                  <div className="space-y-1">
-                                    {visits.slice(0, 2).map((visit, i) => (
-                                      <div key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded truncate">
-                                        {areaView === 'customer' ? visit.customer_name : visit.area_name}
-                                      </div>
-                                    ))}
-                                    {visits.length > 2 && (
-                                      <div className="text-xs text-gray-500">
-                                        +{visits.length - 2} more
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <button onClick={() => navigateWeek('prev')} className="p-2 rounded-lg hover:bg-gray-200">
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <h4 className="text-lg font-semibold">
-                          Week {selectedWeek}
-                        </h4>
-                        <button onClick={() => navigateWeek('next')} className="p-2 rounded-lg hover:bg-gray-200">
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-7 gap-4">
-                        {getWeekCalendarDays().map((day, index) => {
-                          const visits = getVisitsForDay(day.getDate());
-                          const isToday = day.getDate() === new Date().getDate() &&
-                                         day.getMonth() + 1 === new Date().getMonth() + 1 &&
-                                         day.getFullYear() === new Date().getFullYear();
-
-                          return (
-                            <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
-                              day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
-                            } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                              {day && (
-                                <>
-                                  <div className={`text-sm font-medium mb-2 ${
-                                    isToday ? 'text-blue-700' : 'text-gray-900'
-                                  }`}>
-                                    {day.getDate()}
-                                  </div>
-                                  {visits.length > 0 && (
-                                    <div className="space-y-1">
-                                      {visits.map((visit, i) => (
-                                        <div key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded truncate">
-                                          {areaView === 'customer' ? visit.customer_name : visit.area_name}
-                                        </div>
-                                      ))}
+                  <div className="grid grid-cols-7 gap-4">
+                    {getCalendarDays().map((day, index) => {
+                      const visits = getVisitsForDay(day);
+                      const isToday = day === new Date().getDate() && 
+                                     selectedMonth === new Date().getMonth() + 1 && 
+                                     selectedYear === new Date().getFullYear();
+                      
+                      return (
+                        <div key={index} className={`min-h-24 p-2 border border-gray-200 rounded-lg ${
+                          day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
+                        } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                          {day && (
+                            <>
+                              <div className={`text-sm font-medium mb-2 ${
+                                isToday ? 'text-blue-700' : 'text-gray-900'
+                              }`}>
+                                {day}
+                              </div>
+                              {visits.length > 0 && (
+                                <div className="space-y-1">
+                                  {visits.slice(0, 2).map((visit, i) => (
+                                    <div key={i} className="text-xs bg-violet-100 text-violet-700 px-2 py-1 rounded truncate">
+                                      {visit.customer_name}
+                                    </div>
+                                  ))}
+                                  {visits.length > 2 && (
+                                    <div className="text-xs text-gray-500">
+                                      +{visits.length - 2} more
                                     </div>
                                   )}
-                                </>
+                                </div>
                               )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Weekly Plans View */}
-          {activeView === 'weekly' && selectedPlanMR && expandedPlan && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Weekly Strategic Plans - {selectedPlanMR}</h3>
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm font-medium text-gray-700">Week:</label>
-                  <select
-                    value={selectedWeek}
-                    onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  >
-                    {[1,2,3,4].map(week => (
-                      <option key={week} value={week}>Week {week}</option>
-                    ))}
-                  </select>
+{activeView === 'weekly' && selectedPlanMR && expandedPlan && (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <h3 className="text-lg font-semibold text-gray-900">
+        Weekly Strategic Plans - {selectedPlanMR}
+      </h3>
+      <div className="flex items-center space-x-2">
+        <label className="text-sm font-medium text-gray-700">Week:</label>
+        <select 
+          value={selectedWeek} 
+          onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+        >
+          {expandedPlan.weekly_summary?.map((_, index) => (
+            <option key={index + 1} value={index + 1}>
+              Week {index + 1}
+            </option>
+          )) || [1,2,3,4].map(week => (
+            <option key={week} value={week}>Week {week}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+    
+    {/* Handle empty state */}
+    {!expandedPlan.weekly_summary || expandedPlan.weekly_summary.length === 0 ? (
+      <div className="text-center py-12">
+        <div className="text-gray-500 text-lg">No weekly plans available</div>
+        <div className="text-gray-400 text-sm mt-2">Weekly data will appear here when available</div>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {expandedPlan.weekly_summary.map((week, index) => {
+          const weekNumber = index + 1;
+          const isSelected = selectedWeek === weekNumber;
+          
+          return (
+            <div 
+              key={weekNumber} 
+              className={`rounded-xl border-2 p-6 transition-all cursor-pointer ${
+                isSelected 
+                  ? 'border-violet-500 bg-violet-50 shadow-lg' 
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+              }`} 
+              onClick={() => setSelectedWeek(weekNumber)}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h4 className={`text-lg font-semibold ${isSelected ? 'text-violet-900' : 'text-gray-900'}`}>
+                  Week {weekNumber}
+                </h4>
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  {week.dates?.join(' - ') || 'N/A'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${isSelected ? 'text-violet-700' : 'text-gray-900'}`}>
+                    {week.customers || 0}
+                  </div>
+                  <div className="text-sm text-gray-600">Customers</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${isSelected ? 'text-violet-700' : 'text-gray-900'}`}>
+                    ₹{((week.revenue_target || 0) / 1000).toFixed(0)}K
+                  </div>
+                  <div className="text-sm text-gray-600">Revenue Target</div>
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {expandedPlan.weekly_summary?.map((week, index) => {
-                  const weekNumber = index + 1;
-                  const isSelected = selectedWeek === weekNumber;
-
-                  return (
-                    <div key={weekNumber} className={`rounded-xl border-2 p-6 transition-all cursor-pointer ${
-                      isSelected
-                        ? 'border-violet-500 bg-violet-50 shadow-lg'
-                        : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
-                    }`} onClick={() => setSelectedWeek(weekNumber)}>
-                      <div className="flex justify-between items-start mb-4">
-                        <h4 className={`text-lg font-semibold ${isSelected ? 'text-violet-900' : 'text-gray-900'}`}>
-                          Week {weekNumber}
-                        </h4>
-                        <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                          {week.dates?.join(' - ') || 'N/A'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="text-center">
-                          <div className={`text-2xl font-bold ${isSelected ? 'text-violet-700' : 'text-gray-900'}`}>
-                            {week.customers || 0}
-                          </div>
-                          <div className="text-sm text-gray-600">Customers</div>
-                        </div>
-                        <div className="text-center">
-                          <div className={`text-2xl font-bold ${isSelected ? 'text-violet-700' : 'text-gray-900'}`}>
-                            ₹{((week.revenue_target || 0) / 1000).toFixed(0)}K
-                          </div>
-                          <div className="text-sm text-gray-600">Revenue Target</div>
-                        </div>
-                      </div>
-
-                      <div className={`p-3 rounded-lg ${isSelected ? 'bg-white border border-violet-200' : 'bg-gray-50'}`}>
-                        <div className="text-sm text-gray-600 mb-1">Strategic Focus</div>
-                        <div className={`text-sm font-medium ${isSelected ? 'text-violet-800' : 'text-gray-900'}`}>
-                          {week.focus || 'Balanced territory coverage'}
-                        </div>
-                      </div>
-
-                      {week.expanded_data?.area_coverage && (
-                        <div className="mt-3 flex flex-wrap gap-1">
-                          {week.expanded_data.area_coverage.slice(0, 3).map((area, i) => (
-                            <span key={i} className={`text-xs px-2 py-1 rounded-full ${
-                              isSelected ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {area}
-                            </span>
-                          ))}
-                          {week.expanded_data.area_coverage.length > 3 && (
-                            <span className="text-xs text-gray-500">
-                              +{week.expanded_data.area_coverage.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className={`p-3 rounded-lg ${isSelected ? 'bg-white border border-violet-200' : 'bg-gray-50'}`}>
+                <div className="text-sm text-gray-600 mb-1">Strategic Focus</div>
+                <div className={`text-sm font-medium ${isSelected ? 'text-violet-800' : 'text-gray-900'}`}>
+                  {week.focus || 'Balanced territory coverage'}
+                </div>
               </div>
+              
+              {week.expanded_data?.area_coverage && week.expanded_data.area_coverage.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {week.expanded_data.area_coverage.slice(0, 3).map((area, i) => (
+                    <span key={i} className={`text-xs px-2 py-1 rounded-full ${
+                      isSelected ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {area}
+                    </span>
+                  ))}
+                  {week.expanded_data.area_coverage.length > 3 && (
+                    <span className="text-xs text-gray-500">
+                      +{week.expanded_data.area_coverage.length - 3}
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {/* Optional: Add progress indicator */}
+              {week.completion_percentage && (
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>Progress</span>
+                    <span>{week.completion_percentage}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full ${isSelected ? 'bg-violet-500' : 'bg-gray-400'}`}
+                      style={{ width: `${week.completion_percentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
+          );
+        })}
+      </div>
+    )}
+    
+    {/* Optional: Add detailed view for selected week */}
+    {selectedWeek && expandedPlan.weekly_summary?.[selectedWeek - 1] && (
+      <div className="mt-6 p-6 bg-violet-50 rounded-xl border border-violet-200">
+        <h4 className="text-lg font-semibold text-violet-900 mb-4">
+          Week {selectedWeek} - Detailed View
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h5 className="font-medium text-gray-900 mb-2">Key Activities</h5>
+            <ul className="text-sm text-gray-600 space-y-1">
+              {expandedPlan.weekly_summary[selectedWeek - 1].key_activities?.map((activity, i) => (
+                <li key={i} className="flex items-start">
+                  <span className="text-violet-500 mr-2">•</span>
+                  {activity}
+                </li>
+              )) || <li>No activities specified</li>}
+            </ul>
+          </div>
+          <div>
+            <h5 className="font-medium text-gray-900 mb-2">Target Metrics</h5>
+            <div className="text-sm text-gray-600 space-y-1">
+              <div>Revenue: ₹{(expandedPlan.weekly_summary[selectedWeek - 1].revenue_target || 0).toLocaleString()}</div>
+              <div>Customers: {expandedPlan.weekly_summary[selectedWeek - 1].customers || 0}</div>
+              <div>Visits: {expandedPlan.weekly_summary[selectedWeek - 1].visits || 0}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
           {/* Customers View */}
           {activeView === 'customers' && selectedPlanMR && expandedPlan && (
             <div className="space-y-6">
