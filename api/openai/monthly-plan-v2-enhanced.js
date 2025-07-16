@@ -172,7 +172,9 @@ async function handleRevision(req, res) {
            revisionReason,
            planContext,
            finalIdMapping,
-           finalReverseMapping
+           finalReverseMapping,
+           planContext.month,
+           planContext.year
        );
 
        // Return structured revision result
@@ -332,7 +334,7 @@ function createCompressedPerformanceDataWithIds(actualPerformance, weekNumber, r
 // ================================================================
 
 
-async function generateAIRevisionWithMapping(assistantId, threadId, weekNumber, compressedPerformance, revisionReason, planContext, idMapping, reverseMapping) {
+async function generateAIRevisionWithMapping(assistantId, threadId, weekNumber, compressedPerformance, revisionReason, planContext, idMapping, reverseMapping, month, year) {
     try {
         console.log(`🤖 Generating AI revision for Week ${weekNumber} with ID mapping`);
         console.log(`🔗 Processing ${Object.keys(idMapping || {}).length} customer ID mappings`);
@@ -476,7 +478,7 @@ function calculateRevisionTokenSavings(planWithIds, planWithCodes) {
 // AI REVISION GENERATOR
 // ===================================================================
 
-async function generateAIRevision(assistantId, threadId, weekNumber, compressedPerformance, revisionReason, planContext) {
+async function generateAIRevision(assistantId, threadId, weekNumber, compressedPerformance, revisionReason, planContext, month, year) {
    try {
        console.log(`🤖 Generating AI revision for Week ${weekNumber}`);
 
