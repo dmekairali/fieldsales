@@ -215,6 +215,58 @@ async function handleRevision(req, res) {
 }
 
 
+/**
+ * Get remaining Monday dates from a specific week in a given month/year
+ * @param {number} month - Month (1-12)
+ * @param {number} year - Year (e.g., 2024)
+ * @param {number} weekNumber - Week number (1-4)
+ * @returns {Array} Array of Monday dates in DDMM format for the remaining days in the week
+ */
+function getRemainingMondayDatesFromWeek(month, year, weekNumber) {
+    try {
+        // Get the first day of the month
+        const firstDay = new Date(year, month - 1, 1);
+        
+        // Calculate the start date of the specified week
+        const weekStartDate = new Date(firstDay);
+        weekStartDate.setDate(firstDay.getDate() + (weekNumber - 1) * 7);
+        
+        // Get today's date for comparison
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        
+        // Array to store Monday dates
+        const mondayDates = [];
+        
+        // Check each day in the week (7 days)
+        for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+            const currentDate = new Date(weekStartDate);
+            currentDate.setDate(weekStartDate.getDate() + dayOffset);
+            
+            // Check if it's a Monday (getDay() returns 1 for Monday)
+            if (currentDate.getDay() === 1) {
+                // Check if this Monday is today or in the future
+                const currentDateStr = currentDate.toISOString().split('T')[0];
+                
+                if (currentDateStr >= todayStr) {
+                    // Format as DDMM
+                    const day = currentDate.getDate().toString().padStart(2, '0');
+                    const monthStr = currentDate.getMonth() + 1;
+                    const monthFormatted = monthStr.toString().padStart(2, '0');
+                    
+                    mondayDates.push(`${day}${monthFormatted}`);
+                }
+            }
+        }
+        
+        return mondayDates;
+        
+    } catch (error) {
+        console.error('❌ Error in getRemainingMondayDatesFromWeek:', error);
+        return [];
+    }
+}
+
 
 // ================================================================
 // 2. ADD MISSING FUNCTION: extractIdMappingFromCurrentPlan
