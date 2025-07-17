@@ -8,6 +8,8 @@ import RouteOptimizationDashboard from './components/RouteOptimizationDashboard'
 import GeocodingDashboard from './components/GeocodingDashboard';
 import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
 import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
+import LoginPage from './components/LoginPage';
+import { useAuth } from './hooks/useAuth';
 
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
@@ -32,6 +34,7 @@ import {
 } from 'lucide-react';
 
 function App() {
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedMR, setSelectedMR] = useState(null);
   const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
@@ -240,7 +243,7 @@ function App() {
     }
   };
 
-  if (mrLoading) {
+  if (authLoading || mrLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -273,6 +276,10 @@ function App() {
   }
 
   const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
