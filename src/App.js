@@ -1,583 +1,340 @@
-// Fixed App.js - Proper Weekly Revision Integration
-
+// src/App.js - Updated with Authentication Integration
 import React, { useState, useEffect } from 'react';
-import EmergencyDashboard from './components/EmergencyDashboard';
-import VisitQualityMonitor from './components/VisitQualityMonitor';
-import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
-import RouteOptimizationDashboard from './components/RouteOptimizationDashboard';
-import GeocodingDashboard from './components/GeocodingDashboard';
+import ProtectedRoute from './components/ProtectedRoute';
+import authService from './services/AuthService';
 import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
-import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
-
-import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
-import './index.css';
+import EmergencyDashboard from './components/EmergencyDashboard';
+import GeocodingDashboard from './components/GeocodingDashboard';
 import { 
-  Calendar, 
-  TrendingUp, 
-  MapPin, 
-  AlertTriangle, 
   BarChart3, 
   Users, 
+  MapPin, 
   Settings, 
-  Target,
-  Activity,
-  DollarSign,
-  Navigation,
-  FileText,
-  Bell,
+  LogOut, 
   User,
-  ChevronDown,
-  Search,
-  Filter
+  Shield,
+  Building,
+  Calendar
 } from 'lucide-react';
 
-function App() {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [selectedMR, setSelectedMR] = useState(null);
-  const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
-  const [nbdDateRange, setNbdDateRange] = useState(30);
-  const [nbdPerformanceFilter, setNbdPerformanceFilter] = useState('all');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
-  // Shared state for month/year - used by both Monthly Planning and Weekly Revision
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
-  const { 
-    mrList, 
-    loading: mrLoading, 
-    error: mrError, 
-    getMRByName,
-    totalMRs 
-  } = useMedicalRepresentatives();
-
-  // Set default MR when list loads
-  useEffect(() => {
-    if (mrList.length > 0 && !selectedMR) {
-      setSelectedMR(mrList[0]);
-    }
-  }, [mrList, selectedMR]);
-
-  const navigationItems = [
+// Navigation items with access control
+const getNavigationItems = (userAccessLevel) => {
+  const allItems = [
     {
-      id: 'overview',
-      name: 'Dashboard Overview',
+      id: 'dashboard',
+      name: 'Dashboard',
+      description: 'Main dashboard overview',
       icon: BarChart3,
-      description: 'Key metrics and insights',
-      color: 'blue'
+      color: 'blue',
+      requiredAccess: 'viewer',
+      component: 'DashboardOverview'
     },
     {
       id: 'monthly-planning',
       name: 'Monthly Planning',
+      description: 'AI-powered monthly tour planning',
       icon: Calendar,
-      description: 'AI-powered tour planning',
       color: 'violet',
-      badge: 'NEW'
-    },
-    {
-      id: 'weekly-revision',
-      name: 'Weekly Revision',
-      icon: Activity,
-      description: 'Performance tracking',
-      color: 'green',
-      count: 3
+      requiredAccess: 'mr',
+      component: 'MonthlyPlanDashboardV2'
     },
     {
       id: 'emergency',
-      name: 'Emergency Territory',
-      icon: AlertTriangle,
-      description: 'Critical territory management',
+      name: 'Emergency Dashboard',
+      description: 'Zero ROI territories analysis',
+      icon: Users,
       color: 'red',
-      count: 2
-    },
-    {
-      id: 'quality',
-      name: 'Visit Quality',
-      icon: Target,
-      description: 'Quality monitoring',
-      color: 'purple',
-      count: 5
-    },
-    {
-      id: 'nbd',
-      name: 'NBD Performance',
-      icon: TrendingUp,
-      description: 'New business development',
-      color: 'emerald'
-    },
-    {
-      id: 'routes',
-      name: 'Route Optimization',
-      icon: Navigation,
-      description: 'AI route planning',
-      color: 'blue'
-    },
-    {
-      id: 'analytics',
-      name: 'Analytics',
-      icon: BarChart3,
-      description: 'Performance insights',
-      color: 'indigo'
+      requiredAccess: 'manager',
+      component: 'EmergencyDashboard'
     },
     {
       id: 'geocoding',
       name: 'Geocoding',
+      description: 'Customer location management',
       icon: MapPin,
-      description: 'GPS management',
-      color: 'teal'
+      color: 'green',
+      requiredAccess: 'admin',
+      component: 'GeocodingDashboard'
     },
     {
-      id: 'reports',
-      name: 'Reports',
-      icon: FileText,
-      description: 'Territory reports',
-      color: 'amber'
+      id: 'settings',
+      name: 'Settings',
+      description: 'System configuration',
+      icon: Settings,
+      color: 'gray',
+      requiredAccess: 'admin',
+      component: 'Settings'
     }
   ];
 
-  const handleMRChange = (e) => {
-    const selectedValue = e.target.value;
-    setSelectedMRName(selectedValue);
-    
-    if (selectedValue === 'ALL_MRS') {
-      setSelectedMR(null);
-    } else {
-      const mrData = getMRByName(selectedValue);
-      setSelectedMR(mrData);
+  // Filter items based on user access level
+  const levelHierarchy = {
+    'viewer': 1,
+    'mr': 2,
+    'manager': 3,
+    'admin': 4
+  };
+
+  const userLevelNum = levelHierarchy[userAccessLevel] || 0;
+
+  return allItems.filter(item => {
+    const requiredLevelNum = levelHierarchy[item.requiredAccess] || 0;
+    return userLevelNum >= requiredLevelNum;
+  });
+};
+
+const App = () => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    // Listen for auth state changes
+    const unsubscribe = authService.onAuthStateChange((event, userData) => {
+      if (event === 'SIGNED_IN') {
+        setCurrentUser(userData);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setActiveTab('dashboard'); // Reset to default tab
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+    } catch (error) {
+      console.error('Sign out error:', error);
     }
   };
 
-  const getIconColor = (color, isActive) => {
-    const colors = {
-      blue: isActive ? 'text-blue-600' : 'text-gray-400',
-      violet: isActive ? 'text-violet-600' : 'text-gray-400',
-      green: isActive ? 'text-green-600' : 'text-gray-400',
-      red: isActive ? 'text-red-600' : 'text-gray-400',
-      purple: isActive ? 'text-purple-600' : 'text-gray-400',
-      emerald: isActive ? 'text-emerald-600' : 'text-gray-400',
-      indigo: isActive ? 'text-indigo-600' : 'text-gray-400',
-      teal: isActive ? 'text-teal-600' : 'text-gray-400',
-      amber: isActive ? 'text-amber-600' : 'text-gray-400'
+  const getAccessLevelDisplay = (level) => {
+    const levels = {
+      'admin': { label: 'Administrator', color: 'text-red-600 bg-red-100' },
+      'manager': { label: 'Manager', color: 'text-purple-600 bg-purple-100' },
+      'mr': { label: 'Medical Representative', color: 'text-blue-600 bg-blue-100' },
+      'viewer': { label: 'Viewer', color: 'text-green-600 bg-green-100' }
     };
-    return colors[color] || 'text-gray-400';
+    return levels[level] || { label: level, color: 'text-gray-600 bg-gray-100' };
   };
 
-  const getBadgeColor = (color) => {
-    const colors = {
-      blue: 'bg-blue-100 text-blue-700',
-      violet: 'bg-violet-100 text-violet-700',
-      green: 'bg-green-100 text-green-700',
-      red: 'bg-red-100 text-red-700',
-      purple: 'bg-purple-100 text-purple-700',
-      emerald: 'bg-emerald-100 text-emerald-700',
-      indigo: 'bg-indigo-100 text-indigo-700',
-      teal: 'bg-teal-100 text-teal-700',
-      amber: 'bg-amber-100 text-amber-700'
-    };
-    return colors[color] || 'bg-gray-100 text-gray-700';
-  };
-
-  const renderTabContent = () => {
+  const renderComponent = () => {
     switch (activeTab) {
-      case 'overview':
-        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} />;
-      
       case 'monthly-planning':
-        return (
-          <MonthlyPlanDashboardV2
-            selectedMR={selectedMR}
-            selectedMRName={selectedMRName}
-            // Pass shared month/year state
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            onMonthChange={setSelectedMonth}
-            onYearChange={setSelectedYear}
-          />
-        );
-      
-      case 'weekly-revision':
-        // FIXED: Pass the correct props
-        return (
-          <WeeklyRevisionDashboard 
-            mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}  // Pass string, not null for ALL_MRS
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            mrData={selectedMR}  // Pass full MR object for context
-            onRevisionComplete={(result) => {
-              console.log('✅ Revision completed:', result);
-              // Optional: Show success message or refresh other components
-            }}
-          />
-        );
-      
+        return <MonthlyPlanDashboardV2 />;
       case 'emergency':
         return <EmergencyDashboard />;
-      
-      case 'quality':
-        return <VisitQualityMonitor mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} />;
-      
-      case 'nbd':
-        return <NBDPerformanceDashboard 
-          mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
-          dateRange={nbdDateRange}
-          performanceFilter={nbdPerformanceFilter}
-        />;
-      
-      case 'routes':
-        return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
-      
       case 'geocoding':
         return <GeocodingDashboard />;
-      
-      case 'analytics':
-        return <AnalyticsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
-      
-      case 'reports':
-        return <ReportsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
-      
+      case 'settings':
+        return <SettingsComponent />;
       default:
-        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+        return <DashboardOverview user={currentUser} />;
     }
   };
 
-  if (mrLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading TourPlan Pro</h2>
-          <p className="text-gray-600">Connecting to territory management system...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (mrError) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-xl shadow-lg max-w-md border border-gray-200">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="h-8 w-8 text-red-600" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h2>
-          <p className="text-gray-600 mb-4">{mrError}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
-          >
-            Retry Connection
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
   return (
-    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
-        sidebarCollapsed ? 'w-16' : 'w-64'
-      }`}>
-        {/* Logo & Collapse Button */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
-          {!sidebarCollapsed && (
+    <ProtectedRoute requiredAccess="viewer">
+      <div className="flex h-screen bg-gray-50">
+        {/* Sidebar */}
+        <div className={`${sidebarCollapsed ? 'w-16' : 'w-64'} bg-white border-r border-gray-200 transition-all duration-300 flex flex-col`}>
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-violet-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TP</span>
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-violet-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <BarChart3 className="h-5 w-5 text-white" />
               </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="font-bold text-gray-900 truncate">TourPlan Pro</h1>
-                <p className="text-xs text-gray-500 truncate">Territory Management</p>
-              </div>
+              {!sidebarCollapsed && (
+                <div>
+                  <h1 className="font-bold text-gray-900">Field Sales</h1>
+                  <p className="text-xs text-gray-500">Dashboard</p>
+                </div>
+              )}
             </div>
-          )}
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${sidebarCollapsed ? 'rotate-90' : '-rotate-90'}`} />
-          </button>
-        </div>
+          </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200 group ${
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-                title={sidebarCollapsed ? item.name : ''}
-              >
-                <Icon className={`h-5 w-5 ${getIconColor(item.color, isActive)} transition-colors flex-shrink-0`} />
-                {!sidebarCollapsed && (
-                  <>
-                    <div className="ml-3 flex-1 min-w-0">
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2">
+            {currentUser && getNavigationItems(currentUser.profile?.access_level).map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center px-3 py-2 rounded-lg transition-colors ${
+                    isActive 
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title={sidebarCollapsed ? item.name : ''}
+                >
+                  <Icon className="h-5 w-5 flex-shrink-0" />
+                  {!sidebarCollapsed && (
+                    <div className="ml-3 flex-1 min-w-0 text-left">
                       <div className="font-medium text-sm truncate">{item.name}</div>
                       <div className="text-xs text-gray-500 truncate">{item.description}</div>
                     </div>
-                    <div className="flex items-center space-x-2 flex-shrink-0">
-                      {item.badge && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
-                      {item.count && (
-                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getBadgeColor(item.color)}`}>
-                          {item.count}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
 
-        {/* User Profile */}
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="h-4 w-4 text-white" />
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-gray-900 truncate">Admin User</div>
-                <div className="text-xs text-gray-500 truncate">Territory Manager</div>
+          {/* User Profile */}
+          <div className="p-4 border-t border-gray-200">
+            {currentUser && (
+              <div className="space-y-3">
+                {/* User Info */}
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-white" />
+                  </div>
+                  {!sidebarCollapsed && (
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-900 truncate">
+                        {currentUser.profile?.full_name || 'Unknown User'}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {currentUser.profile?.employee_id || 'No ID'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Access Level Badge */}
+                {!sidebarCollapsed && currentUser.profile?.access_level && (
+                  <div className="flex items-center space-x-2">
+                    <Shield className="h-3 w-3 text-gray-400" />
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getAccessLevelDisplay(currentUser.profile.access_level).color}`}>
+                      {getAccessLevelDisplay(currentUser.profile.access_level).label}
+                    </span>
+                  </div>
+                )}
+
+                {/* Territory Info */}
+                {!sidebarCollapsed && currentUser.profile?.assigned_territories?.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Building className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-600 truncate">
+                      {currentUser.profile.assigned_territories.slice(0, 2).join(', ')}
+                      {currentUser.profile.assigned_territories.length > 2 && '...'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Sign Out Button */}
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title={sidebarCollapsed ? 'Sign Out' : ''}
+                >
+                  <LogOut className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Sign Out</span>}
+                </button>
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-        {/* Fixed Top Section */}
-        <div className="fixed top-0 right-0 bg-white border-b border-gray-200 z-20" style={{ left: sidebarCollapsed ? '64px' : '256px' }}>
-          {/* Top Header */}
-          <header className="h-16 flex items-center justify-between px-4 lg:px-6">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-lg lg:text-xl font-bold text-gray-900 truncate">
-                {navigationItems.find(item => item.id === activeTab)?.name || 'Dashboard'}
-              </h2>
-              <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-500">
-                <Calendar className="h-4 w-4" />
-                <span>{new Date().toLocaleDateString('en-US', { 
-                  weekday: 'short', 
-                  year: 'numeric', 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 lg:space-x-4">
-              {/* MR Selector */}
-              <div className="flex items-center space-x-2 lg:space-x-3">
-                <label className="hidden lg:block text-sm font-medium text-gray-700">Medical Rep:</label>
-                <select 
-                  value={selectedMRName} 
-                  onChange={handleMRChange}
-                  className="bg-white border border-gray-300 rounded-lg px-2 lg:px-3 py-2 text-xs lg:text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-32 lg:min-w-48"
-                  disabled={mrList.length === 0}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Top Bar */}
+          <div className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <option value="ALL_MRS">All MRs ({totalMRs})</option>
-                  {mrList.length === 0 ? (
-                    <option value="">No MRs Available</option>
-                  ) : (
-                    mrList.map((mr) => (
-                      <option key={mr.id} value={mr.name}>
-                        {mr.name} ({mr.employee_id})
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              {/* Month/Year Selectors - Show for Monthly Planning and Weekly Revision */}
-              {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                <div className="flex items-center space-x-2">
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                    className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {monthNames.slice(1).map((month, index) => (
-                      <option key={index + 1} value={index + 1}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {[2024, 2025, 2026].map(year => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
+                  <BarChart3 className="h-5 w-5 text-gray-600" />
+                </button>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    {getNavigationItems(currentUser?.profile?.access_level || 'viewer')
+                      .find(item => item.id === activeTab)?.name || 'Dashboard'}
+                  </h2>
+                  <p className="text-sm text-gray-600">
+                    Welcome back, {currentUser?.profile?.full_name || 'User'}
+                  </p>
                 </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex items-center space-x-1 lg:space-x-2">
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Search className="h-4 w-4 lg:h-5 lg:w-5" />
-                </button>
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
-                </button>
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
-                </button>
               </div>
-            </div>
-          </header>
-
-          {/* MR Details Bar */}
-          {selectedMR && selectedMRName !== 'ALL_MRS' && (
-            <div className="bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 px-4 lg:px-6 py-3">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
-                <div className="flex flex-wrap items-center gap-3 lg:gap-6">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="font-semibold text-gray-900 text-sm lg:text-base">{selectedMR.name}</span>
+              
+              {/* Quick Actions */}
+              <div className="flex items-center space-x-3">
+                <div className="text-right">
+                  <div className="text-sm font-medium text-gray-900">
+                    {currentUser?.profile?.mr_name || currentUser?.profile?.full_name}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
-                    <div className="flex items-center space-x-1">
-                      <MapPin className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                      <span className="text-gray-700">{selectedMR.territory}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Target className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                      <span className="text-gray-700">₹{selectedMR.monthly_target?.toLocaleString() || 'N/A'}</span>
-                    </div>
-                    {selectedMR.manager_name && (
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                        <span className="text-gray-700">{selectedMR.manager_name}</span>
-                      </div>
-                    )}
+                  <div className="text-xs text-gray-500">
+                    Last login: {currentUser?.profile?.last_login 
+                      ? new Date(currentUser.profile.last_login).toLocaleDateString()
+                      : 'Never'
+                    }
                   </div>
-                </div>
-                <div className="flex items-center space-x-2 lg:space-x-3 text-xs lg:text-sm text-gray-600">
-                  <span>Joined: {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}</span>
-                  <span className="hidden lg:inline">•</span>
-                  <span>ID: {selectedMR.employee_id}</span>
-                  {/* Show current month/year for planning tabs */}
-                  {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                    <>
-                      <span className="hidden lg:inline">•</span>
-                      <span>{monthNames[selectedMonth]} {selectedYear}</span>
-                    </>
-                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* All MRs Summary */}
-          {selectedMRName === 'ALL_MRS' && (
-            <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-100 px-4 lg:px-6 py-3">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
-                <div className="flex items-center space-x-2 lg:space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
-                    <span className="font-semibold text-gray-900 text-sm lg:text-base">Comprehensive Analysis</span>
-                  </div>
-                  <span className="text-gray-600 text-xs lg:text-sm">Viewing all {totalMRs} active Medical Representatives</span>
-                </div>
-                <div className="flex items-center space-x-2 lg:space-x-4 text-xs lg:text-sm text-gray-600">
-                  <span>Total Territories: {totalMRs}</span>
-                  <span className="hidden lg:inline">•</span>
-                  <span>System-wide Overview</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Page Content */}
+          <main className="flex-1 overflow-auto p-6">
+            {renderComponent()}
+          </main>
         </div>
-
-        {/* Tab Content with proper top spacing */}
-        <main className="pt-32 lg:pt-28 p-4 lg:p-6">
-          {renderTabContent()}
-        </main>
       </div>
-    </div>
+    </ProtectedRoute>
   );
-}
+};
 
 // Dashboard Overview Component
-const DashboardOverview = ({ selectedMR, selectedMRName }) => (
+const DashboardOverview = ({ user }) => (
   <div className="space-y-6">
     <div className="text-center py-20">
       <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
         <BarChart3 className="h-10 w-10 text-white" />
       </div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
+      <h2 className="text-3xl font-bold text-gray-900 mb-4">Welcome to Field Sales Dashboard</h2>
       <p className="text-gray-600 text-lg mb-8">
-        {selectedMR ? `Territory insights for ${selectedMR.name}` : 'Complete territory management overview'}
+        Hello {user?.profile?.full_name}, you're signed in as {user?.profile?.access_level}
       </p>
-      <div className="bg-blue-50 rounded-xl p-6 max-w-md mx-auto border border-blue-200">
-        <h3 className="font-semibold text-blue-900 mb-2">Coming Soon</h3>
-        <p className="text-blue-700 text-sm">
-          Advanced dashboard overview with KPIs, charts, and performance metrics
-        </p>
+      
+      {/* User Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="text-2xl font-bold text-blue-600 mb-2">
+            {user?.profile?.assigned_territories?.length || 0}
+          </div>
+          <div className="text-sm text-gray-600">Assigned Territories</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="text-2xl font-bold text-green-600 mb-2">
+            {user?.profile?.access_level?.toUpperCase() || 'UNKNOWN'}
+          </div>
+          <div className="text-sm text-gray-600">Access Level</div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="text-2xl font-bold text-purple-600 mb-2">
+            {user?.profile?.employee_id || 'N/A'}
+          </div>
+          <div className="text-sm text-gray-600">Employee ID</div>
+        </div>
       </div>
     </div>
   </div>
 );
 
-// Analytics View Component  
-const AnalyticsView = ({ selectedMR, selectedMRName }) => (
+// Settings Component Placeholder
+const SettingsComponent = () => (
   <div className="space-y-6">
-    <div className="text-center py-20">
-      <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-        <BarChart3 className="h-10 w-10 text-white" />
-      </div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">Advanced Analytics</h2>
-      <p className="text-gray-600 text-lg mb-8">
-        Comprehensive performance insights and predictive analytics
-      </p>
-      <div className="bg-indigo-50 rounded-xl p-6 max-w-md mx-auto border border-indigo-200">
-        <h3 className="font-semibold text-indigo-900 mb-2">Coming Soon</h3>
-        <p className="text-indigo-700 text-sm">
-          Advanced analytics dashboard with trends and forecasting
-        </p>
-      </div>
-    </div>
-  </div>
-);
-
-// Reports View Component
-const ReportsView = ({ selectedMR, selectedMRName }) => (
-  <div className="space-y-6">
-    <div className="text-center py-20">
-      <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-        <FileText className="h-10 w-10 text-white" />
-      </div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">Reports Center</h2>
-      <p className="text-gray-600 text-lg mb-8">
-        Comprehensive reports and data exports
-      </p>
-      <div className="bg-amber-50 rounded-xl p-6 max-w-md mx-auto border border-amber-200">
-        <h3 className="font-semibold text-amber-900 mb-2">Coming Soon</h3>
-        <p className="text-amber-700 text-sm">
-          Advanced reporting system with custom exports
-        </p>
-      </div>
+    <h3 className="text-xl font-semibold text-gray-900">Settings</h3>
+    <div className="bg-white p-6 rounded-lg border border-gray-200">
+      <p className="text-gray-600">Settings component will be implemented here.</p>
     </div>
   </div>
 );
