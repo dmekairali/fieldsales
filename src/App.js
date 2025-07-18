@@ -1,6 +1,6 @@
-// App.js - Integrated with Authentication (All existing tabs preserved)
+// App.js - Complete Integration with Authentication and Settings Dropdown Logout
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
 import authService from './services/AuthService';
 import EmergencyDashboard from './components/EmergencyDashboard';
@@ -34,6 +34,175 @@ import {
   LogOut,
   Shield
 } from 'lucide-react';
+
+// Settings Dropdown Component
+const SettingsDropdown = ({ currentUser, onSignOut }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getAccessLevelDisplay = (level) => {
+    const levels = {
+      'admin': { label: 'Administrator', color: 'text-red-600', bgColor: 'bg-red-100' },
+      'manager': { label: 'Manager', color: 'text-purple-600', bgColor: 'bg-purple-100' },
+      'mr': { label: 'Medical Representative', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+      'viewer': { label: 'Viewer', color: 'text-green-600', bgColor: 'bg-green-100' }
+    };
+    return levels[level] || { label: level, color: 'text-gray-600', bgColor: 'bg-gray-100' };
+  };
+
+  const accessLevel = getAccessLevelDisplay(currentUser?.profile?.access_level);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Settings Button */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`p-2 rounded-lg transition-colors ${
+          isOpen 
+            ? 'text-blue-600 bg-blue-100' 
+            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+        }`}
+      >
+        <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
+      </button>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-center space-x-2">
+              <Settings className="h-5 w-5 text-gray-600" />
+              <h3 className="font-semibold text-gray-900">Settings & Account</h3>
+            </div>
+          </div>
+
+          {/* User Info Section */}
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-violet-600 rounded-full flex items-center justify-center">
+                <User className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-gray-900 truncate">
+                  {currentUser?.profile?.full_name || 'Unknown User'}
+                </div>
+                <div className="text-sm text-gray-500 truncate">
+                  {currentUser?.profile?.email || 'No email'}
+                </div>
+              </div>
+            </div>
+            
+            {/* Access Level & ID */}
+            <div className="mt-3 flex items-center justify-between">
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${accessLevel.color} ${accessLevel.bgColor}`}>
+                <Shield className="h-3 w-3 mr-1" />
+                {accessLevel.label}
+              </span>
+              <span className="text-xs text-gray-500">
+                ID: {currentUser?.profile?.employee_id || 'N/A'}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Info */}
+          <div className="p-4 space-y-3 border-b border-gray-100">
+            {/* Territories */}
+            {currentUser?.profile?.assigned_territories?.length > 0 && (
+              <div className="flex items-start space-x-2">
+                <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Territories</div>
+                  <div className="text-sm text-gray-900 truncate">
+                    {currentUser.profile.assigned_territories.slice(0, 2).join(', ')}
+                    {currentUser.profile.assigned_territories.length > 2 && 
+                      ` (+${currentUser.profile.assigned_territories.length - 2} more)`
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Manager */}
+            {currentUser?.profile?.reporting_manager && (
+              <div className="flex items-start space-x-2">
+                <Users className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Reports To</div>
+                  <div className="text-sm text-gray-900 truncate">
+                    {currentUser.profile.reporting_manager}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Last Login */}
+            {currentUser?.profile?.last_login && (
+              <div className="flex items-start space-x-2">
+                <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</div>
+                  <div className="text-sm text-gray-900">
+                    {new Date(currentUser.profile.last_login).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Settings Options */}
+          <div className="p-4 space-y-1 border-b border-gray-100">
+            <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+              <User className="h-4 w-4 text-gray-400" />
+              <span>Profile Settings</span>
+            </button>
+            
+            <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+              <Bell className="h-4 w-4 text-gray-400" />
+              <span>Notifications</span>
+            </button>
+            
+            <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+              <Shield className="h-4 w-4 text-gray-400" />
+              <span>Privacy & Security</span>
+            </button>
+            
+            <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
+              <Settings className="h-4 w-4 text-gray-400" />
+              <span>App Preferences</span>
+            </button>
+          </div>
+
+          {/* Sign Out */}
+          <div className="p-4">
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onSignOut();
+              }}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 rounded-lg border border-red-200 transition-all font-medium"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function App() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -479,7 +648,7 @@ function App() {
                   </div>
                 )}
 
-                {/* Sign Out Button */}
+                {/* Sign Out Button - Backup in sidebar */}
                 <button
                   onClick={handleSignOut}
                   className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -514,7 +683,7 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 lg:space-x-4">
+             <div className="flex items-center space-x-2 lg:space-x-4">
                 {/* MR Selector */}
                 <div className="flex items-center space-x-2 lg:space-x-3">
                   <label className="hidden lg:block text-sm font-medium text-gray-700">Medical Rep:</label>
@@ -581,9 +750,12 @@ function App() {
                   <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
                     <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
                   </button>
-                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
-                  </button>
+                  
+                  {/* Settings Dropdown with Logout */}
+                  <SettingsDropdown 
+                    currentUser={currentUser} 
+                    onSignOut={handleSignOut}
+                  />
                 </div>
               </div>
             </header>
@@ -650,7 +822,7 @@ function App() {
             )}
           </div>
 
-         {/* Tab Content with proper top spacing */}
+          {/* Tab Content with proper top spacing */}
           <main className="pt-32 lg:pt-28 p-4 lg:p-6">
             {renderTabContent()}
           </main>
