@@ -701,7 +701,7 @@ function createUltraCompressedInput(customers, idMapping = null, reverseMapping 
         const conversionRate = parseFloat((customer.conversion_rate_90d || 0).toFixed(2)); // Restrict to 2 decimal places
         
         // Add preferred visit day and confidence
-        const preferredVisitDay = customer.preferred_visit_day ? customer.preferred_visit_day.split(',').map(day => `${day.trim()}-${day.trim().substring(0, 3)}`).join(', ') : '';
+        const preferredVisitDay = customer.preferred_visit_day ? customer.preferred_visit_day.split(',').map(day => day.trim().substring(0, 3)).join(', ') : '';
         const preferredDayConfidence = customer.preferred_day_confidence || '';
 
         // Store using REAL database ID (much shorter than customer codes)
