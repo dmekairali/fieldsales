@@ -700,6 +700,10 @@ function createUltraCompressedInput(customers, idMapping = null, reverseMapping 
         const orders90d = customer.total_orders_90d || 1;
         const conversionRate = parseFloat((customer.conversion_rate_90d || 0).toFixed(2)); // Restrict to 2 decimal places
         
+        // Add preferred visit day and confidence
+        const preferredVisitDay = customer.preferred_visit_day ? customer.preferred_visit_day.split(',').map(day => `${day.trim()}-${day.trim().substring(0, 3)}`).join(', ') : '';
+        const preferredDayConfidence = customer.preferred_day_confidence || '';
+
         // Store using REAL database ID (much shorter than customer codes)
         compressedCustomers[realId] = [
             tierCode,
@@ -710,7 +714,9 @@ function createUltraCompressedInput(customers, idMapping = null, reverseMapping 
             daysSinceVisit,
             customerType,
             orders90d,
-            conversionRate
+            conversionRate,
+            preferredVisitDay,
+            preferredDayConfidence
         ];
     });
     
@@ -719,7 +725,7 @@ function createUltraCompressedInput(customers, idMapping = null, reverseMapping 
         id_mapping: idMapping,        // Store for conversion back
         reverse_mapping: reverseMapping,
         field_mapping: {
-            fields: ["tier_code", "area_name", "tier_score", "frequency", "sales_90d", "days_since_visit", "customer_type", "orders_90d", "conversion_rate"],
+            fields: ["tier_code", "area_name", "tier_score", "frequency", "sales_90d", "days_since_visit", "customer_type", "orders_90d", "conversion_rate", "preferred_visit_day", "preferred_day_confidence"],
             tier_codes: {1: "TIER_1_CHAMPION", 2: "TIER_2_PERFORMER", 3: "TIER_3_DEVELOPER", 4: "TIER_4_PROSPECT"},
             customer_types: {D: "Doctor", R: "Retailer", S: "Stockist", C: "Clinic", H: "Hospital"},
             frequencies: {Q: "Quarterly", M1: "Monthly (1 visit)", M2: "Monthly (2 visits)", M3: "Monthly (3 visits)", F: "Fortnightly", W: "Weekly"}
