@@ -220,7 +220,9 @@ async getCompressedTerritoryContext(mrName, month, year) {
                 conversion_rate_90d,
                 last_visit_date,
                 days_since_last_visit,
-                customer_segment
+                customer_segment,
+                preferred_visit_day,
+                preferred_day_confidence
             `)
             .eq('mr_name', mrName)
             .eq('status', 'ACTIVE');
