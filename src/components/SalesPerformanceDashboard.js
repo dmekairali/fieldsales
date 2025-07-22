@@ -672,7 +672,144 @@ const handlePeriodChange = (newPeriod) => {
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {/* Filter content with responsive grid */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedPeriod}
+                  onChange={(e) => handlePeriodChange(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                 <option value="weekly">Weekly</option>
+  <option value="monthly">Monthly</option>
+  <option value="quarterly">Quarterly</option>
+  <option value="yearly">Yearly</option>
+  <option value="custom">Custom Date Range</option>
+                </select>
+
+                {selectedPeriod === 'weekly' && (
+                  <input
+                    type="week"
+                    value={selectedWeek}
+                    onChange={(e) => setSelectedWeek(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                )}
+
+                {selectedPeriod === 'monthly' && (
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                )}
+
+                {selectedPeriod === 'quarterly' && (
+                  <select
+                    value={selectedQuarter}
+                    onChange={(e) => setSelectedQuarter(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="2024-Q1">2024 Q1</option>
+                    <option value="2024-Q2">2024 Q2</option>
+                    <option value="2024-Q3">2024 Q3</option>
+                    <option value="2024-Q4">2024 Q4</option>
+                    <option value="2023-Q1">2023 Q1</option>
+                    <option value="2023-Q2">2023 Q2</option>
+                    <option value="2023-Q3">2023 Q3</option>
+                    <option value="2023-Q4">2023 Q4</option>
+                  </select>
+                )}
+
+                {selectedPeriod === 'yearly' && (
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                    <option value="2022">2022</option>
+                    <option value="2021">2021</option>
+                  </select>
+                )}
+              </div>
+
+              {selectedPeriod === 'custom' && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <span className="text-gray-500">to</span>
+                  <input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
+              <select
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Regions</option>
+                <option value="north">North</option>
+                <option value="south">South</option>
+                <option value="east">East</option>
+                <option value="west">West</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Team (ASM/RSM)</label>
+              <select
+                value={selectedTeam}
+                onChange={(e) => setSelectedTeam(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Teams</option>
+                {teams.map(team => (
+                  <option key={team.employee_id} value={team.employee_id}>
+                    {team.name} ({team.role_level}) - {team.region}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+              <select
+                value={selectedState}
+                onChange={(e) => setSelectedState(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All States</option>
+                {states.map(state => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Medical Rep</label>
+              <select
+                value={selectedMR}
+                onChange={(e) => setSelectedMR(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Representatives</option>
+                {medicalReps.map(rep => (
+                  <option key={rep.employee_id} value={rep.employee_id}>{rep.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
