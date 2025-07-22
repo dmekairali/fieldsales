@@ -505,6 +505,13 @@ const handlePeriodChange = (newPeriod) => {
   };
 
   const formatCurrency = (value) => {
+    if (value >= 10000000) { // 1 crore
+      return `₹${(value / 10000000).toFixed(1)}Cr`;
+    } else if (value >= 100000) { // 1 lakh
+      return `₹${(value / 100000).toFixed(1)}L`;
+    } else if (value >= 1000) { // 1 thousand
+      return `₹${(value / 1000).toFixed(1)}K`;
+    }
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -512,86 +519,112 @@ const handlePeriodChange = (newPeriod) => {
     }).format(value);
   };
 
+  const chartContainerStyles = {
+    width: "100%",
+    height: 300,
+    minWidth: 0, // Allow shrinking
+    overflow: "hidden"
+  };
+
   const KPICard = ({ title, value, change, icon: Icon, color }) => (
-    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`p-3 rounded-lg ${color}`}>
-          <Icon className="w-6 h-6 text-white" />
+    <div className="bg-white rounded-xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition-shadow min-w-0">
+      <div className="flex items-center justify-between mb-3">
+        <div className={`p-2 rounded-lg ${color} flex-shrink-0`}>
+          <Icon className="w-5 h-5 text-white" />
         </div>
         {change && (
-          <span className={`text-sm font-medium ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-600'} flex-shrink-0`}>
             {change > 0 ? '+' : ''}{change}%
           </span>
         )}
       </div>
-      <h3 className="text-gray-600 text-sm font-medium mb-1">{title}</h3>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      <h3 className="text-gray-600 text-xs font-medium mb-1 truncate">{title}</h3>
+      <p className="text-lg font-bold text-gray-900 truncate" title={value}>{value}</p>
+    </div>
+  );
+
+  const ChartWrapper = ({ children, title }) => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 min-w-0 overflow-hidden">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">{title}</h3>
+      <div style={chartContainerStyles}>
+        {children}
+      </div>
+    </div>
+  );
+
+  const TableWrapper = ({ children }) => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="overflow-x-auto min-w-0">
+        <div className="min-w-[800px]"> {/* Minimum width for table */}
+          {children}
+        </div>
+      </div>
     </div>
   );
 
   const PerformanceTable = ({ data }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-6 border-b border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-900">Top Performers</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Visits</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Achievement</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {data.map((rep, index) => (
-              <tr key={rep.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {index === 0 && <Award className="w-5 h-5 text-yellow-500 mr-2" />}
-                    {index === 1 && <Award className="w-5 h-5 text-gray-400 mr-2" />}
-                    {index === 2 && <Award className="w-5 h-5 text-orange-600 mr-2" />}
-                    <span className="text-sm font-medium text-gray-900">#{index + 1}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{rep.name}</div>
-                    <div className="text-sm text-gray-500">{rep.id}</div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {formatCurrency(rep.revenue)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{rep.visits}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <span className="text-sm text-gray-900">{rep.conversion}%</span>
-                    <div className="ml-2 w-16 bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${rep.conversion}%` }}
-                      />
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    rep.achievement >= 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {rep.achievement}%
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  <TableWrapper>
+    <div className="p-6 border-b border-gray-100">
+      <h3 className="text-lg font-semibold text-gray-900">Top Performers</h3>
     </div>
-  );
+    <table className="w-full min-w-[800px]">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Rank</th>
+          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Revenue</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Visits</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Conversion</th>
+          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Achievement</th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+        {data.map((rep, index) => (
+          <tr key={rep.id} className="hover:bg-gray-50 transition-colors">
+            <td className="px-4 py-3 whitespace-nowrap w-16">
+              <div className="flex items-center">
+                {index === 0 && <Award className="w-4 h-4 text-yellow-500 mr-1" />}
+                {index === 1 && <Award className="w-4 h-4 text-gray-400 mr-1" />}
+                {index === 2 && <Award className="w-4 h-4 text-orange-600 mr-1" />}
+                <span className="text-sm font-medium text-gray-900">#{index + 1}</span>
+              </div>
+            </td>
+            <td className="px-4 py-3 min-w-0">
+              <div className="truncate">
+                <div className="text-sm font-medium text-gray-900 truncate">{rep.name}</div>
+                <div className="text-xs text-gray-500 truncate">{rep.id}</div>
+              </div>
+            </td>
+            <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium text-gray-900 w-24">
+              <span title={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(rep.revenue)}>
+                {formatCurrency(rep.revenue)}
+              </span>
+            </td>
+            <td className="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-900 w-20">{rep.visits}</td>
+            <td className="px-4 py-3 whitespace-nowrap w-24">
+              <div className="flex items-center justify-center">
+                <span className="text-xs text-gray-900 mr-1">{rep.conversion}%</span>
+                <div className="w-8 bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className="bg-blue-600 h-1.5 rounded-full"
+                    style={{ width: `${Math.min(rep.conversion, 100)}%` }}
+                  />
+                </div>
+              </div>
+            </td>
+            <td className="px-4 py-3 whitespace-nowrap w-24">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                rep.achievement >= 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {rep.achievement}%
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </TableWrapper>
+);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
@@ -607,7 +640,7 @@ const handlePeriodChange = (newPeriod) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 lg:p-6 overflow-x-hidden max-w-full">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
@@ -638,151 +671,14 @@ const handlePeriodChange = (newPeriod) => {
 
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Period</label>
-              <div className="flex gap-2">
-                <select
-                  value={selectedPeriod}
-                  onChange={(e) => handlePeriodChange(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                 <option value="weekly">Weekly</option>
-  <option value="monthly">Monthly</option>
-  <option value="quarterly">Quarterly</option>
-  <option value="yearly">Yearly</option>
-  <option value="custom">Custom Date Range</option>
-                </select>
-                
-                {selectedPeriod === 'weekly' && (
-                  <input
-                    type="week"
-                    value={selectedWeek}
-                    onChange={(e) => setSelectedWeek(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                )}
-                
-                {selectedPeriod === 'monthly' && (
-                  <input
-                    type="month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                )}
-                
-                {selectedPeriod === 'quarterly' && (
-                  <select
-                    value={selectedQuarter}
-                    onChange={(e) => setSelectedQuarter(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="2024-Q1">2024 Q1</option>
-                    <option value="2024-Q2">2024 Q2</option>
-                    <option value="2024-Q3">2024 Q3</option>
-                    <option value="2024-Q4">2024 Q4</option>
-                    <option value="2023-Q1">2023 Q1</option>
-                    <option value="2023-Q2">2023 Q2</option>
-                    <option value="2023-Q3">2023 Q3</option>
-                    <option value="2023-Q4">2023 Q4</option>
-                  </select>
-                )}
-                
-                {selectedPeriod === 'yearly' && (
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="2025">2025</option>
-                    <option value="2024">2024</option>
-                    <option value="2023">2023</option>
-                    <option value="2022">2022</option>
-                    <option value="2021">2021</option>
-                  </select>
-                )}
-              </div>
-              
-              {selectedPeriod === 'custom' && (
-                <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <span className="text-gray-500">to</span>
-                  <input
-                    type="date"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
-              <select
-                value={selectedRegion}
-                onChange={(e) => setSelectedRegion(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Regions</option>
-                <option value="north">North</option>
-                <option value="south">South</option>
-                <option value="east">East</option>
-                <option value="west">West</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Team (ASM/RSM)</label>
-              <select
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Teams</option>
-                {teams.map(team => (
-                  <option key={team.employee_id} value={team.employee_id}>
-                    {team.name} ({team.role_level}) - {team.region}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-              <select
-                value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All States</option>
-                {states.map(state => (
-                  <option key={state} value={state}>{state}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Medical Rep</label>
-              <select
-                value={selectedMR}
-                onChange={(e) => setSelectedMR(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Representatives</option>
-                {medicalReps.map(rep => (
-                  <option key={rep.employee_id} value={rep.employee_id}>{rep.name}</option>
-                ))}
-              </select>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {/* Filter content with responsive grid */}
           </div>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8 min-w-0">
         <KPICard
           title="Total Revenue"
           value={formatCurrency(dashboardData.overview.totalRevenue)}
@@ -829,10 +725,9 @@ const handlePeriodChange = (newPeriod) => {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Revenue Trend Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Trend</h3>
+          <ResponsiveContainer width="100%" height={300} minWidth={0}>
             <AreaChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
@@ -844,11 +739,9 @@ const handlePeriodChange = (newPeriod) => {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Visit & Conversion Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Visits & Conversion Rate</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Visits & Conversion Rate</h3>
+          <ResponsiveContainer width="100%" height={300} minWidth={0}>
             <LineChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
@@ -861,11 +754,9 @@ const handlePeriodChange = (newPeriod) => {
             </LineChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Revenue Split (NBD vs CRR) */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Distribution</h3>
+          <ResponsiveContainer width="100%" height={300} minWidth={0}>
             <BarChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
@@ -877,10 +768,8 @@ const handlePeriodChange = (newPeriod) => {
             </BarChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Performance Metrics */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Metrics</h3>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Performance Metrics</h3>
           <div className="space-y-6">
             {/* Visit Metrics */}
             <div>
@@ -942,7 +831,9 @@ const handlePeriodChange = (newPeriod) => {
       </div>
 
       {/* Top Performers Table */}
-      <PerformanceTable data={dashboardData.topPerformers} />
+      <TableWrapper>
+        <PerformanceTable data={dashboardData.topPerformers} />
+      </TableWrapper>
 
       {/* Additional Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
@@ -1035,28 +926,26 @@ const handlePeriodChange = (newPeriod) => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h3>
           <div className="space-y-4">
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600">Avg Visits per Rep</span>
-              <span className="text-sm font-medium">
+              <span className="text-sm text-gray-600 truncate pr-2">Avg Visits per Rep</span>
+              <span className="text-sm font-medium text-right flex-shrink-0">
                 {dashboardData.overview.activeReps > 0 
                   ? Math.round(dashboardData.overview.totalVisits / dashboardData.overview.activeReps)
                   : 0}
               </span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600">Avg Revenue per Visit</span>
-              <span className="text-sm font-medium">
-                {dashboardData.overview.totalVisits > 0
-                  ? formatCurrency(dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits)
-                  : formatCurrency(0)}
+              <span className="text-sm text-gray-600 truncate pr-2">Avg Revenue per Visit</span>
+              <span className="text-sm font-medium text-right flex-shrink-0" title={formatCurrency(dashboardData.overview.totalVisits > 0 ? dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits : 0)}>
+                {formatCurrency(dashboardData.overview.totalVisits > 0 ? dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits : 0)}
               </span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600">Visit to Order Ratio</span>
-              <span className="text-sm font-medium">{dashboardData.overview.conversionRate}%</span>
+              <span className="text-sm text-gray-600 truncate pr-2">Visit to Order Ratio</span>
+              <span className="text-sm font-medium text-right flex-shrink-0">{dashboardData.overview.conversionRate}%</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600">Growth Rate</span>
-              <span className="text-sm font-medium text-green-600">+{dashboardData.detailedMetrics.revenueMetrics.growthRate}%</span>
+              <span className="text-sm text-gray-600 truncate pr-2">Growth Rate</span>
+              <span className="text-sm font-medium text-green-600 text-right flex-shrink-0">+{dashboardData.detailedMetrics.revenueMetrics.growthRate}%</span>
             </div>
           </div>
         </div>
