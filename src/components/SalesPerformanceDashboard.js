@@ -4,16 +4,52 @@ import { Calendar, TrendingUp, Users, Target, DollarSign, Activity, Award, Alert
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase client
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const SalesPerformanceDashboard = () => {
+
+
+// Helper function to get current period values
+const getCurrentPeriodDefaults = () => {
+  const now = new Date();
+  
+  // Current week in YYYY-Www format
+  const currentWeek = (() => {
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const dayOfYear = Math.floor((now - startOfYear) / (24 * 60 * 60 * 1000)) + 1;
+    const weekNumber = Math.ceil(dayOfYear / 7);
+    return `${now.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+  })();
+  
+  // Current month in YYYY-MM format
+  const currentMonth = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  
+  // Current quarter in YYYY-Qn format
+  const currentQuarter = `${now.getFullYear()}-Q${Math.ceil((now.getMonth() + 1) / 3)}`;
+  
+  // Current year
+  const currentYear = now.getFullYear().toString();
+  
+  return {
+    week: currentWeek,
+    month: currentMonth,
+    quarter: currentQuarter,
+    year: currentYear
+  };
+};
+
+
+// Initialize with current defaults
+const currentDefaults = getCurrentPeriodDefaults();
+
+
   const [selectedPeriod, setSelectedPeriod] = useState('monthly');
-  const [selectedMonth, setSelectedMonth] = useState('2024-06');
-  const [selectedWeek, setSelectedWeek] = useState('2024-W25');
-  const [selectedQuarter, setSelectedQuarter] = useState('2024-Q2');
-  const [selectedYear, setSelectedYear] = useState('2024');
+const [selectedMonth, setSelectedMonth] = useState(currentDefaults.month);
+const [selectedWeek, setSelectedWeek] = useState(currentDefaults.week);
+const [selectedQuarter, setSelectedQuarter] = useState(currentDefaults.quarter);
+const [selectedYear, setSelectedYear] = useState(currentDefaults.year);
   const [selectedRegion, setSelectedRegion] = useState('all');
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedState, setSelectedState] = useState('all');
@@ -72,6 +108,30 @@ const SalesPerformanceDashboard = () => {
       end: end.toISOString().split('T')[0]
     };
   };
+
+// Updated period change handler
+const handlePeriodChange = (newPeriod) => {
+  setSelectedPeriod(newPeriod);
+  
+  // Auto-update to current period when changing period type
+  const current = getCurrentPeriodDefaults();
+  
+  switch (newPeriod) {
+    case 'weekly':
+      setSelectedWeek(current.week);
+      break;
+    case 'monthly':
+      setSelectedMonth(current.month);
+      break;
+    case 'quarterly':
+      setSelectedQuarter(current.quarter);
+      break;
+    case 'yearly':
+      setSelectedYear(current.year);
+      break;
+  }
+};
+
 
   // Fetch initial data for filters
   useEffect(() => {
@@ -584,14 +644,14 @@ const SalesPerformanceDashboard = () => {
               <div className="flex gap-2">
                 <select
                   value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                  onChange={(e) => handlePeriodChange(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="yearly">Yearly</option>
-                  <option value="custom">Custom Date Range</option>
+                 <option value="weekly">Weekly</option>
+  <option value="monthly">Monthly</option>
+  <option value="quarterly">Quarterly</option>
+  <option value="yearly">Yearly</option>
+  <option value="custom">Custom Date Range</option>
                 </select>
                 
                 {selectedPeriod === 'weekly' && (
