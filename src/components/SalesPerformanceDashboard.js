@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { Calendar, TrendingUp, Users, Target, DollarSign, Activity, Award, AlertCircle, ChevronDown, Filter, Download, RefreshCw, User, MapPin, Phone, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'YOUR_SUPABASE_URL';
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const SalesPerformanceDashboard = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('monthly');
@@ -13,68 +19,430 @@ const SalesPerformanceDashboard = () => {
   const [selectedState, setSelectedState] = useState('all');
   const [selectedMR, setSelectedMR] = useState('all');
   const [dateRange, setDateRange] = useState({ start: '2024-01-01', end: '2024-12-31' });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [states, setStates] = useState([]);
+  const [medicalReps, setMedicalReps] = useState([]);
 
-  // Mock data for demonstration
-  const teamData = {
-    overview: {
-      totalRevenue: 2847650,
-      totalVisits: 3456,
-      conversionRate: 68.5,
-      activeReps: 24,
-      targetAchievement: 92.3,
-      avgOrderValue: 824.35
-    },
-    trends: {
-      weekly: [
-        { week: 'W1', revenue: 145000, visits: 180, conversion: 72, target: 150000 },
-        { week: 'W2', revenue: 168000, visits: 195, conversion: 75, target: 150000 },
-        { week: 'W3', revenue: 152000, visits: 172, conversion: 70, target: 150000 },
-        { week: 'W4', revenue: 175000, visits: 201, conversion: 78, target: 150000 }
-      ],
-      monthly: [
-        { month: 'Jan', revenue: 245000, visits: 320, conversion: 68, target: 250000, nbd: 145000, crr: 100000 },
-        { month: 'Feb', revenue: 268000, visits: 345, conversion: 72, target: 260000, nbd: 158000, crr: 110000 },
-        { month: 'Mar', revenue: 312000, visits: 380, conversion: 75, target: 300000, nbd: 187000, crr: 125000 },
-        { month: 'Apr', revenue: 295000, visits: 360, conversion: 71, target: 290000, nbd: 175000, crr: 120000 },
-        { month: 'May', revenue: 334000, visits: 395, conversion: 77, target: 320000, nbd: 200000, crr: 134000 },
-        { month: 'Jun', revenue: 358000, visits: 412, conversion: 79, target: 340000, nbd: 215000, crr: 143000 }
-      ]
-    },
-    topPerformers: [
-      { name: 'Rajesh Kumar', id: 'MR001', revenue: 456000, visits: 487, conversion: 82, achievement: 114 },
-      { name: 'Priya Sharma', id: 'MR002', revenue: 423000, visits: 465, conversion: 79, achievement: 106 },
-      { name: 'Amit Singh', id: 'MR003', revenue: 398000, visits: 445, conversion: 76, achievement: 99 },
-      { name: 'Neha Patel', id: 'MR004', revenue: 387000, visits: 432, conversion: 74, achievement: 97 },
-      { name: 'Suresh Verma', id: 'MR005', revenue: 365000, visits: 410, conversion: 73, achievement: 91 }
-    ],
-    performanceByCategory: [
-      { category: 'New Business (NBD)', value: 1650000, percentage: 58 },
-      { category: 'Repeat Business (CRR)', value: 1197650, percentage: 42 }
-    ],
-    detailedMetrics: {
-      visitMetrics: {
-        planned: 3600,
-        completed: 3456,
-        missed: 144,
-        completionRate: 96
-      },
-      conversionMetrics: {
-        totalLeads: 3456,
-        converted: 2367,
-        pending: 890,
-        lost: 199
-      },
-      revenueMetrics: {
-        target: 3000000,
-        achieved: 2847650,
-        gap: 152350,
-        growthRate: 12.5
-      }
+  // Helper function to get date range based on selected period
+  const getDateRange = () => {
+    if (selectedPeriod === 'custom') {
+      return { start: dateRange.start, end: dateRange.end };
+    }
+
+    const now = new Date();
+    let start, end;
+
+    switch (selectedPeriod) {
+      case 'weekly':
+        const [year, week] = selectedWeek.split('-W');
+        const firstDayOfYear = new Date(parseInt(year), 0, 1);
+        const daysToAdd = (parseInt(week) - 1) * 7;
+        start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+        // Adjust to Monday
+        const dayOfWeek = start.getDay();
+        const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        start.setDate(start.getDate() + daysToMonday);
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        break;
+
+      case 'monthly':
+        const [monthYear, monthNum] = selectedMonth.split('-');
+        start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+        end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
+        break;
+
+      case 'quarterly':
+        const [qYear, quarter] = selectedQuarter.split('-Q');
+        const qNum = parseInt(quarter);
+        start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
+        end = new Date(parseInt(qYear), qNum * 3, 0);
+        break;
+
+      case 'yearly':
+        start = new Date(parseInt(selectedYear), 0, 1);
+        end = new Date(parseInt(selectedYear), 11, 31);
+        break;
+    }
+
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
+  };
+
+  // Fetch initial data for filters
+  useEffect(() => {
+    fetchFilterData();
+  }, []);
+
+  // Fetch dashboard data when filters change
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
+      selectedRegion, selectedTeam, selectedState, selectedMR]);
+
+  const fetchFilterData = async () => {
+    try {
+      // Fetch teams (ASM/RSM)
+      const { data: teamData } = await supabase
+        .from('medical_representatives')
+        .select('employee_id, name, role_level, region')
+        .in('role_level', ['ASM', 'RSM'])
+        .order('name');
+
+      // Fetch states
+      const { data: stateData } = await supabase
+        .from('medical_representatives')
+        .select('state')
+        .not('state', 'is', null)
+        .order('state');
+
+      // Get unique states
+      const uniqueStates = [...new Set(stateData?.map(item => item.state) || [])];
+
+      // Fetch all medical representatives
+      const { data: mrData } = await supabase
+        .from('medical_representatives')
+        .select('employee_id, name, role_level')
+        .eq('role_level', 'MR')
+        .order('name');
+
+      setTeams(teamData || []);
+      setStates(uniqueStates);
+      setMedicalReps(mrData || []);
+    } catch (error) {
+      console.error('Error fetching filter data:', error);
     }
   };
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const { start, end } = getDateRange();
+      
+      // Build base query for orders
+      let orderQuery = supabase
+        .from('orders')
+        .select(`
+         order_id,
+         order_date,
+         net_amount,
+         order_type,
+         mr_name,
+         customer_code,
+         state
+          )
+        `)
+        .gte('order_date', start)
+        .lte('order_date', end);
+
+      // Build base query for visits  
+      let visitQuery = supabase
+        .from('mr_visits')
+        .select(`
+          "visitId",
+          "dcrDate",
+          "empName",
+          "clientMobileNo",
+          "clientName",
+          "amountOfSale"
+        `)
+        .gte('"dcrDate"', start)
+        .lte('"dcrDate"', end);
+
+      // Build base query for targets
+      let targetQuery = supabase
+        .from('mr_weekly_targets')
+        .select('*')
+        .gte('target_date', start)
+        .lte('target_date', end);
+
+      // Apply filters
+      if (selectedMR !== 'all') {
+        const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
+        if (selectedMRData) {
+          orderQuery = orderQuery.eq('mr_name', selectedMRData.name);
+          visitQuery = visitQuery.eq('"empName"', selectedMRData.name);
+          targetQuery = targetQuery.eq('employee_id', selectedMR);
+        }
+      }
+
+      if (selectedTeam !== 'all') {
+        // Get MRs under selected ASM/RSM
+        const { data: teamMRs } = await supabase
+          .from('medical_representatives')
+          .select('employee_id, name')
+          .or(`area_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name},regional_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name}`);
+        
+        const mrNames = teamMRs?.map(mr => mr.name) || [];
+        const mrIds = teamMRs?.map(mr => mr.employee_id) || [];
+        
+        if (mrNames.length > 0) {
+          orderQuery = orderQuery.in('mr_name', mrNames);
+          visitQuery = visitQuery.in('"empName"', mrNames);
+          targetQuery = targetQuery.in('employee_id', mrIds);
+        }
+      }
+
+      if (selectedState !== 'all') {
+          orderQuery = orderQuery.eq('state', selectedState);
+        // For visits, we need to join with customers based on mobile number
+      }
+
+      // Execute queries
+      const [orderData, visitData, targetData, mrData] = await Promise.all([
+        orderQuery,
+        visitQuery,
+        targetQuery,
+        supabase
+          .from('medical_representatives')
+          .select('employee_id, name, role_level, region, state')
+      ]);
+
+      // Process data to calculate conversions
+      const processedData = processDataWithConversions(
+        orderData.data || [],
+        visitData.data || [],
+        targetData.data || [],
+        mrData.data || []
+      );
+
+      setDashboardData(processedData);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processDataWithConversions = (orders, visits, targets, mrs) => {
+    // Create a map of visits by date and customer for conversion tracking
+    const visitMap = new Map();
+    visits.forEach(visit => {
+      const dateKey = visit.dcrDate;
+      const customerKey = `${visit.clientMobileNo}_${visit.clientName}`;
+      if (!visitMap.has(dateKey)) {
+        visitMap.set(dateKey, new Map());
+      }
+      visitMap.get(dateKey).set(customerKey, visit);
+    });
+
+    // Calculate conversions - a visit is converted if there's an order for the same customer on the same date
+    const convertedVisits = new Set();
+    orders.forEach(order => {
+      const dateKey = order.order_date;
+      const dayVisits = visitMap.get(dateKey);
+      if (dayVisits) {
+        // Check if any visit matches this order's customer
+        dayVisits.forEach((visit, customerKey) => {
+          if (customerKey.includes(order.customer_code) || 
+              (visit.clientName && order.customer_code && 
+               visit.clientName.toLowerCase().includes(order.customer_code.toLowerCase()))) {
+            convertedVisits.add(visit.visitId);
+          }
+        });
+      }
+    });
+
+    // Calculate overview metrics
+    const totalRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const totalVisits = visits.length;
+    const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100).toFixed(1) : 0;
+    
+    // Get unique MRs from visits
+    const activeMRNames = [...new Set(visits.map(v => v.empName))];
+    const activeReps = activeMRNames.length;
+    
+    // Calculate target achievement
+    const totalTarget = targets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    const targetAchievement = totalTarget > 0 ? ((totalRevenue / totalTarget) * 100).toFixed(1) : 0;
+    
+    const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+
+    // Calculate NBD vs CRR
+    const nbdRevenue = orders
+      .filter(order => order.order_type === 'NBD')
+      .reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const crrRevenue = orders
+      .filter(order => order.order_type === 'CRR')
+      .reduce((sum, order) => sum + (order.net_amount || 0), 0);
+
+    // Group data by time period for trends
+    const trends = groupDataByPeriod(orders, visits, targets, selectedPeriod, convertedVisits);
+
+    // Calculate top performers
+    const performerMap = {};
+    
+    // Group orders by MR
+    orders.forEach(order => {
+      const mrName = order.mr_name;
+      if (!performerMap[mrName]) {
+        const mr = mrs.find(m => m.name === mrName);
+        performerMap[mrName] = {
+          id: mr?.employee_id || mrName,
+          name: mrName,
+          revenue: 0,
+          visits: 0,
+          orders: 0,
+          convertedVisits: 0
+        };
+      }
+      performerMap[mrName].revenue += order.net_amount || 0;
+      performerMap[mrName].orders += 1;
+    });
+
+    // Group visits by MR
+    visits.forEach(visit => {
+      const mrName = visit.empName;
+      if (!performerMap[mrName]) {
+        const mr = mrs.find(m => m.name === mrName);
+        performerMap[mrName] = {
+          id: mr?.employee_id || mrName,
+          name: mrName,
+          revenue: 0,
+          visits: 0,
+          orders: 0,
+          convertedVisits: 0
+        };
+      }
+      performerMap[mrName].visits += 1;
+      if (convertedVisits.has(visit.visitId)) {
+        performerMap[mrName].convertedVisits += 1;
+      }
+    });
+
+    const topPerformers = Object.values(performerMap)
+      .map(performer => ({
+        ...performer,
+        conversion: performer.visits > 0 ? ((performer.convertedVisits / performer.visits) * 100).toFixed(0) : 0,
+        achievement: 100 // This would be calculated based on individual targets
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    // Visit metrics
+    const plannedVisits = targets.reduce((sum, target) => sum + (target.total_visit_plan || 0), 0);
+    const completedVisits = visits.length;
+    const visitMetrics = {
+      planned: plannedVisits,
+      completed: completedVisits,
+      missed: Math.max(0, plannedVisits - completedVisits),
+      completionRate: plannedVisits > 0 ? ((completedVisits / plannedVisits) * 100).toFixed(0) : 0
+    };
+
+    // Conversion metrics
+    const conversionMetrics = {
+      totalLeads: totalVisits,
+      converted: convertedVisits.size,
+      pending: 0, // Would need additional data
+      lost: totalVisits - convertedVisits.size
+    };
+
+    // Revenue metrics
+    const revenueMetrics = {
+      target: totalTarget,
+      achieved: totalRevenue,
+      gap: totalTarget - totalRevenue,
+      growthRate: 12.5 // This would be calculated based on previous period
+    };
+
+    return {
+      overview: {
+        totalRevenue,
+        totalVisits,
+        conversionRate,
+        activeReps,
+        targetAchievement,
+        avgOrderValue
+      },
+      trends,
+      topPerformers,
+      performanceByCategory: [
+        { category: 'New Business (NBD)', value: nbdRevenue, percentage: totalRevenue > 0 ? ((nbdRevenue / totalRevenue) * 100).toFixed(0) : 0 },
+        { category: 'Customer Retention (CRR)', value: crrRevenue, percentage: totalRevenue > 0 ? ((crrRevenue / totalRevenue) * 100).toFixed(0) : 0 }
+      ],
+      detailedMetrics: {
+        visitMetrics,
+        conversionMetrics,
+        revenueMetrics
+      }
+    };
+  };
+
+  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits) => {
+    // This is a simplified version - you would implement proper grouping logic
+    // based on the selected period (weekly, monthly, quarterly, yearly)
+    const grouped = {
+      weekly: [],
+      monthly: []
+    };
+
+    // Example monthly grouping
+    const monthlyData = {};
+    orders.forEach(order => {
+      const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
+      if (!monthlyData[month]) {
+        monthlyData[month] = {
+          month,
+          revenue: 0,
+          visits: 0,
+          orders: 0,
+          nbd: 0,
+          crr: 0,
+          target: 0,
+          converted: 0
+        };
+      }
+      monthlyData[month].revenue += order.net_amount || 0;
+      monthlyData[month].orders += 1;
+      if (order.order_type === 'NBD') {
+        monthlyData[month].nbd += order.net_amount || 0;
+      } else {
+        monthlyData[month].crr += order.net_amount || 0;
+      }
+    });
+
+    // Add visit counts and conversions
+    visits.forEach(visit => {
+      const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
+      if (!monthlyData[month]) {
+        monthlyData[month] = {
+          month,
+          revenue: 0,
+          visits: 0,
+          orders: 0,
+          nbd: 0,
+          crr: 0,
+          target: 0,
+          converted: 0
+        };
+      }
+      monthlyData[month].visits += 1;
+      if (convertedVisits.has(visit.visitId)) {
+        monthlyData[month].converted += 1;
+      }
+    });
+
+    // Add targets
+    targets.forEach(target => {
+      const month = new Date(target.target_date).toLocaleString('default', { month: 'short' });
+      if (monthlyData[month]) {
+        monthlyData[month].target += target.total_revenue_target || 0;
+      }
+    });
+
+    // Calculate conversion rates
+    Object.values(monthlyData).forEach(data => {
+      data.conversion = data.visits > 0 ? ((data.converted / data.visits) * 100).toFixed(0) : 0;
+    });
+
+    grouped.monthly = Object.values(monthlyData);
+
+    return grouped;
+  };
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-IN', {
@@ -165,6 +533,19 @@ const SalesPerformanceDashboard = () => {
     </div>
   );
 
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+
+  if (loading || !dashboardData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
@@ -181,7 +562,10 @@ const SalesPerformanceDashboard = () => {
             </p>
           </div>
           <div className="flex items-center space-x-3">
-            <button className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <button 
+              onClick={fetchDashboardData}
+              className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </button>
@@ -251,6 +635,7 @@ const SalesPerformanceDashboard = () => {
                     onChange={(e) => setSelectedYear(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
+                    <option value="2025">2025</option>
                     <option value="2024">2024</option>
                     <option value="2023">2023</option>
                     <option value="2022">2022</option>
@@ -299,12 +684,11 @@ const SalesPerformanceDashboard = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Teams</option>
-                <option value="ASM001">Vijay Kumar (ASM) - North</option>
-                <option value="ASM002">Priya Mehta (ASM) - South</option>
-                <option value="RSM001">Rajesh Sharma (RSM) - North</option>
-                <option value="RSM002">Anita Patel (RSM) - South</option>
-                <option value="ASM003">Sunil Verma (ASM) - East</option>
-                <option value="ASM004">Deepak Singh (ASM) - West</option>
+                {teams.map(team => (
+                  <option key={team.employee_id} value={team.employee_id}>
+                    {team.name} ({team.role_level}) - {team.region}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -315,16 +699,9 @@ const SalesPerformanceDashboard = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All States</option>
-                <option value="UP">Uttar Pradesh</option>
-                <option value="DL">Delhi</option>
-                <option value="HR">Haryana</option>
-                <option value="RJ">Rajasthan</option>
-                <option value="MH">Maharashtra</option>
-                <option value="GJ">Gujarat</option>
-                <option value="KA">Karnataka</option>
-                <option value="TN">Tamil Nadu</option>
-                <option value="WB">West Bengal</option>
-                <option value="BR">Bihar</option>
+                {states.map(state => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -335,8 +712,8 @@ const SalesPerformanceDashboard = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Representatives</option>
-                {teamData.topPerformers.map(rep => (
-                  <option key={rep.id} value={rep.id}>{rep.name}</option>
+                {medicalReps.map(rep => (
+                  <option key={rep.employee_id} value={rep.employee_id}>{rep.name}</option>
                 ))}
               </select>
             </div>
@@ -348,42 +725,42 @@ const SalesPerformanceDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
         <KPICard
           title="Total Revenue"
-          value={formatCurrency(teamData.overview.totalRevenue)}
+          value={formatCurrency(dashboardData.overview.totalRevenue)}
           change={12.5}
           icon={DollarSign}
           color="bg-blue-600"
         />
         <KPICard
           title="Total Visits"
-          value={teamData.overview.totalVisits.toLocaleString()}
+          value={dashboardData.overview.totalVisits.toLocaleString()}
           change={8.3}
           icon={MapPin}
           color="bg-green-600"
         />
         <KPICard
           title="Conversion Rate"
-          value={`${teamData.overview.conversionRate}%`}
+          value={`${dashboardData.overview.conversionRate}%`}
           change={5.2}
           icon={TrendingUp}
           color="bg-purple-600"
         />
         <KPICard
           title="Active Reps"
-          value={teamData.overview.activeReps}
+          value={dashboardData.overview.activeReps}
           change={0}
           icon={Users}
           color="bg-orange-600"
         />
         <KPICard
           title="Target Achievement"
-          value={`${teamData.overview.targetAchievement}%`}
+          value={`${dashboardData.overview.targetAchievement}%`}
           change={-2.1}
           icon={Target}
           color="bg-pink-600"
         />
         <KPICard
           title="Avg Order Value"
-          value={formatCurrency(teamData.overview.avgOrderValue)}
+          value={formatCurrency(dashboardData.overview.avgOrderValue)}
           change={3.7}
           icon={ShoppingCart}
           color="bg-indigo-600"
@@ -396,7 +773,7 @@ const SalesPerformanceDashboard = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={teamData.trends[selectedPeriod]}>
+            <AreaChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
               <YAxis />
@@ -412,7 +789,7 @@ const SalesPerformanceDashboard = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Visits & Conversion Rate</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={teamData.trends[selectedPeriod]}>
+            <LineChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
               <YAxis yAxisId="left" />
@@ -429,9 +806,9 @@ const SalesPerformanceDashboard = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Distribution</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={teamData.trends.monthly}>
+            <BarChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
+              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
               <YAxis />
               <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
@@ -451,17 +828,17 @@ const SalesPerformanceDashboard = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Completed</span>
-                  <span className="text-sm font-medium">{teamData.detailedMetrics.visitMetrics.completed}</span>
+                  <span className="text-sm font-medium">{dashboardData.detailedMetrics.visitMetrics.completed}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
                     className="bg-green-600 h-2 rounded-full"
-                    style={{ width: `${teamData.detailedMetrics.visitMetrics.completionRate}%` }}
+                    style={{ width: `${dashboardData.detailedMetrics.visitMetrics.completionRate}%` }}
                   />
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>Planned: {teamData.detailedMetrics.visitMetrics.planned}</span>
-                  <span>Missed: {teamData.detailedMetrics.visitMetrics.missed}</span>
+                  <span>Planned: {dashboardData.detailedMetrics.visitMetrics.planned}</span>
+                  <span>Missed: {dashboardData.detailedMetrics.visitMetrics.missed}</span>
                 </div>
               </div>
             </div>
@@ -475,28 +852,28 @@ const SalesPerformanceDashboard = () => {
                     <Users className="w-4 h-4 text-blue-600 mr-2" />
                     <span className="text-sm text-gray-700">Total Leads</span>
                   </div>
-                  <span className="text-sm font-medium">{teamData.detailedMetrics.conversionMetrics.totalLeads}</span>
+                  <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.totalLeads}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                   <div className="flex items-center">
                     <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
                     <span className="text-sm text-gray-700">Converted</span>
                   </div>
-                  <span className="text-sm font-medium">{teamData.detailedMetrics.conversionMetrics.converted}</span>
+                  <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.converted}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                   <div className="flex items-center">
                     <Clock className="w-4 h-4 text-yellow-600 mr-2" />
                     <span className="text-sm text-gray-700">Pending</span>
                   </div>
-                  <span className="text-sm font-medium">{teamData.detailedMetrics.conversionMetrics.pending}</span>
+                  <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.pending}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                   <div className="flex items-center">
                     <XCircle className="w-4 h-4 text-red-600 mr-2" />
                     <span className="text-sm text-gray-700">Lost</span>
                   </div>
-                  <span className="text-sm font-medium">{teamData.detailedMetrics.conversionMetrics.lost}</span>
+                  <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.lost}</span>
                 </div>
               </div>
             </div>
@@ -505,7 +882,7 @@ const SalesPerformanceDashboard = () => {
       </div>
 
       {/* Top Performers Table */}
-      <PerformanceTable data={teamData.topPerformers} />
+      <PerformanceTable data={dashboardData.topPerformers} />
 
       {/* Additional Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
@@ -530,14 +907,14 @@ const SalesPerformanceDashboard = () => {
                     fill="none"
                     stroke="#3b82f6"
                     strokeWidth="12"
-                    strokeDasharray={`${2 * Math.PI * 70 * 0.923} ${2 * Math.PI * 70}`}
+                    strokeDasharray={`${2 * Math.PI * 70 * (dashboardData.overview.targetAchievement / 100)} ${2 * Math.PI * 70}`}
                     strokeDashoffset="0"
                     transform="rotate(-90 80 80)"
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-gray-900">92.3%</div>
+                    <div className="text-3xl font-bold text-gray-900">{dashboardData.overview.targetAchievement}%</div>
                     <div className="text-sm text-gray-600">of target</div>
                   </div>
                 </div>
@@ -546,15 +923,15 @@ const SalesPerformanceDashboard = () => {
             <div className="mt-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Target</span>
-                <span className="font-medium">{formatCurrency(teamData.detailedMetrics.revenueMetrics.target)}</span>
+                <span className="font-medium">{formatCurrency(dashboardData.detailedMetrics.revenueMetrics.target)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Achieved</span>
-                <span className="font-medium text-green-600">{formatCurrency(teamData.detailedMetrics.revenueMetrics.achieved)}</span>
+                <span className="font-medium text-green-600">{formatCurrency(dashboardData.detailedMetrics.revenueMetrics.achieved)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Gap</span>
-                <span className="font-medium text-red-600">{formatCurrency(teamData.detailedMetrics.revenueMetrics.gap)}</span>
+                <span className="font-medium text-red-600">{formatCurrency(Math.abs(dashboardData.detailedMetrics.revenueMetrics.gap))}</span>
               </div>
             </div>
           </div>
@@ -565,7 +942,7 @@ const SalesPerformanceDashboard = () => {
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
-                data={teamData.performanceByCategory}
+                data={dashboardData.performanceByCategory}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -574,7 +951,7 @@ const SalesPerformanceDashboard = () => {
                 fill="#8884d8"
                 dataKey="value"
               >
-                {teamData.performanceByCategory.map((entry, index) => (
+                {dashboardData.performanceByCategory.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -584,14 +961,12 @@ const SalesPerformanceDashboard = () => {
           </ResponsiveContainer>
           <div className="mt-4 space-y-2">
             <div className="text-sm text-gray-600">
-              <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                <span>New Business Development (NBD)</span>
-                <span className="font-medium">{formatCurrency(1650000)}</span>
-              </div>
-              <div className="flex justify-between items-center p-2 bg-green-50 rounded mt-2">
-                <span>Customer Retention & Repeat (CRR)</span>
-                <span className="font-medium">{formatCurrency(1197650)}</span>
-              </div>
+              {dashboardData.performanceByCategory.map((category, index) => (
+                <div key={index} className={`flex justify-between items-center p-2 ${index === 0 ? 'bg-blue-50' : 'bg-green-50'} rounded`}>
+                  <span>{category.category}</span>
+                  <span className="font-medium">{formatCurrency(category.value)}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -601,19 +976,27 @@ const SalesPerformanceDashboard = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-600">Avg Visits per Rep</span>
-              <span className="text-sm font-medium">144</span>
+              <span className="text-sm font-medium">
+                {dashboardData.overview.activeReps > 0 
+                  ? Math.round(dashboardData.overview.totalVisits / dashboardData.overview.activeReps)
+                  : 0}
+              </span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-600">Avg Revenue per Visit</span>
-              <span className="text-sm font-medium">{formatCurrency(824)}</span>
+              <span className="text-sm font-medium">
+                {dashboardData.overview.totalVisits > 0
+                  ? formatCurrency(dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits)
+                  : formatCurrency(0)}
+              </span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600">Best Performing Day</span>
-              <span className="text-sm font-medium">Thursday</span>
+              <span className="text-sm text-gray-600">Visit to Order Ratio</span>
+              <span className="text-sm font-medium">{dashboardData.overview.conversionRate}%</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-600">Growth Rate</span>
-              <span className="text-sm font-medium text-green-600">+12.5%</span>
+              <span className="text-sm font-medium text-green-600">+{dashboardData.detailedMetrics.revenueMetrics.growthRate}%</span>
             </div>
           </div>
         </div>
