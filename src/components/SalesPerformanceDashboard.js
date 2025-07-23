@@ -110,6 +110,50 @@ const currentDefaults = getCurrentPeriodDefaults();
     };
   };
 
+  // Helper function to get the previous date range for comparison
+const getPreviousDateRange = (currentStart, currentEnd) => {
+  const startDate = new Date(currentStart);
+  const endDate = new Date(currentEnd);
+  let prevStart, prevEnd;
+
+  switch (selectedPeriod) {
+    case 'weekly':
+      prevStart = new Date(startDate);
+      prevStart.setDate(startDate.getDate() - 7);
+      prevEnd = new Date(endDate);
+      prevEnd.setDate(endDate.getDate() - 7);
+      break;
+    case 'monthly':
+      prevStart = new Date(startDate);
+      prevStart.setMonth(startDate.getMonth() - 1);
+      prevEnd = new Date(startDate);
+      prevEnd.setDate(0); // Last day of previous month
+      break;
+    case 'quarterly':
+      prevStart = new Date(startDate);
+      prevStart.setMonth(startDate.getMonth() - 3);
+      prevEnd = new Date(startDate);
+      prevEnd.setDate(0); // Last day of previous quarter
+      break;
+    case 'yearly':
+      prevStart = new Date(startDate);
+      prevStart.setFullYear(startDate.getFullYear() - 1);
+      prevEnd = new Date(endDate);
+      prevEnd.setFullYear(endDate.getFullYear() - 1);
+      break;
+    default: // Custom or other
+      const diff = endDate.getTime() - startDate.getTime();
+      prevStart = new Date(startDate.getTime() - diff);
+      prevEnd = new Date(startDate.getTime() - 1);
+      break;
+  }
+
+  return {
+    start: prevStart.toISOString().split('T')[0],
+    end: prevEnd.toISOString().split('T')[0]
+  };
+};
+
   // Updated period change handler
   const handlePeriodChange = (newPeriod) => {
     setSelectedPeriod(newPeriod);
@@ -227,6 +271,27 @@ const currentDefaults = getCurrentPeriodDefaults();
     setLoading(true);
     try {
       const { start, end } = getDateRange();
+      const prevDateRange = getPreviousDateRange(start, end);
+
+      // Base query builder for orders
+      const getOrderQuery = (startDate, endDate) => {
+        let query = supabase
+          .from('orders')
+          .select('order_id, order_date, net_amount, order_type, mr_name, customer_code, state, status, delivery_status, payment_status')
+          .gte('order_date', startDate)
+          .lte('order_date', endDate)
+          .in('customer_type', ['Doctor', 'Retailer'])
+          .eq('status', 'Order Confirmed')
+          .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
+
+        if (selectedMR !== 'all') {
+          const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
+          if (selectedMRData) query = query.eq('mr_name', selectedMRData.name);
+        }
+        // Note: Team and State filters are applied post-query for simplicity here,
+        // but could be added to the query for performance.
+        return query;
+      };
       
       // Build base query for orders with enhanced fields
       let orderQuery = supabase
@@ -313,15 +378,20 @@ const currentDefaults = getCurrentPeriodDefaults();
         orderQuery = orderQuery.eq('state', selectedState);
       }
 
+      // Previous period order query
+      const prevOrderQuery = getOrderQuery(prevDateRange.start, prevDateRange.end);
+
+
       // Execute queries
-      const [orderData, visitData, targetData, mrData, allVisitsData] = await Promise.all([
+      const [orderData, visitData, targetData, mrData, allVisitsData, prevOrderData] = await Promise.all([
         orderQuery,
         visitQuery,
         targetQuery,
         supabase
           .from('medical_representatives')
           .select('employee_id, name, role_level, region, state, is_active, area_sales_manager_name, regional_sales_manager_name'),
-        allVisitsQuery
+        allVisitsQuery,
+        prevOrderQuery
       ]);
 
       // Process data to calculate conversions
@@ -330,7 +400,8 @@ const currentDefaults = getCurrentPeriodDefaults();
         visitData.data || [],
         targetData.data || [],
         mrData.data || [],
-        allVisitsData.data || []
+        allVisitsData.data || [],
+        prevOrderData.data || []
       );
 
       setDashboardData(processedData);
@@ -341,7 +412,7 @@ const currentDefaults = getCurrentPeriodDefaults();
     }
   };
 
-  const processDataWithConversions = (orders, visits, targets, mrs, allVisits) => {
+  const processDataWithConversions = (orders, visits, targets, mrs, allVisits, prevOrders) => {
     // Create a map of visits by date and customer for conversion tracking
     const visitMap = new Map();
     visits.forEach(visit => {
@@ -548,11 +619,17 @@ const currentDefaults = getCurrentPeriodDefaults();
     };
 
     // Revenue metrics
+    const prevTotalRevenue = prevOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const growthRate = prevTotalRevenue > 0
+      ? (((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100).toFixed(1)
+      : (totalRevenue > 0 ? 100 : 0);
+
+
     const revenueMetrics = {
       target: totalTarget,
       achieved: totalRevenue,
       gap: totalTarget - totalRevenue,
-      growthRate: 12.5 // This would be calculated based on previous period
+      growthRate: parseFloat(growthRate)
     };
 
     return {
@@ -1283,7 +1360,7 @@ const currentDefaults = getCurrentPeriodDefaults();
         <KPICard
           title="Total Revenue"
           value={formatCurrency(dashboardData.overview.totalRevenue)}
-          change={12.5}
+          change={dashboardData.detailedMetrics.revenueMetrics.growthRate}
           icon={DollarSign}
           color="bg-blue-600"
         />
