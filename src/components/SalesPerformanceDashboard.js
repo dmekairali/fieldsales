@@ -1555,7 +1555,9 @@ const currentDefaults = getCurrentPeriodDefaults();
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
               <span className="text-sm text-gray-600 truncate pr-2">Growth Rate</span>
-              <span className="text-sm font-medium text-green-600 text-right flex-shrink-0">+{dashboardData.detailedMetrics.revenueMetrics.growthRate}%</span>
+              <span className={`text-sm font-medium ${dashboardData.overview.conversionRateChange > 0 ? 'text-green-600' : 'text-red-600'} text-right flex-shrink-0`}>
+                {dashboardData.overview.conversionRateChange > 0 ? '+' : ''}{dashboardData.overview.conversionRateChange.toFixed(1)}%
+              </span>
             </div>
           </div>
         </div>
