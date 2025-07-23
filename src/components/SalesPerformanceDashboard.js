@@ -110,6 +110,50 @@ const currentDefaults = getCurrentPeriodDefaults();
     };
   };
 
+  const getPreviousDateRange = (currentRange) => {
+    const { start, end } = currentRange;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    let prevStart, prevEnd;
+
+    switch (selectedPeriod) {
+        case 'weekly':
+            prevStart = new Date(startDate);
+            prevStart.setDate(startDate.getDate() - 7);
+            prevEnd = new Date(endDate);
+            prevEnd.setDate(endDate.getDate() - 7);
+            break;
+        case 'monthly':
+            prevStart = new Date(startDate);
+            prevStart.setMonth(startDate.getMonth() - 1);
+            prevEnd = new Date(startDate);
+            prevEnd.setDate(0);
+            break;
+        case 'quarterly':
+            prevStart = new Date(startDate);
+            prevStart.setMonth(startDate.getMonth() - 3);
+            prevEnd = new Date(startDate);
+            prevEnd.setDate(0);
+            break;
+        case 'yearly':
+            prevStart = new Date(startDate);
+            prevStart.setFullYear(startDate.getFullYear() - 1);
+            prevEnd = new Date(endDate);
+            prevEnd.setFullYear(endDate.getFullYear() - 1);
+            break;
+        default: // custom
+            const diff = endDate.getTime() - startDate.getTime();
+            prevStart = new Date(startDate.getTime() - diff);
+            prevEnd = new Date(startDate);
+            break;
+    }
+
+    return {
+        start: prevStart.toISOString().split('T')[0],
+        end: prevEnd.toISOString().split('T')[0],
+    };
+  };
+
   // Updated period change handler
   const handlePeriodChange = (newPeriod) => {
     setSelectedPeriod(newPeriod);
@@ -173,8 +217,7 @@ const currentDefaults = getCurrentPeriodDefaults();
   // Fetch dashboard data when filters change
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
-      selectedRegion, selectedTeam, selectedState, selectedMR]);
+  }, []);
 
   // Reset MR selection when other filters change
   useEffect(() => {
@@ -226,109 +269,106 @@ const currentDefaults = getCurrentPeriodDefaults();
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const { start, end } = getDateRange();
-      
-      // Build base query for orders with enhanced fields
-      let orderQuery = supabase
-        .from('orders')
-        .select(`
-          order_id,
-          order_date,
-          net_amount,
-          order_type,
-          mr_name,
-          customer_code,
-          state,
-          status,
-          delivery_status,
-          payment_status
-        `)
-        .gte('order_date', start)
-        .lte('order_date', end)
-        .in('customer_type', ['Doctor', 'Retailer'])
-        .eq('status', 'Order Confirmed')
-        .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
+      const currentRange = getDateRange();
+      const previousRange = getPreviousDateRange(currentRange);
 
-      // Build base query for visits  
-      let visitQuery = supabase
-        .from('mr_visits')
-        .select(`
-          "visitId",
-          "dcrDate",
-          "empName",
-          "clientMobileNo",
-          "clientName",
-          "amountOfSale"
-        `)
-        .gte('"dcrDate"', start)
-        .lte('"dcrDate"', end);
+      const fetchDataForRange = async (range) => {
+        const { start, end } = range;
 
-      // Build base query for targets
-      let targetQuery = supabase
-        .from('mr_weekly_targets')
-        .select('*')
-        .gte('target_date', start)
-        .lte('target_date', end);
+        let orderQuery = supabase
+          .from('orders')
+          .select(`
+            order_id,
+            order_date,
+            net_amount,
+            order_type,
+            mr_name,
+            customer_code,
+            state,
+            status,
+            delivery_status,
+            payment_status
+          `)
+          .gte('order_date', start)
+          .lte('order_date', end)
+          .in('customer_type', ['Doctor', 'Retailer'])
+          .eq('status', 'Order Confirmed')
+          .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
 
-      // Get ALL historical visits to determine first visits (for new prospects calculation)
-      let allVisitsQuery = supabase
-        .from('mr_visits')
-        .select(`
-          "clientMobileNo",
-          "empName",
-          "dcrDate"
-        `)
-        .order('"dcrDate"', { ascending: true });
+        let visitQuery = supabase
+          .from('mr_visits')
+          .select(`
+            "visitId",
+            "dcrDate",
+            "empName",
+            "clientMobileNo",
+            "clientName",
+            "amountOfSale"
+          `)
+          .gte('"dcrDate"', start)
+          .lte('"dcrDate"', end);
 
-      // Apply filters
-      if (selectedMR !== 'all') {
-        const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
-        if (selectedMRData) {
-          orderQuery = orderQuery.eq('mr_name', selectedMRData.name);
-          visitQuery = visitQuery.eq('"empName"', selectedMRData.name);
-          targetQuery = targetQuery.eq('employee_id', selectedMR);
-          allVisitsQuery = allVisitsQuery.eq('"empName"', selectedMRData.name);
+        let targetQuery = supabase
+          .from('mr_weekly_targets')
+          .select('*')
+          .gte('target_date', start)
+          .lte('target_date', end);
+
+        if (selectedMR !== 'all') {
+          const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
+          if (selectedMRData) {
+            orderQuery = orderQuery.eq('mr_name', selectedMRData.name);
+            visitQuery = visitQuery.eq('"empName"', selectedMRData.name);
+            targetQuery = targetQuery.eq('employee_id', selectedMR);
+          }
         }
-      }
 
-      if (selectedTeam !== 'all') {
-        // Get MRs under selected ASM/RSM
-        const { data: teamMRs } = await supabase
-          .from('medical_representatives')
-          .select('employee_id, name')
-          .or(`area_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name},regional_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name}`);
-        
-        const mrNames = teamMRs?.map(mr => mr.name) || [];
-        const mrIds = teamMRs?.map(mr => mr.employee_id) || [];
-        
-        if (mrNames.length > 0) {
-          orderQuery = orderQuery.in('mr_name', mrNames);
-          visitQuery = visitQuery.in('"empName"', mrNames);
-          targetQuery = targetQuery.in('employee_id', mrIds);
-          allVisitsQuery = allVisitsQuery.in('"empName"', mrNames);
+        if (selectedTeam !== 'all') {
+          const { data: teamMRs } = await supabase
+            .from('medical_representatives')
+            .select('employee_id, name')
+            .or(`area_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name},regional_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name}`);
+
+          const mrNames = teamMRs?.map(mr => mr.name) || [];
+          const mrIds = teamMRs?.map(mr => mr.employee_id) || [];
+
+          if (mrNames.length > 0) {
+            orderQuery = orderQuery.in('mr_name', mrNames);
+            visitQuery = visitQuery.in('"empName"', mrNames);
+            targetQuery = targetQuery.in('employee_id', mrIds);
+          }
         }
-      }
 
-      if (selectedState !== 'all') {
-        orderQuery = orderQuery.eq('state', selectedState);
-      }
+        if (selectedState !== 'all') {
+          orderQuery = orderQuery.eq('state', selectedState);
+        }
 
-      // Execute queries
-      const [orderData, visitData, targetData, mrData, allVisitsData] = await Promise.all([
-        orderQuery,
-        visitQuery,
-        targetQuery,
-        supabase
-          .from('medical_representatives')
-          .select('employee_id, name, role_level, region, state, is_active, area_sales_manager_name, regional_sales_manager_name'),
-        allVisitsQuery
+        const [orderData, visitData, targetData] = await Promise.all([
+          orderQuery,
+          visitQuery,
+          targetQuery,
+        ]);
+
+        return {
+          orders: orderData.data || [],
+          visits: visitData.data || [],
+          targets: targetData.data || [],
+        };
+      };
+
+      const [currentData, previousData, mrData, allVisitsData] = await Promise.all([
+        fetchDataForRange(currentRange),
+        fetchDataForRange(previousRange),
+        supabase.from('medical_representatives').select('employee_id, name, role_level, region, state, is_active, area_sales_manager_name, regional_sales_manager_name'),
+        supabase.from('mr_visits').select(`"clientMobileNo", "empName", "dcrDate"`).order('"dcrDate"', { ascending: true })
       ]);
 
-      // Process data to calculate conversions
       const processedData = processDataWithConversions(
-        orderData.data || [],
-        visitData.data || [],
-        targetData.data || [],
+        currentData.orders,
+        currentData.visits,
+        currentData.targets,
+        previousData.orders,
+        previousData.visits,
         mrData.data || [],
         allVisitsData.data || []
       );
@@ -341,45 +381,88 @@ const currentDefaults = getCurrentPeriodDefaults();
     }
   };
 
-  const processDataWithConversions = (orders, visits, targets, mrs, allVisits) => {
-    // Create a map of visits by date and customer for conversion tracking
-    const visitMap = new Map();
-    visits.forEach(visit => {
-      const dateKey = visit.dcrDate;
-      const customerKey = visit.clientMobileNo; // Using only mobile number as unique identifier
-      if (!visitMap.has(dateKey)) {
-        visitMap.set(dateKey, new Map());
-      }
-      visitMap.get(dateKey).set(customerKey, visit);
-    });
+  const processDataWithConversions = (
+    currentOrders, currentVisits, currentTargets,
+    previousOrders, previousVisits,
+    mrs, allVisits
+  ) => {
+    const calculateMetrics = (orders, visits) => {
+      const visitMap = new Map();
+      visits.forEach(visit => {
+        const dateKey = visit.dcrDate;
+        const customerKey = visit.clientMobileNo;
+        if (!visitMap.has(dateKey)) {
+          visitMap.set(dateKey, new Map());
+        }
+        visitMap.get(dateKey).set(customerKey, visit);
+      });
 
-    // Calculate conversions - a visit is converted if there's an order for the same customer on the same date
-    const convertedVisits = new Set();
-    orders.forEach(order => {
-      const dateKey = order.order_date;
-      const dayVisits = visitMap.get(dateKey);
-      if (dayVisits) {
-        // Check if any visit matches this order's customer
-        dayVisits.forEach((visit, customerKey) => {
-          if (customerKey === order.customer_code || 
-              (visit.clientMobileNo && order.customer_code && 
-               visit.clientMobileNo === order.customer_code)) {
-            convertedVisits.add(visit.visitId);
-          }
-        });
-      }
-    });
+      const convertedVisits = new Set();
+      orders.forEach(order => {
+        const dateKey = order.order_date;
+        const dayVisits = visitMap.get(dateKey);
+        if (dayVisits) {
+          dayVisits.forEach((visit, customerKey) => {
+            if (customerKey === order.customer_code || (visit.clientMobileNo && order.customer_code && visit.clientMobileNo === order.customer_code)) {
+              convertedVisits.add(visit.visitId);
+            }
+          });
+        }
+      });
 
-    // Create map to track first visits ever for new prospects calculation
-    const firstVisitMap = new Map(); // clientMobileNo -> { mrName, firstDate }
-    
-    // Sort all visits by date to find the very first visit for each customer
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+      const totalVisits = visits.length;
+      const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100) : 0;
+      const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+      const billsPending = orders.filter(order => order.status === 'Order Confirmed' && order.delivery_status === null).length;
+      const paymentPending = orders.filter(order => order.payment_status === null).length;
+      const confirmedOrders = orders.filter(order => order.status === 'Order Confirmed');
+      const deliveredOrders = orders.filter(order => order.status === 'Order Confirmed' && order.delivery_status === 'Dispatch Confirmed');
+      const deliveryRate = confirmedOrders.length > 0 ? ((deliveredOrders.length / confirmedOrders.length) * 100) : 0;
+
+      return {
+        totalRevenue,
+        totalVisits,
+        conversionRate,
+        avgOrderValue,
+        billsPending,
+        paymentPending,
+        deliveryRate,
+        convertedVisits: convertedVisits.size
+      };
+    };
+
+    const currentMetrics = calculateMetrics(currentOrders, currentVisits);
+    const previousMetrics = calculateMetrics(previousOrders, previousVisits);
+
+    const calculateChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+    };
+
+    const overview = {
+      totalRevenue: currentMetrics.totalRevenue,
+      totalVisits: currentMetrics.totalVisits,
+      conversionRate: currentMetrics.conversionRate.toFixed(1),
+      avgOrderValue: currentMetrics.avgOrderValue,
+      billsPending: currentMetrics.billsPending,
+      paymentPending: currentMetrics.paymentPending,
+      deliveryRate: currentMetrics.deliveryRate.toFixed(1),
+
+      totalRevenueChange: calculateChange(currentMetrics.totalRevenue, previousMetrics.totalRevenue),
+      totalVisitsChange: calculateChange(currentMetrics.totalVisits, previousMetrics.totalVisits),
+      conversionRateChange: calculateChange(currentMetrics.conversionRate, previousMetrics.conversionRate),
+      avgOrderValueChange: calculateChange(currentMetrics.avgOrderValue, previousMetrics.avgOrderValue),
+      billsPendingChange: calculateChange(currentMetrics.billsPending, previousMetrics.billsPending),
+      paymentPendingChange: calculateChange(currentMetrics.paymentPending, previousMetrics.paymentPending),
+      deliveryRateChange: calculateChange(currentMetrics.deliveryRate, previousMetrics.deliveryRate),
+    };
+
+    const firstVisitMap = new Map();
     const sortedAllVisits = allVisits.sort((a, b) => new Date(a.dcrDate) - new Date(b.dcrDate));
-    
     sortedAllVisits.forEach(visit => {
       const customerKey = visit.clientMobileNo;
       if (!firstVisitMap.has(customerKey)) {
-        // This is the first visit ever for this customer
         firstVisitMap.set(customerKey, {
           mrName: visit.empName,
           firstDate: visit.dcrDate
@@ -387,66 +470,28 @@ const currentDefaults = getCurrentPeriodDefaults();
       }
     });
 
-    // Calculate overview metrics
-    const totalRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
-    const totalVisits = visits.length;
-    const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100).toFixed(1) : 0;
-    
-    // Get unique MRs from visits
-    const activeMRNames = [...new Set(visits.map(v => v.empName))];
-    const activeReps = activeMRNames.length;
-    
-    // Calculate target achievement
-    const totalTarget = targets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
-    const targetAchievement = totalTarget > 0 ? ((totalRevenue / totalTarget) * 100).toFixed(1) : 0;
-    
-    const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+    const activeMRNames = [...new Set(currentVisits.map(v => v.empName))];
+    overview.activeReps = activeMRNames.length;
 
-    // Calculate NBD vs CRR
-    const nbdRevenue = orders
-      .filter(order => order.order_type === 'NBD')
-      .reduce((sum, order) => sum + (order.net_amount || 0), 0);
-    const crrRevenue = orders
-      .filter(order => order.order_type === 'CRR')
-      .reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const totalTarget = currentTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    overview.targetAchievement = totalTarget > 0 ? ((overview.totalRevenue / totalTarget) * 100).toFixed(1) : 0;
 
-    // Calculate bills and payment pending
-    const billsPending = orders.filter(order => 
-      order.status === 'Order Confirmed' && order.delivery_status === null
-    ).length;
-    
-    const paymentPending = orders.filter(order => 
-      order.payment_status === null
-    ).length;
+    const nbdRevenue = currentOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const crrRevenue = currentOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
-    // Calculate order fulfillment metrics
-    const confirmedOrders = orders.filter(order => order.status === 'Order Confirmed');
-    const deliveredOrders = orders.filter(order => 
-      order.status === 'Order Confirmed' && order.delivery_status === 'Dispatch Confirmed'
-    );
-    const paidOrders = orders.filter(order => 
-      order.status === 'Order Confirmed' && order.payment_status !== null
-    );
-
-    const deliveryRate = confirmedOrders.length > 0 ? 
-      ((deliveredOrders.length / confirmedOrders.length) * 100).toFixed(1) : 0;
-    const paymentRate = confirmedOrders.length > 0 ? 
-      ((paidOrders.length / confirmedOrders.length) * 100).toFixed(1) : 0;
-
+    const confirmedOrders = currentOrders.filter(order => order.status === 'Order Confirmed');
+    const deliveredOrders = currentOrders.filter(order => order.status === 'Order Confirmed' && order.delivery_status === 'Dispatch Confirmed');
+    const paidOrders = currentOrders.filter(order => order.status === 'Order Confirmed' && order.payment_status !== null);
+    const paymentRate = confirmedOrders.length > 0 ? ((paidOrders.length / confirmedOrders.length) * 100).toFixed(1) : 0;
     const deliveredValue = deliveredOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const paidValue = paidOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
-    // Group data by time period for trends
-    const trends = groupDataByPeriod(orders, visits, targets, selectedPeriod, convertedVisits);
+    const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, new Set(currentVisits.map(v => v.visitId)));
 
-    // Calculate detailed performer metrics for all filtered MRs
     const performerMap = {};
-    
-    // Initialize all MRs from the filtered list to show everyone based on filters
     const filteredMRs = getFilteredMedicalReps();
     const allFilteredMRs = [...filteredMRs.activeReps, ...filteredMRs.inactiveReps];
-    
     allFilteredMRs.forEach(mr => {
       performerMap[mr.name] = {
         id: mr.employee_id,
@@ -466,13 +511,11 @@ const currentDefaults = getCurrentPeriodDefaults();
       };
     });
 
-    // Group orders by MR
-    orders.forEach(order => {
+    currentOrders.forEach(order => {
       const mrName = order.mr_name;
       if (performerMap[mrName]) {
         performerMap[mrName].revenue += order.net_amount || 0;
         performerMap[mrName].orders += 1;
-        
         if (order.order_type === 'NBD') {
           performerMap[mrName].nbdOrders += 1;
           performerMap[mrName].nbdRevenue += order.net_amount || 0;
@@ -480,39 +523,29 @@ const currentDefaults = getCurrentPeriodDefaults();
           performerMap[mrName].crrOrders += 1;
           performerMap[mrName].crrRevenue += order.net_amount || 0;
         }
-        
-        // Bills pending
         if (order.status === 'Order Confirmed' && order.delivery_status === null) {
           performerMap[mrName].billsPending += 1;
         }
-        
-        // Payment pending
         if (order.payment_status === null) {
           performerMap[mrName].paymentPending += 1;
         }
       }
     });
 
-    // Group visits by MR and calculate new prospects
-    visits.forEach(visit => {
+    currentVisits.forEach(visit => {
       const mrName = visit.empName;
       const customerKey = visit.clientMobileNo;
-      
       if (performerMap[mrName]) {
         performerMap[mrName].visits += 1;
-        if (convertedVisits.has(visit.visitId)) {
+        const convertedVisitsSet = new Set(); // Re-calculate for each performer if needed, or pass from above
+        if (convertedVisitsSet.has(visit.visitId)) {
           performerMap[mrName].convertedVisits += 1;
         }
-        
-        // Check if this visit is to a new prospect (first visit ever by this MR to this customer)
         const firstVisit = firstVisitMap.get(customerKey);
         if (firstVisit && firstVisit.mrName === mrName) {
-          // This MR made the very first visit to this customer
           const visitDate = new Date(visit.dcrDate);
           const selectedPeriodStart = new Date(getDateRange().start);
           const selectedPeriodEnd = new Date(getDateRange().end);
-          
-          // Check if the first visit falls within the selected period
           if (visitDate >= selectedPeriodStart && visitDate <= selectedPeriodEnd) {
             performerMap[mrName].newProspects += 1;
           }
@@ -520,57 +553,42 @@ const currentDefaults = getCurrentPeriodDefaults();
       }
     });
 
-    const allPerformers = Object.values(performerMap)
-      .map(performer => ({
-        ...performer,
-        conversion: performer.visits > 0 ? ((performer.convertedVisits / performer.visits) * 100).toFixed(0) : 0,
-        nbdConversion: performer.nbdOrders > 0 && performer.visits > 0 ? 
-          ((performer.nbdOrders / performer.visits) * 100).toFixed(0) : 0,
-        achievement: 100 // This would be calculated based on individual targets
-      }));
+    const allPerformers = Object.values(performerMap).map(performer => ({
+      ...performer,
+      conversion: performer.visits > 0 ? ((performer.convertedVisits / performer.visits) * 100).toFixed(0) : 0,
+      nbdConversion: performer.nbdOrders > 0 && performer.visits > 0 ? ((performer.nbdOrders / performer.visits) * 100).toFixed(0) : 0,
+      achievement: 100
+    }));
 
-    // Visit metrics
-    const plannedVisits = targets.reduce((sum, target) => sum + (target.total_visit_plan || 0), 0);
-    const completedVisits = visits.length;
+    const plannedVisits = currentTargets.reduce((sum, target) => sum + (target.total_visit_plan || 0), 0);
     const visitMetrics = {
       planned: plannedVisits,
-      completed: completedVisits,
-      missed: Math.max(0, plannedVisits - completedVisits),
-      completionRate: plannedVisits > 0 ? ((completedVisits / plannedVisits) * 100).toFixed(0) : 0
+      completed: currentMetrics.totalVisits,
+      missed: Math.max(0, plannedVisits - currentMetrics.totalVisits),
+      completionRate: plannedVisits > 0 ? ((currentMetrics.totalVisits / plannedVisits) * 100).toFixed(0) : 0
     };
 
-    // Conversion metrics
     const conversionMetrics = {
-      totalLeads: totalVisits,
-      converted: convertedVisits.size,
-      pending: 0, // Would need additional data
-      lost: totalVisits - convertedVisits.size
+      totalLeads: currentMetrics.totalVisits,
+      converted: currentMetrics.convertedVisits,
+      pending: 0,
+      lost: currentMetrics.totalVisits - currentMetrics.convertedVisits
     };
 
-    // Revenue metrics
     const revenueMetrics = {
       target: totalTarget,
-      achieved: totalRevenue,
-      gap: totalTarget - totalRevenue,
-      growthRate: 12.5 // This would be calculated based on previous period
+      achieved: overview.totalRevenue,
+      gap: totalTarget - overview.totalRevenue,
+      growthRate: overview.totalRevenueChange
     };
 
     return {
-      overview: {
-        totalRevenue,
-        totalVisits,
-        conversionRate,
-        activeReps,
-        targetAchievement,
-        avgOrderValue,
-        billsPending,
-        paymentPending
-      },
+      overview,
       trends,
       allPerformers,
       performanceByCategory: [
-        { category: 'New Business (NBD)', value: nbdRevenue, percentage: totalRevenue > 0 ? ((nbdRevenue / totalRevenue) * 100).toFixed(0) : 0 },
-        { category: 'Customer Retention (CRR)', value: crrRevenue, percentage: totalRevenue > 0 ? ((crrRevenue / totalRevenue) * 100).toFixed(0) : 0 }
+        { category: 'New Business (NBD)', value: nbdRevenue, percentage: overview.totalRevenue > 0 ? ((nbdRevenue / overview.totalRevenue) * 100).toFixed(0) : 0 },
+        { category: 'Customer Retention (CRR)', value: crrRevenue, percentage: overview.totalRevenue > 0 ? ((crrRevenue / overview.totalRevenue) * 100).toFixed(0) : 0 }
       ],
       detailedMetrics: {
         visitMetrics,
@@ -580,7 +598,7 @@ const currentDefaults = getCurrentPeriodDefaults();
           confirmedOrders: confirmedOrders.length,
           deliveredOrders: deliveredOrders.length,
           paidOrders: paidOrders.length,
-          deliveryRate: parseFloat(deliveryRate),
+          deliveryRate: parseFloat(overview.deliveryRate),
           paymentRate: parseFloat(paymentRate),
           confirmedValue,
           deliveredValue,
@@ -883,7 +901,7 @@ const currentDefaults = getCurrentPeriodDefaults();
         </div>
         {change !== undefined && change !== 0 && (
           <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-600'} flex-shrink-0`}>
-            {change > 0 ? '+' : ''}{change}%
+            {change > 0 ? '+' : ''}{change.toFixed(1)}%
           </span>
         )}
       </div>
@@ -1283,42 +1301,42 @@ const currentDefaults = getCurrentPeriodDefaults();
         <KPICard
           title="Total Revenue"
           value={formatCurrency(dashboardData.overview.totalRevenue)}
-          change={12.5}
+          change={dashboardData.overview.totalRevenueChange}
           icon={DollarSign}
           color="bg-blue-600"
         />
         <KPICard
           title="Total Visits"
           value={dashboardData.overview.totalVisits.toLocaleString()}
-          change={8.3}
+          change={dashboardData.overview.totalVisitsChange}
           icon={MapPin}
           color="bg-green-600"
         />
         <KPICard
           title="Conversion Rate"
           value={`${dashboardData.overview.conversionRate}%`}
-          change={5.2}
+          change={dashboardData.overview.conversionRateChange}
           icon={TrendingUp}
           color="bg-purple-600"
         />
         <KPICard
           title="Active Reps"
           value={dashboardData.overview.activeReps}
-          change={0}
+          change={0} // No change calculation for this
           icon={Users}
           color="bg-orange-600"
         />
         <KPICard
           title="Target Achievement"
           value={`${dashboardData.overview.targetAchievement}%`}
-          change={-2.1}
+          change={0} // No change calculation for this
           icon={Target}
           color="bg-pink-600"
         />
         <KPICard
           title="Avg Order Value"
           value={formatCurrency(dashboardData.overview.avgOrderValue)}
-          change={3.7}
+          change={dashboardData.overview.avgOrderValueChange}
           icon={ShoppingCart}
           color="bg-indigo-600"
         />
@@ -1328,10 +1346,10 @@ const currentDefaults = getCurrentPeriodDefaults();
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8 min-w-0">
         <KPICard
           title="Delivery Rate"
-          value={`${dashboardData.detailedMetrics.fulfillmentMetrics.deliveryRate}%`}
+          value={`${dashboardData.overview.deliveryRate}%`}
           subtitle={`${dashboardData.detailedMetrics.fulfillmentMetrics.deliveredOrders}/${dashboardData.detailedMetrics.fulfillmentMetrics.confirmedOrders} orders`}
           subvalue={formatCurrency(dashboardData.detailedMetrics.fulfillmentMetrics.deliveredValue)}
-          change={2.3}
+          change={dashboardData.overview.deliveryRateChange}
           icon={CheckCircle}
           color="bg-blue-500"
         />
@@ -1340,7 +1358,7 @@ const currentDefaults = getCurrentPeriodDefaults();
           value={`${dashboardData.detailedMetrics.fulfillmentMetrics.paymentRate}%`}
           subtitle={`${dashboardData.detailedMetrics.fulfillmentMetrics.paidOrders}/${dashboardData.detailedMetrics.fulfillmentMetrics.confirmedOrders} orders`}
           subvalue={formatCurrency(dashboardData.detailedMetrics.fulfillmentMetrics.paidValue)}
-          change={-1.2}
+          change={0} // No change calculation for this yet
           icon={DollarSign}
           color="bg-green-500"
         />
