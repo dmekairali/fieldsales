@@ -56,7 +56,9 @@ const currentDefaults = getCurrentPeriodDefaults();
   const [dashboardData, setDashboardData] = useState(null);
   const [teams, setTeams] = useState([]);
   const [states, setStates] = useState([]);
+  const [regions, setRegions] = useState([]); // Add regions state
   const [medicalReps, setMedicalReps] = useState([]);
+  const [unknownMRs, setUnknownMRs] = useState([]);
   
   // New state variables for enhanced functionality
   const [sortConfig, setSortConfig] = useState({ key: 'revenue', direction: 'desc' });
@@ -110,6 +112,51 @@ const currentDefaults = getCurrentPeriodDefaults();
     };
   };
 
+  // Get previous period date range for comparison
+  const getPreviousDateRange = (currentRange) => {
+    const { start, end } = currentRange;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    let prevStart, prevEnd;
+
+    switch (selectedPeriod) {
+        case 'weekly':
+            prevStart = new Date(startDate);
+            prevStart.setDate(startDate.getDate() - 7);
+            prevEnd = new Date(endDate);
+            prevEnd.setDate(endDate.getDate() - 7);
+            break;
+        case 'monthly':
+            prevStart = new Date(startDate);
+            prevStart.setMonth(startDate.getMonth() - 1);
+            prevEnd = new Date(startDate);
+            prevEnd.setDate(0);
+            break;
+        case 'quarterly':
+            prevStart = new Date(startDate);
+            prevStart.setMonth(startDate.getMonth() - 3);
+            prevEnd = new Date(startDate);
+            prevEnd.setDate(0);
+            break;
+        case 'yearly':
+            prevStart = new Date(startDate);
+            prevStart.setFullYear(startDate.getFullYear() - 1);
+            prevEnd = new Date(endDate);
+            prevEnd.setFullYear(endDate.getFullYear() - 1);
+            break;
+        default: // custom
+            const diff = endDate.getTime() - startDate.getTime();
+            prevStart = new Date(startDate.getTime() - diff);
+            prevEnd = new Date(startDate);
+            break;
+    }
+
+    return {
+        start: prevStart.toISOString().split('T')[0],
+        end: prevEnd.toISOString().split('T')[0],
+    };
+  };
+
   // Updated period change handler
   const handlePeriodChange = (newPeriod) => {
     setSelectedPeriod(newPeriod);
@@ -134,48 +181,98 @@ const currentDefaults = getCurrentPeriodDefaults();
   };
 
   // Filter Medical Reps based on other selections
-  const getFilteredMedicalReps = () => {
-    let filteredReps = medicalReps;
+  // Filter Medical Reps based on other selections
+const getFilteredMedicalReps = () => {
+  let filteredReps = [...medicalReps];
+  let filteredUnknownReps = [...unknownMRs];
+  
+  console.log('Starting getFilteredMedicalReps with:', filteredReps.length, 'known +', filteredUnknownReps.length, 'unknown');
 
-    // Filter by Region
-    if (selectedRegion !== 'all') {
-      filteredReps = filteredReps.filter(rep => rep.region === selectedRegion);
-    }
+  // Apply Region filter to known MRs
+  if (selectedRegion !== 'all') {
+    filteredReps = filteredReps.filter(rep => rep.region === selectedRegion);
+    // Unknown MRs don't have proper region data, so exclude them when region is filtered
+    filteredUnknownReps = [];
+  }
 
-    // Filter by Team (ASM/RSM)
-    if (selectedTeam !== 'all') {
-      const selectedTeamData = teams.find(team => team.employee_id === selectedTeam);
-      if (selectedTeamData) {
+  // Apply State filter to known MRs
+  if (selectedState !== 'all') {
+    filteredReps = filteredReps.filter(rep => rep.state === selectedState);
+    // Unknown MRs don't have proper state data, so exclude them when state is filtered
+    filteredUnknownReps = [];
+  }
+
+  // Apply Team filter to known MRs
+  if (selectedTeam !== 'all') {
+    const selectedTeamData = teams.find(team => team.employee_id === selectedTeam);
+    
+    if (selectedTeam === 'independent') {
+      // Independent: only known MRs with no team assignment
+      filteredReps = filteredReps.filter(rep => 
+        rep.role_level === 'MR' && 
+        !rep.area_sales_manager_name && 
+        !rep.regional_sales_manager_name
+      );
+      filteredUnknownReps = []; // Unknown MRs are not part of independent
+    } else if (selectedTeamData) {
+      // Specific team selected: only known MRs under that team
+      if (selectedTeamData.role_level === 'RSM') {
+        const rsmName = selectedTeamData.name;
+        const asmUnderRSM = medicalReps.filter(rep => 
+          rep.role_level === 'ASM' && rep.regional_sales_manager_name === rsmName
+        );
+        const asmNames = asmUnderRSM.map(asm => asm.name);
+        
         filteredReps = filteredReps.filter(rep => 
-          rep.area_sales_manager_name === selectedTeamData.name || 
-          rep.regional_sales_manager_name === selectedTeamData.name
+          rep.role_level === 'MR' && (
+            rep.regional_sales_manager_name === rsmName ||
+            asmNames.includes(rep.area_sales_manager_name)
+          )
+        );
+      } else if (selectedTeamData.role_level === 'ASM') {
+        const asmName = selectedTeamData.name;
+        filteredReps = filteredReps.filter(rep => 
+          rep.role_level === 'MR' && rep.area_sales_manager_name === asmName
         );
       }
+      filteredUnknownReps = []; // Unknown MRs are not part of specific teams
     }
+  }
 
-    // Filter by State
-    if (selectedState !== 'all') {
-      filteredReps = filteredReps.filter(rep => rep.state === selectedState);
-    }
+  // Only include MRs in the final result
+  filteredReps = filteredReps.filter(rep => rep.role_level === 'MR');
 
-    // Group by active status
-    const activeReps = filteredReps.filter(rep => rep.is_active === true);
-    const inactiveReps = filteredReps.filter(rep => rep.is_active === false);
+  // Combine known and unknown MRs
+  const allFilteredReps = [...filteredReps, ...filteredUnknownReps];
 
-    return { activeReps, inactiveReps };
-  };
+  // Group by active status
+  const activeReps = allFilteredReps.filter(rep => rep.is_active === true);
+  const inactiveReps = allFilteredReps.filter(rep => rep.is_active === false);
+
+  console.log('Final split:', { 
+    knownActive: filteredReps.filter(r => r.is_active).length,
+    unknownActive: filteredUnknownReps.length,
+    totalActive: activeReps.length,
+    totalInactive: inactiveReps.length 
+  });
+
+  return { activeReps, inactiveReps };
+};
 
   // Fetch initial data for filters
   useEffect(() => {
     fetchFilterData();
   }, []);
 
-  // Fetch dashboard data when filters change
+  // Fetch dashboard data when filters change - FIXED: Added dateRange dependency
   useEffect(() => {
+  if (medicalReps.length > 0) {
+    // Refetch unknown MRs when period changes (they might be different)
+    getUnknownMRsFromSalesData().then(setUnknownMRs);
     fetchDashboardData();
-  }, [selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
-      selectedRegion, selectedTeam, selectedState, selectedMR]);
-
+  }
+}, [selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
+    selectedRegion, selectedTeam, selectedState, selectedMR, dateRange, medicalReps]);
   // Reset MR selection when other filters change
   useEffect(() => {
     if (selectedMR !== 'all') {
@@ -190,196 +287,364 @@ const currentDefaults = getCurrentPeriodDefaults();
   }, [selectedRegion, selectedTeam, selectedState]);
 
   const fetchFilterData = async () => {
-    try {
-      // Fetch teams (ASM/RSM)
-      const { data: teamData } = await supabase
-        .from('medical_representatives')
-        .select('employee_id, name, role_level, region')
-        .in('role_level', ['ASM', 'RSM'])
-        .order('name');
+  try {
+    // Fetch teams (ASM/RSM) - Make sure to get all role levels
+    const { data: teamData } = await supabase
+      .from('medical_representatives')
+      .select('employee_id, name, role_level, region')
+      .in('role_level', ['ASM', 'RSM']) // Only ASM and RSM for team filter
+      .eq('is_active', true) // Only active managers
+      .order('role_level', { ascending: false }) // RSM first, then ASM
+      .order('name');
 
-      // Fetch states
-      const { data: stateData } = await supabase
-        .from('medical_representatives')
-        .select('state')
-        .not('state', 'is', null)
-        .order('state');
+    // Fetch unique states
+    const { data: stateData } = await supabase
+      .from('medical_representatives')
+      .select('state')
+      .not('state', 'is', null)
+      .eq('role_level', 'MR') // Only from MRs
+      .order('state');
 
-      // Get unique states
-      const uniqueStates = [...new Set(stateData?.map(item => item.state) || [])];
+    // Fetch unique regions  
+    const { data: regionData } = await supabase
+      .from('medical_representatives')
+      .select('region')
+      .not('region', 'is', null)
+      .eq('role_level', 'MR') // Only from MRs
+      .order('region');
 
-      // Fetch all medical representatives with enhanced fields
-      const { data: mrData } = await supabase
-        .from('medical_representatives')
-        .select('employee_id, name, role_level, is_active, region, state, area_sales_manager_name, regional_sales_manager_name')
-        .eq('role_level', 'MR')
-        .order('name');
+    const uniqueStates = [...new Set(stateData?.map(item => item.state) || [])];
+    const uniqueRegions = [...new Set(regionData?.map(item => item.region) || [])];
 
-      setTeams(teamData || []);
-      setStates(uniqueStates);
-      setMedicalReps(mrData || []);
-    } catch (error) {
-      console.error('Error fetching filter data:', error);
-    }
-  };
+    // Fetch all medical representatives
+    const { data: mrData } = await supabase
+      .from('medical_representatives')
+      .select('employee_id, name, role_level, is_active, region, state, area_sales_manager_name, regional_sales_manager_name')
+      .order('name');
+
+      // FIXED: Also fetch unknown MRs
+    const unknownMRData = await getUnknownMRsFromSalesData();
+    
+    console.log('Filter data loaded:', {
+      teams: teamData?.length || 0,
+      states: uniqueStates.length,
+      regions: uniqueRegions.length,
+      allReps: mrData?.length || 0,
+      mrOnly: mrData?.filter(r => r.role_level === 'MR').length || 0,
+      unknownMRs: unknownMRData.length
+    });
+
+    setTeams(teamData || []);
+    setStates(uniqueStates);
+    setRegions(uniqueRegions);
+    setMedicalReps(mrData || []);
+    setUnknownMRs(unknownMRData); // Set unknown MRs
+  } catch (error) {
+    console.error('Error fetching filter data:', error);
+  }
+};
 
   const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const { start, end } = getDateRange();
+  setLoading(true);
+  try {
+    const currentRange = getDateRange();
+    const previousRange = getPreviousDateRange(currentRange);
+
+    console.log('Date ranges:', { current: currentRange, previous: previousRange });
+    console.log('Current filters:', { selectedRegion, selectedTeam, selectedState, selectedMR });
+
+    const fetchDataForRange = async (range) => {
+  const { start, end } = range;
+  
+  // Build base queries (same as before)
+  let orderQuery = supabase
+    .from('orders')
+    .select(`
+      order_id,
+      order_date,
+      net_amount,
+      order_type,
+      mr_name,
+      customer_code,
+      state,
+      status,
+      delivery_status,
+      payment_status
+    `)
+    .gte('order_date', start)
+    .lte('order_date', end)
+    .in('customer_type', ['Doctor', 'Retailer'])
+    .eq('status', 'Order Confirmed')
+    .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
+
+  let visitQuery = supabase
+    .from('mr_visits')
+    .select(`
+      "visitId",
+      "dcrDate",
+      "empName",
+      "clientMobileNo",
+      "clientName",
+      "amountOfSale"
+    `)
+    .gte('"dcrDate"', start)
+    .lte('"dcrDate"', end);
+
+  let targetQuery = supabase
+    .from('mr_weekly_targets')
+    .select('*')
+    .gte('target_date', start)
+    .lte('target_date', end);
+
+  // FIXED: Handle Sales Agent (unknown MR) selection specifically
+  if (selectedMR !== 'all') {
+    // Check if selected MR is a Sales Agent (unknown MR)
+    if (selectedMR.startsWith('unknown_')) {
+      // Extract the actual name from the ID
+      const salesAgentName = selectedMR.replace('unknown_', '');
+      console.log('Selected Sales Agent:', salesAgentName);
       
-      // Build base query for orders with enhanced fields
-      let orderQuery = supabase
-        .from('orders')
-        .select(`
-          order_id,
-          order_date,
-          net_amount,
-          order_type,
-          mr_name,
-          customer_code,
-          state,
-          status,
-          delivery_status,
-          payment_status
-        `)
-        .gte('order_date', start)
-        .lte('order_date', end)
-        .in('customer_type', ['Doctor', 'Retailer'])
-        .eq('status', 'Order Confirmed')
-        .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
-
-      // Build base query for visits  
-      let visitQuery = supabase
-        .from('mr_visits')
-        .select(`
-          "visitId",
-          "dcrDate",
-          "empName",
-          "clientMobileNo",
-          "clientName",
-          "amountOfSale"
-        `)
-        .gte('"dcrDate"', start)
-        .lte('"dcrDate"', end);
-
-      // Build base query for targets
-      let targetQuery = supabase
-        .from('mr_weekly_targets')
-        .select('*')
-        .gte('target_date', start)
-        .lte('target_date', end);
-
-      // Get ALL historical visits to determine first visits (for new prospects calculation)
-      let allVisitsQuery = supabase
-        .from('mr_visits')
-        .select(`
-          "clientMobileNo",
-          "empName",
-          "dcrDate"
-        `)
-        .order('"dcrDate"', { ascending: true });
-
-      // Apply filters
-      if (selectedMR !== 'all') {
-        const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
-        if (selectedMRData) {
-          orderQuery = orderQuery.eq('mr_name', selectedMRData.name);
-          visitQuery = visitQuery.eq('"empName"', selectedMRData.name);
-          targetQuery = targetQuery.eq('employee_id', selectedMR);
-          allVisitsQuery = allVisitsQuery.eq('"empName"', selectedMRData.name);
-        }
+      // Filter directly by name for Sales Agents
+      orderQuery = orderQuery.eq('mr_name', salesAgentName);
+      visitQuery = visitQuery.eq('"empName"', salesAgentName);
+      // Sales Agents don't have targets, so skip target filtering
+      
+    } else {
+      // Handle regular MR selection
+      const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
+      if (selectedMRData) {
+        orderQuery = orderQuery.eq('mr_name', selectedMRData.name);
+        visitQuery = visitQuery.eq('"empName"', selectedMRData.name);
+        targetQuery = targetQuery.eq('employee_id', selectedMR);
       }
-
-      if (selectedTeam !== 'all') {
-        // Get MRs under selected ASM/RSM
-        const { data: teamMRs } = await supabase
-          .from('medical_representatives')
-          .select('employee_id, name')
-          .or(`area_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name},regional_sales_manager_name.eq.${teams.find(t => t.employee_id === selectedTeam)?.name}`);
-        
-        const mrNames = teamMRs?.map(mr => mr.name) || [];
-        const mrIds = teamMRs?.map(mr => mr.employee_id) || [];
-        
-        if (mrNames.length > 0) {
-          orderQuery = orderQuery.in('mr_name', mrNames);
-          visitQuery = visitQuery.in('"empName"', mrNames);
-          targetQuery = targetQuery.in('employee_id', mrIds);
-          allVisitsQuery = allVisitsQuery.in('"empName"', mrNames);
-        }
-      }
-
-      if (selectedState !== 'all') {
-        orderQuery = orderQuery.eq('state', selectedState);
-      }
-
-      // Execute queries
-      const [orderData, visitData, targetData, mrData, allVisitsData] = await Promise.all([
-        orderQuery,
-        visitQuery,
-        targetQuery,
-        supabase
-          .from('medical_representatives')
-          .select('employee_id, name, role_level, region, state, is_active, area_sales_manager_name, regional_sales_manager_name'),
-        allVisitsQuery
-      ]);
-
-      // Process data to calculate conversions
-      const processedData = processDataWithConversions(
-        orderData.data || [],
-        visitData.data || [],
-        targetData.data || [],
-        mrData.data || [],
-        allVisitsData.data || []
-      );
-
-      setDashboardData(processedData);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const processDataWithConversions = (orders, visits, targets, mrs, allVisits) => {
-    // Create a map of visits by date and customer for conversion tracking
-    const visitMap = new Map();
-    visits.forEach(visit => {
-      const dateKey = visit.dcrDate;
-      const customerKey = visit.clientMobileNo; // Using only mobile number as unique identifier
-      if (!visitMap.has(dateKey)) {
-        visitMap.set(dateKey, new Map());
-      }
-      visitMap.get(dateKey).set(customerKey, visit);
-    });
-
-    // Calculate conversions - a visit is converted if there's an order for the same customer on the same date
-    const convertedVisits = new Set();
-    orders.forEach(order => {
-      const dateKey = order.order_date;
-      const dayVisits = visitMap.get(dateKey);
-      if (dayVisits) {
-        // Check if any visit matches this order's customer
-        dayVisits.forEach((visit, customerKey) => {
-          if (customerKey === order.customer_code || 
-              (visit.clientMobileNo && order.customer_code && 
-               visit.clientMobileNo === order.customer_code)) {
-            convertedVisits.add(visit.visitId);
+  } else {
+    // Handle team-based filtering (existing logic)
+    if (selectedTeam === 'all' && selectedRegion === 'all' && selectedState === 'all') {
+      // Show ALL data without MR filtering
+      console.log('Showing ALL data without MR filtering');
+    } else {
+      // Apply specific filtering logic
+      let allIncludedPersons = [];
+      
+      if (selectedTeam === 'independent') {
+        const independentMRs = medicalReps.filter(rep => 
+          rep.role_level === 'MR' && 
+          !rep.area_sales_manager_name && 
+          !rep.regional_sales_manager_name
+        );
+        
+        let filteredIndependent = [...independentMRs];
+        if (selectedRegion !== 'all') {
+          filteredIndependent = filteredIndependent.filter(rep => rep.region === selectedRegion);
+        }
+        if (selectedState !== 'all') {
+          filteredIndependent = filteredIndependent.filter(rep => rep.state === selectedState);
+        }
+        
+        allIncludedPersons = filteredIndependent;
+        
+      } else {
+        const { activeReps, inactiveReps } = getFilteredMedicalReps();
+        allIncludedPersons = [...activeReps, ...inactiveReps];
+        
+        if (selectedTeam !== 'all') {
+          const selectedTeamData = teams.find(team => team.employee_id === selectedTeam);
+          if (selectedTeamData) {
+            allIncludedPersons.push(selectedTeamData);
           }
-        });
+        }
       }
+      
+      if (allIncludedPersons.length === 0) {
+        return { orders: [], visits: [], targets: [] };
+      }
+      
+      const personNames = allIncludedPersons.map(person => person.name);
+      orderQuery = orderQuery.in('mr_name', personNames);
+      visitQuery = visitQuery.in('"empName"', personNames);
+      targetQuery = targetQuery.in('employee_id', allIncludedPersons.map(p => p.employee_id));
+    }
+  }
+
+  // Apply state filter to orders if needed
+  if (selectedState !== 'all') {
+    orderQuery = orderQuery.eq('state', selectedState);
+  }
+
+  try {
+    const [orderData, visitData, targetData] = await Promise.all([
+      orderQuery,
+      visitQuery,
+      targetQuery,
+    ]);
+
+    const results = {
+      orders: orderData.data || [],
+      visits: visitData.data || [],
+      targets: targetData.data || [],
+    };
+
+    console.log('Query results:', {
+      selectedMR: selectedMR,
+      isSalesAgent: selectedMR.startsWith('unknown_'),
+      orders: results.orders.length,
+      visits: results.visits.length,
+      totalRevenue: results.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
     });
+
+    return results;
+
+  } catch (error) {
+    console.error('Database query error:', error);
+    return { orders: [], visits: [], targets: [] };
+  }
+};
+
+    const [currentData, previousData, allVisitsData] = await Promise.all([
+      fetchDataForRange(currentRange),
+      fetchDataForRange(previousRange),
+      supabase
+        .from('mr_visits')
+        .select(`"clientMobileNo", "empName", "dcrDate"`)
+        .order('"dcrDate"', { ascending: true })
+    ]);
+
+    console.log('Final data summary:', {
+      currentOrders: currentData.orders.length,
+      currentVisits: currentData.visits.length,
+      previousOrders: previousData.orders.length,
+      previousVisits: previousData.visits.length
+    });
+
+    // Process data
+    const processedData = processDataWithConversions(
+      currentData.orders,
+      currentData.visits,
+      currentData.targets,
+      previousData.orders,
+      previousData.visits,
+      medicalReps,
+      allVisitsData.data || []
+    );
+
+    setDashboardData(processedData);
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Add this function after getFilteredMedicalReps
+const debugFilterState = () => {
+  const filtered = getFilteredMedicalReps();
+  console.log('=== FILTER DEBUG ===');
+  console.log('Selected filters:', { selectedRegion, selectedTeam, selectedState, selectedMR });
+  console.log('Total medicalReps:', medicalReps.length);
+  console.log('Teams available:', teams.length);
+  console.log('Filtered active MRs:', filtered.activeReps.length);
+  console.log('Filtered inactive MRs:', filtered.inactiveReps.length);
+  
+  if (selectedTeam !== 'all') {
+    const teamData = teams.find(t => t.employee_id === selectedTeam);
+    console.log('Selected team details:', teamData);
+  }
+  
+  console.log('Sample filtered MRs:', filtered.activeReps.slice(0, 3).map(mr => ({
+    name: mr.name,
+    region: mr.region,
+    state: mr.state,
+    asm: mr.area_sales_manager_name,
+    rsm: mr.regional_sales_manager_name
+  })));
+  console.log('==================');
+};
+
+  const processDataWithConversions = (
+    currentOrders, currentVisits, currentTargets,
+    previousOrders, previousVisits,
+    mrs, allVisits
+  ) => {
+   // Remove #S from visit MR names before any calculations
+  currentVisits = currentVisits.map(visit => ({ ...visit, empName: visit.empName?.replace(/#S$/, '') }));
+  previousVisits = previousVisits.map(visit => ({ ...visit, empName: visit.empName?.replace(/#S$/, '') }));
+  allVisits = allVisits.map(visit => ({ ...visit, empName: visit.empName?.replace(/#S$/, '') }));
+
+    // Helper function to calculate metrics for a period
+    const calculateMetrics = (orders, visits) => {
+      // Create a map of visits by date and customer for conversion tracking
+      const visitMap = new Map();
+      visits.forEach(visit => {
+        const dateKey = visit.dcrDate;
+        const customerKey = visit.clientMobileNo;
+        if (!visitMap.has(dateKey)) {
+          visitMap.set(dateKey, new Map());
+        }
+        visitMap.get(dateKey).set(customerKey, visit);
+      });
+
+      // Calculate conversions - a visit is converted if there's an order for the same customer on the same date
+      const convertedVisits = new Set();
+      orders.forEach(order => {
+        const dateKey = order.order_date;
+        const dayVisits = visitMap.get(dateKey);
+        if (dayVisits) {
+          dayVisits.forEach((visit, customerKey) => {
+            if (customerKey === order.customer_code || 
+                (visit.clientMobileNo && order.customer_code && 
+                 visit.clientMobileNo === order.customer_code)) {
+              convertedVisits.add(visit.visitId);
+            }
+          });
+        }
+      });
+
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+      const totalVisits = visits.length;
+      const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100) : 0;
+      const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+      const billsPending = orders.filter(order => 
+        order.status === 'Order Confirmed' && order.delivery_status === null
+      ).length;
+      const paymentPending = orders.filter(order => order.payment_status === null).length;
+      
+      const confirmedOrders = orders.filter(order => order.status === 'Order Confirmed');
+      const deliveredOrders = orders.filter(order => 
+        order.status === 'Order Confirmed' && order.delivery_status === 'Dispatch Confirmed'
+      );
+      const deliveryRate = confirmedOrders.length > 0 ? 
+        ((deliveredOrders.length / confirmedOrders.length) * 100) : 0;
+
+      return {
+        totalRevenue,
+        totalVisits,
+        conversionRate,
+        avgOrderValue,
+        billsPending,
+        paymentPending,
+        deliveryRate,
+        convertedVisits: convertedVisits.size,
+        convertedVisitsSet: convertedVisits
+      };
+    };
+
+    const currentMetrics = calculateMetrics(currentOrders, currentVisits);
+    const previousMetrics = calculateMetrics(previousOrders, previousVisits);
+
+    // FIXED: Calculate actual change percentages
+    const calculateChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+    };
 
     // Create map to track first visits ever for new prospects calculation
-    const firstVisitMap = new Map(); // clientMobileNo -> { mrName, firstDate }
-    
-    // Sort all visits by date to find the very first visit for each customer
+    const firstVisitMap = new Map();
     const sortedAllVisits = allVisits.sort((a, b) => new Date(a.dcrDate) - new Date(b.dcrDate));
     
     sortedAllVisits.forEach(visit => {
       const customerKey = visit.clientMobileNo;
       if (!firstVisitMap.has(customerKey)) {
-        // This is the first visit ever for this customer
         firstVisitMap.set(customerKey, {
           mrName: visit.empName,
           firstDate: visit.dcrDate
@@ -387,44 +652,36 @@ const currentDefaults = getCurrentPeriodDefaults();
       }
     });
 
-    // Calculate overview metrics
-    const totalRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
-    const totalVisits = visits.length;
-    const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100).toFixed(1) : 0;
-    
-    // Get unique MRs from visits
-    const activeMRNames = [...new Set(visits.map(v => v.empName))];
-    const activeReps = activeMRNames.length;
+
+// Get unique MRs from current visits
+const activeMRNames = [...new Set(currentVisits.map(v => v.empName))];
+let activeReps = activeMRNames.length;
+
+// FIXED: Handle single Sales Agent selection for active count
+if (selectedMR !== 'all' && selectedMR.startsWith('unknown_')) {
+  const salesAgentName = selectedMR.replace('unknown_', '');
+  activeReps = activeMRNames.includes(salesAgentName) ? 1 : 0;
+  console.log(`Sales Agent ${salesAgentName} is ${activeReps > 0 ? 'active' : 'inactive'} in this period`);
+}
     
     // Calculate target achievement
-    const totalTarget = targets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
-    const targetAchievement = totalTarget > 0 ? ((totalRevenue / totalTarget) * 100).toFixed(1) : 0;
-    
-    const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+    const totalTarget = currentTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    const targetAchievement = totalTarget > 0 ? ((currentMetrics.totalRevenue / totalTarget) * 100).toFixed(1) : 0;
 
     // Calculate NBD vs CRR
-    const nbdRevenue = orders
+    const nbdRevenue = currentOrders
       .filter(order => order.order_type === 'NBD')
       .reduce((sum, order) => sum + (order.net_amount || 0), 0);
-    const crrRevenue = orders
+    const crrRevenue = currentOrders
       .filter(order => order.order_type === 'CRR')
       .reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
-    // Calculate bills and payment pending
-    const billsPending = orders.filter(order => 
-      order.status === 'Order Confirmed' && order.delivery_status === null
-    ).length;
-    
-    const paymentPending = orders.filter(order => 
-      order.payment_status === null
-    ).length;
-
     // Calculate order fulfillment metrics
-    const confirmedOrders = orders.filter(order => order.status === 'Order Confirmed');
-    const deliveredOrders = orders.filter(order => 
+    const confirmedOrders = currentOrders.filter(order => order.status === 'Order Confirmed');
+    const deliveredOrders = currentOrders.filter(order => 
       order.status === 'Order Confirmed' && order.delivery_status === 'Dispatch Confirmed'
     );
-    const paidOrders = orders.filter(order => 
+    const paidOrders = currentOrders.filter(order => 
       order.status === 'Order Confirmed' && order.payment_status !== null
     );
 
@@ -438,20 +695,90 @@ const currentDefaults = getCurrentPeriodDefaults();
     const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
     // Group data by time period for trends
-    const trends = groupDataByPeriod(orders, visits, targets, selectedPeriod, convertedVisits);
+    const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet);
 
     // Calculate detailed performer metrics for all filtered MRs
-    const performerMap = {};
-    
-    // Initialize all MRs from the filtered list to show everyone based on filters
-    const filteredMRs = getFilteredMedicalReps();
-    const allFilteredMRs = [...filteredMRs.activeReps, ...filteredMRs.inactiveReps];
-    
-    allFilteredMRs.forEach(mr => {
-      performerMap[mr.name] = {
-        id: mr.employee_id,
-        name: mr.name,
-        isActive: mr.is_active,
+    // In processDataWithConversions function, update the performer initialization section:
+
+// Calculate detailed performer metrics for all filtered persons (including ASM/RSM)
+// Calculate detailed performer metrics
+// In processDataWithConversions, update the performer initialization:
+
+// Calculate detailed performer metrics
+const performerMap = {};
+
+// FIXED: Handle single Sales Agent selection
+if (selectedMR !== 'all' && selectedMR.startsWith('unknown_')) {
+  // Single Sales Agent selected
+  const salesAgentName = selectedMR.replace('unknown_', '');
+  performerMap[salesAgentName] = {
+    id: selectedMR,
+    name: salesAgentName,
+    isActive: true,
+    roleLevel: 'SALES_AGENT',
+    revenue: 0,
+    visits: 0,
+    orders: 0,
+    convertedVisits: 0,
+    nbdOrders: 0,
+    crrOrders: 0,
+    nbdRevenue: 0,
+    crrRevenue: 0,
+    newProspects: 0,
+    billsPending: 0,
+    paymentPending: 0
+  };
+  console.log('Initialized single Sales Agent:', salesAgentName);
+} else {
+  // Regular filtering logic
+  const { activeReps, inactiveReps } = getFilteredMedicalReps();
+  const allFilteredMRs = [...activeReps, ...inactiveReps];
+
+  // Include ASM/RSM if team is selected
+  if (selectedTeam !== 'all' && selectedTeam !== 'independent') {
+    const selectedTeamData = teams.find(team => team.employee_id === selectedTeam);
+    if (selectedTeamData) {
+      allFilteredMRs.push({
+        ...selectedTeamData,
+        is_active: true
+      });
+    }
+  }
+
+  // Initialize known MRs and Sales Agents
+  allFilteredMRs.forEach(person => {
+    performerMap[person.name] = {
+      id: person.employee_id,
+      name: person.name,
+      isActive: person.is_active,
+      roleLevel: person.role_level || 'MR',
+      revenue: 0,
+      visits: 0,
+      orders: 0,
+      convertedVisits: 0,
+      nbdOrders: 0,
+      crrOrders: 0,
+      nbdRevenue: 0,
+      crrRevenue: 0,
+      newProspects: 0,
+      billsPending: 0,
+      paymentPending: 0
+    };
+  });
+
+  // Add any unknown MRs from actual data if not already included
+  const allOrderMRs = [...new Set(currentOrders.map(order => order.mr_name).filter(Boolean))];
+  const allVisitMRs = [...new Set(currentVisits.map(visit => visit.empName).filter(Boolean))];
+  const allActiveMRNames = [...new Set([...allOrderMRs, ...allVisitMRs])];
+
+  allActiveMRNames.forEach(mrName => {
+    if (!performerMap[mrName]) {
+      console.log('Adding unknown MR from data:', mrName);
+      performerMap[mrName] = {
+        id: `unknown_${mrName}`,
+        name: mrName,
+        isActive: true,
+        roleLevel: 'SALES_AGENT',
         revenue: 0,
         visits: 0,
         orders: 0,
@@ -464,10 +791,15 @@ const currentDefaults = getCurrentPeriodDefaults();
         billsPending: 0,
         paymentPending: 0
       };
-    });
+    }
+  });
+}
 
+console.log('Total performers initialized:', Object.keys(performerMap).length);
+
+// Rest of the processing logic remains the same...
     // Group orders by MR
-    orders.forEach(order => {
+    currentOrders.forEach(order => {
       const mrName = order.mr_name;
       if (performerMap[mrName]) {
         performerMap[mrName].revenue += order.net_amount || 0;
@@ -481,38 +813,36 @@ const currentDefaults = getCurrentPeriodDefaults();
           performerMap[mrName].crrRevenue += order.net_amount || 0;
         }
         
-        // Bills pending
         if (order.status === 'Order Confirmed' && order.delivery_status === null) {
           performerMap[mrName].billsPending += 1;
         }
         
-        // Payment pending
         if (order.payment_status === null) {
           performerMap[mrName].paymentPending += 1;
         }
       }
     });
 
-    // Group visits by MR and calculate new prospects
-    visits.forEach(visit => {
+    // Group visits by MR and calculate conversions and new prospects
+    currentVisits.forEach(visit => {
       const mrName = visit.empName;
       const customerKey = visit.clientMobileNo;
       
       if (performerMap[mrName]) {
         performerMap[mrName].visits += 1;
-        if (convertedVisits.has(visit.visitId)) {
+        
+        // FIXED: Use the correct convertedVisits set
+        if (currentMetrics.convertedVisitsSet.has(visit.visitId)) {
           performerMap[mrName].convertedVisits += 1;
         }
         
-        // Check if this visit is to a new prospect (first visit ever by this MR to this customer)
+        // Check if this visit is to a new prospect
         const firstVisit = firstVisitMap.get(customerKey);
         if (firstVisit && firstVisit.mrName === mrName) {
-          // This MR made the very first visit to this customer
           const visitDate = new Date(visit.dcrDate);
           const selectedPeriodStart = new Date(getDateRange().start);
           const selectedPeriodEnd = new Date(getDateRange().end);
           
-          // Check if the first visit falls within the selected period
           if (visitDate >= selectedPeriodStart && visitDate <= selectedPeriodEnd) {
             performerMap[mrName].newProspects += 1;
           }
@@ -523,54 +853,67 @@ const currentDefaults = getCurrentPeriodDefaults();
     const allPerformers = Object.values(performerMap)
       .map(performer => ({
         ...performer,
-        conversion: performer.visits > 0 ? ((performer.convertedVisits / performer.visits) * 100).toFixed(0) : 0,
-        nbdConversion: performer.nbdOrders > 0 && performer.visits > 0 ? 
-          ((performer.nbdOrders / performer.visits) * 100).toFixed(0) : 0,
-        achievement: 100 // This would be calculated based on individual targets
+        conversion: performer.visits > 0 ? 
+          ((performer.convertedVisits / performer.visits) * 100).toFixed(1) : '0.0',
+        nbdConversion: performer.visits > 0 ? 
+          ((performer.nbdOrders / performer.visits) * 100).toFixed(1) : '0.0',
+        achievement: 100
       }));
 
-    // Visit metrics
-    const plannedVisits = targets.reduce((sum, target) => sum + (target.total_visit_plan || 0), 0);
-    const completedVisits = visits.length;
+    // Calculate visit metrics
+    const plannedVisits = currentTargets.reduce((sum, target) => sum + (target.total_visit_plan || 0), 0);
     const visitMetrics = {
       planned: plannedVisits,
-      completed: completedVisits,
-      missed: Math.max(0, plannedVisits - completedVisits),
-      completionRate: plannedVisits > 0 ? ((completedVisits / plannedVisits) * 100).toFixed(0) : 0
+      completed: currentMetrics.totalVisits,
+      missed: Math.max(0, plannedVisits - currentMetrics.totalVisits),
+      completionRate: plannedVisits > 0 ? ((currentMetrics.totalVisits / plannedVisits) * 100).toFixed(0) : 0
     };
 
     // Conversion metrics
     const conversionMetrics = {
-      totalLeads: totalVisits,
-      converted: convertedVisits.size,
-      pending: 0, // Would need additional data
-      lost: totalVisits - convertedVisits.size
+      totalLeads: currentMetrics.totalVisits,
+      converted: currentMetrics.convertedVisits,
+      pending: 0,
+      lost: currentMetrics.totalVisits - currentMetrics.convertedVisits
     };
 
     // Revenue metrics
     const revenueMetrics = {
       target: totalTarget,
-      achieved: totalRevenue,
-      gap: totalTarget - totalRevenue,
-      growthRate: 12.5 // This would be calculated based on previous period
+      achieved: currentMetrics.totalRevenue,
+      gap: totalTarget - currentMetrics.totalRevenue,
+      growthRate: calculateChange(currentMetrics.totalRevenue, previousMetrics.totalRevenue)
+    };
+
+    // FIXED: Return overview with calculated changes
+    const overview = {
+      totalRevenue: currentMetrics.totalRevenue,
+      totalVisits: currentMetrics.totalVisits,
+      conversionRate: currentMetrics.conversionRate.toFixed(1),
+      avgOrderValue: currentMetrics.avgOrderValue,
+      billsPending: currentMetrics.billsPending,
+      paymentPending: currentMetrics.paymentPending,
+      deliveryRate: currentMetrics.deliveryRate.toFixed(1),
+      activeReps,
+      targetAchievement,
+
+      // FIXED: Calculate actual changes
+      totalRevenueChange: calculateChange(currentMetrics.totalRevenue, previousMetrics.totalRevenue),
+      totalVisitsChange: calculateChange(currentMetrics.totalVisits, previousMetrics.totalVisits),
+      conversionRateChange: calculateChange(currentMetrics.conversionRate, previousMetrics.conversionRate),
+      avgOrderValueChange: calculateChange(currentMetrics.avgOrderValue, previousMetrics.avgOrderValue),
+      billsPendingChange: calculateChange(currentMetrics.billsPending, previousMetrics.billsPending),
+      paymentPendingChange: calculateChange(currentMetrics.paymentPending, previousMetrics.paymentPending),
+      deliveryRateChange: calculateChange(currentMetrics.deliveryRate, previousMetrics.deliveryRate),
     };
 
     return {
-      overview: {
-        totalRevenue,
-        totalVisits,
-        conversionRate,
-        activeReps,
-        targetAchievement,
-        avgOrderValue,
-        billsPending,
-        paymentPending
-      },
+      overview,
       trends,
       allPerformers,
       performanceByCategory: [
-        { category: 'New Business (NBD)', value: nbdRevenue, percentage: totalRevenue > 0 ? ((nbdRevenue / totalRevenue) * 100).toFixed(0) : 0 },
-        { category: 'Customer Retention (CRR)', value: crrRevenue, percentage: totalRevenue > 0 ? ((crrRevenue / totalRevenue) * 100).toFixed(0) : 0 }
+        { category: 'New Business (NBD)', value: nbdRevenue, percentage: currentMetrics.totalRevenue > 0 ? ((nbdRevenue / currentMetrics.totalRevenue) * 100).toFixed(0) : 0 },
+        { category: 'Customer Retention (CRR)', value: crrRevenue, percentage: currentMetrics.totalRevenue > 0 ? ((crrRevenue / currentMetrics.totalRevenue) * 100).toFixed(0) : 0 }
       ],
       detailedMetrics: {
         visitMetrics,
@@ -591,8 +934,6 @@ const currentDefaults = getCurrentPeriodDefaults();
   };
 
   const groupDataByPeriod = (orders, visits, targets, period, convertedVisits) => {
-    // This is a simplified version - you would implement proper grouping logic
-    // based on the selected period (weekly, monthly, quarterly, yearly)
     const grouped = {
       weekly: [],
       monthly: []
@@ -737,62 +1078,143 @@ const currentDefaults = getCurrentPeriodDefaults();
     );
   };
 
+
+  const getUnknownMRsFromSalesData = async () => {
+  try {
+    const currentRange = getDateRange();
+    
+    // Get all unique MR names from orders in current period
+    const { data: orderMRs } = await supabase
+      .from('orders')
+      .select('mr_name')
+      .gte('order_date', currentRange.start)
+      .lte('order_date', currentRange.end)
+      .in('customer_type', ['Doctor', 'Retailer'])
+      .eq('status', 'Order Confirmed')
+      .not('mr_name', 'is', null);
+
+    // Get all unique MR names from visits in current period  
+    const { data: visitMRs } = await supabase
+      .from('mr_visits')
+      .select('"empName"')
+      .gte('"dcrDate"', currentRange.start)
+      .lte('"dcrDate"', currentRange.end)
+      .not('"empName"', 'is', null);
+
+    // Combine and get unique names
+    const allActiveNames = [
+      ...new Set([
+        ...(orderMRs?.map(o => o.mr_name) || []),
+        ...(visitMRs?.map(v => v.empName) || [])
+      ])
+    ].filter(Boolean);
+
+    // Get known MR names from medical_representatives
+    const knownMRNames = medicalReps.map(mr => mr.name);
+
+    // Find unknown MRs (in sales data but not in medical_representatives)
+    const unknownMRNames = allActiveNames.filter(name => !knownMRNames.includes(name));
+
+    console.log('Unknown MRs found:', unknownMRNames);
+
+    return unknownMRNames.map(name => ({
+      employee_id: `unknown_${name}`,
+      name: name,
+      role_level: 'SALES_AGENT',
+      is_active: true,
+      region: 'Unknown',
+      state: 'Unknown',
+      area_sales_manager_name: null,
+      regional_sales_manager_name: null
+    }));
+
+  } catch (error) {
+    console.error('Error fetching unknown MRs:', error);
+    return [];
+  }
+};
   // Enhanced Medical Rep Dropdown Component
   const EnhancedMedicalRepDropdown = () => {
-    const { activeReps, inactiveReps } = getFilteredMedicalReps();
-    
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Medical Rep 
-          <span className="text-xs text-gray-500 ml-1">
-            ({activeReps.length + inactiveReps.length} available)
-          </span>
-        </label>
-        <select
-          value={selectedMR}
-          onChange={(e) => setSelectedMR(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="all">All Representatives</option>
-          
-          {activeReps.length > 0 && (
-            <optgroup label={`🟢 Active Representatives (${activeReps.length})`}>
-              {activeReps.map(rep => (
-                <option key={rep.employee_id} value={rep.employee_id}>
-                  {rep.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-          
-          {inactiveReps.length > 0 && (
-            <optgroup label={`🔴 Inactive Representatives (${inactiveReps.length})`}>
-              {inactiveReps.map(rep => (
-                <option key={rep.employee_id} value={rep.employee_id}>
-                  {rep.name} (Inactive)
-                </option>
-              ))}
-            </optgroup>
-          )}
-          
-      
-          
-         
-{activeReps.length === 0 && inactiveReps.length === 0 && (
-            <option disabled>No representatives found for current filters</option>
-          )}
-        </select>
+  const { activeReps, inactiveReps } = getFilteredMedicalReps();
+  
+  // Separate known and unknown MRs
+  const knownActiveReps = activeReps.filter(rep => rep.role_level === 'MR');
+  const knownInactiveReps = inactiveReps.filter(rep => rep.role_level === 'MR');
+  const salesAgents = activeReps.filter(rep => rep.role_level === 'SALES_AGENT');
+  
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Team Member 
+        <span className="text-xs text-gray-500 ml-1">
+          ({activeReps.length + inactiveReps.length} available)
+        </span>
+        {selectedTeam === 'independent' && (
+          <span className="text-xs text-blue-600 ml-1">[Independent Only]</span>
+        )}
+      </label>
+      <select
+        value={selectedMR}
+        onChange={(e) => setSelectedMR(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      >
+        <option value="all">All Representatives</option>
         
-        {/* Filter summary */}
-        <div className="mt-1 text-xs text-gray-500">
-          {selectedRegion !== 'all' && <span className="mr-2">📍 {selectedRegion}</span>}
-          {selectedTeam !== 'all' && <span className="mr-2">👥 {teams.find(t => t.employee_id === selectedTeam)?.name}</span>}
-          {selectedState !== 'all' && <span className="mr-2">🏛️ {selectedState}</span>}
-        </div>
-      </div>
-    );
-  };
+        {/* Active Known MRs */}
+        {knownActiveReps.length > 0 && (
+          <optgroup label={`🟢 Active Medical Reps (${knownActiveReps.length})`}>
+            {knownActiveReps.map(rep => (
+              <option key={rep.employee_id} value={rep.employee_id}>
+                {rep.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        
+        {/* Sales Agents (Unknown MRs) */}
+        {salesAgents.length > 0 && (
+          <optgroup label={`🔶 Sales Agents (${salesAgents.length})`}>
+            {salesAgents.map(rep => (
+              <option key={rep.employee_id} value={rep.employee_id}>
+                {rep.name} (Sales Agent)
+              </option>
+            ))}
+          </optgroup>
+        )}
+        
+        {/* Inactive Known MRs */}
+        {knownInactiveReps.length > 0 && (
+          <optgroup label={`🔴 Inactive Medical Reps (${knownInactiveReps.length})`}>
+            {knownInactiveReps.map(rep => (
+              <option key={rep.employee_id} value={rep.employee_id}>
+                {rep.name} (Inactive)
+              </option>
+            ))}
+          </optgroup>
+        )}
+        
+        {activeReps.length === 0 && inactiveReps.length === 0 && (
+          <option disabled>No representatives found for current filters</option>
+        )}
+      </select>
+      
+      {/* Filter summary */}
+<div className="mt-1 text-xs text-gray-500">
+  {selectedRegion !== 'all' && <span className="mr-2">📍 {selectedRegion}</span>}
+  {selectedTeam !== 'all' && selectedTeam !== 'independent' && (
+    <span className="mr-2">👥 {teams.find(t => t.employee_id === selectedTeam)?.name}</span>
+  )}
+  {selectedTeam === 'independent' && <span className="mr-2">🔸 Independent</span>}
+  {selectedState !== 'all' && <span className="mr-2">🏛️ {selectedState}</span>}
+  {selectedMR !== 'all' && selectedMR.startsWith('unknown_') && (
+    <span className="mr-2">🔶 Sales Agent: {selectedMR.replace('unknown_', '')}</span>
+  )}
+  {salesAgents.length > 0 && selectedMR === 'all' && <span className="mr-2">🔶 {salesAgents.length} Sales Agents</span>}
+</div>
+
+    </div>
+  );
+};
 
   // Enhanced Order Fulfillment Chart Component with Vertical Stacked Bar
   const OrderFulfillmentChart = ({ data }) => {
@@ -883,7 +1305,7 @@ const currentDefaults = getCurrentPeriodDefaults();
         </div>
         {change !== undefined && change !== 0 && (
           <span className={`text-xs font-medium ${change > 0 ? 'text-green-600' : 'text-red-600'} flex-shrink-0`}>
-            {change > 0 ? '+' : ''}{change}%
+            {change > 0 ? '+' : ''}{parseFloat(change).toFixed(1)}%
           </span>
         )}
       </div>
@@ -1032,15 +1454,21 @@ const currentDefaults = getCurrentPeriodDefaults();
                       <span className="text-sm font-medium text-gray-900">#{index + 1}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 min-w-0">
-                    <div className="truncate">
-                      <div className="text-sm font-medium text-gray-900 truncate">
-                        {rep.name}
-                        {!rep.isActive && <span className="ml-1 text-xs text-red-500">(Inactive)</span>}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">{rep.id}</div>
-                    </div>
-                  </td>
+          
+<td className="px-4 py-3 min-w-0">
+  <div className="truncate">
+<div className="text-sm font-medium text-gray-900 truncate flex items-center">
+  {rep.roleLevel === 'RSM' && <span className="mr-1 text-xs bg-purple-100 text-purple-800 px-1 rounded">RSM</span>}
+  {rep.roleLevel === 'ASM' && <span className="mr-1 text-xs bg-blue-100 text-blue-800 px-1 rounded">ASM</span>}
+  {rep.roleLevel === 'MR' && <span className="mr-1 text-xs bg-green-100 text-green-800 px-1 rounded">MR</span>}
+  {rep.roleLevel === 'SALES_AGENT' && <span className="mr-1 text-xs bg-orange-100 text-orange-800 px-1 rounded">AGENT</span>}
+  {rep.name}
+  {!rep.isActive && <span className="ml-1 text-xs text-red-500">(Inactive)</span>}
+</div>
+
+    <div className="text-xs text-gray-500 truncate">{rep.id}</div>
+  </div>
+</td>
                   <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium text-gray-900 w-24">
                     <span title={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(rep.revenue)}>
                       {formatCurrency(rep.revenue)}
@@ -1053,7 +1481,7 @@ const currentDefaults = getCurrentPeriodDefaults();
                       <div className="w-8 bg-gray-200 rounded-full h-1.5">
                         <div
                           className="bg-blue-600 h-1.5 rounded-full"
-                          style={{ width: `${Math.min(rep.conversion, 100)}%` }}
+                          style={{ width: `${Math.min(parseFloat(rep.conversion), 100)}%` }}
                         />
                       </div>
                     </div>
@@ -1223,7 +1651,7 @@ const currentDefaults = getCurrentPeriodDefaults();
               )}
             </div>
             
-            {/* Region Filter */}
+            {/* Region Filter - FIXED: Use dynamic regions */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
               <select
@@ -1232,29 +1660,57 @@ const currentDefaults = getCurrentPeriodDefaults();
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Regions</option>
-                <option value="north">North</option>
-                <option value="south">South</option>
-                <option value="east">East</option>
-                <option value="west">West</option>
-              </select>
-            </div>
-            
-            {/* Team Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Team (ASM/RSM)</label>
-              <select
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Teams</option>
-                {teams.map(team => (
-                  <option key={team.employee_id} value={team.employee_id}>
-                    {team.name} ({team.role_level}) - {team.region}
-                  </option>
+                {regions.map(region => (
+                  <option key={region} value={region}>{region}</option>
                 ))}
               </select>
             </div>
+            
+           {/* Team Filter - FIXED to include independent option */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">Team (ASM/RSM)</label>
+  <select
+    value={selectedTeam}
+    onChange={(e) => setSelectedTeam(e.target.value)}
+    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+  >
+    <option value="all">All Teams</option>
+    
+    {/* Regular Teams */}
+    {teams.map(team => {
+      const mrCount = team.role_level === 'RSM' 
+        ? medicalReps.filter(mr => 
+            mr.role_level === 'MR' && (
+              mr.regional_sales_manager_name === team.name ||
+              (mr.area_sales_manager_name && 
+               medicalReps.some(asm => 
+                 asm.role_level === 'ASM' && 
+                 asm.name === mr.area_sales_manager_name && 
+                 asm.regional_sales_manager_name === team.name
+               ))
+            )
+          ).length
+        : medicalReps.filter(mr => 
+            mr.role_level === 'MR' && mr.area_sales_manager_name === team.name
+          ).length;
+      
+      return (
+        <option key={team.employee_id} value={team.employee_id}>
+          {team.role_level === 'RSM' ? '🏢' : '👥'} {team.name} ({team.role_level}) - {team.region} [{mrCount} MRs]
+        </option>
+      );
+    })}
+    
+    {/* Independent Employees Option */}
+    <option value="independent">
+      🔸 Independent Employees [{medicalReps.filter(rep => 
+        rep.role_level === 'MR' && 
+        !rep.area_sales_manager_name && 
+        !rep.regional_sales_manager_name
+      ).length} MRs]
+    </option>
+  </select>
+</div>
             
             {/* State Filter */}
             <div>
@@ -1279,25 +1735,25 @@ const currentDefaults = getCurrentPeriodDefaults();
 
       {/* Enhanced KPI Cards - Two Rows Layout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-4 min-w-0">
-        {/* First Row */}
+        {/* First Row - FIXED: Use calculated changes */}
         <KPICard
           title="Total Revenue"
           value={formatCurrency(dashboardData.overview.totalRevenue)}
-          change={12.5}
+          change={dashboardData.overview.totalRevenueChange}
           icon={DollarSign}
           color="bg-blue-600"
         />
         <KPICard
           title="Total Visits"
           value={dashboardData.overview.totalVisits.toLocaleString()}
-          change={8.3}
+          change={dashboardData.overview.totalVisitsChange}
           icon={MapPin}
           color="bg-green-600"
         />
         <KPICard
           title="Conversion Rate"
           value={`${dashboardData.overview.conversionRate}%`}
-          change={5.2}
+          change={dashboardData.overview.conversionRateChange}
           icon={TrendingUp}
           color="bg-purple-600"
         />
@@ -1311,14 +1767,14 @@ const currentDefaults = getCurrentPeriodDefaults();
         <KPICard
           title="Target Achievement"
           value={`${dashboardData.overview.targetAchievement}%`}
-          change={-2.1}
+          change={0}
           icon={Target}
           color="bg-pink-600"
         />
         <KPICard
           title="Avg Order Value"
           value={formatCurrency(dashboardData.overview.avgOrderValue)}
-          change={3.7}
+          change={dashboardData.overview.avgOrderValueChange}
           icon={ShoppingCart}
           color="bg-indigo-600"
         />
@@ -1328,10 +1784,10 @@ const currentDefaults = getCurrentPeriodDefaults();
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8 min-w-0">
         <KPICard
           title="Delivery Rate"
-          value={`${dashboardData.detailedMetrics.fulfillmentMetrics.deliveryRate}%`}
+          value={`${dashboardData.overview.deliveryRate}%`}
           subtitle={`${dashboardData.detailedMetrics.fulfillmentMetrics.deliveredOrders}/${dashboardData.detailedMetrics.fulfillmentMetrics.confirmedOrders} orders`}
           subvalue={formatCurrency(dashboardData.detailedMetrics.fulfillmentMetrics.deliveredValue)}
-          change={2.3}
+          change={dashboardData.overview.deliveryRateChange}
           icon={CheckCircle}
           color="bg-blue-500"
         />
@@ -1340,7 +1796,7 @@ const currentDefaults = getCurrentPeriodDefaults();
           value={`${dashboardData.detailedMetrics.fulfillmentMetrics.paymentRate}%`}
           subtitle={`${dashboardData.detailedMetrics.fulfillmentMetrics.paidOrders}/${dashboardData.detailedMetrics.fulfillmentMetrics.confirmedOrders} orders`}
           subvalue={formatCurrency(dashboardData.detailedMetrics.fulfillmentMetrics.paidValue)}
-          change={-1.2}
+          change={0}
           icon={DollarSign}
           color="bg-green-500"
         />
@@ -1356,14 +1812,14 @@ const currentDefaults = getCurrentPeriodDefaults();
         <KPICard
           title="Bills Pending"
           value={dashboardData.overview.billsPending}
-          change={0}
+          change={dashboardData.overview.billsPendingChange}
           icon={AlertCircle}
           color="bg-yellow-500"
         />
         <KPICard
           title="Payment Pending"
           value={dashboardData.overview.paymentPending}
-          change={0}
+          change={dashboardData.overview.paymentPendingChange}
           icon={XCircle}
           color="bg-red-500"
         />
@@ -1395,7 +1851,6 @@ const currentDefaults = getCurrentPeriodDefaults();
               <YAxis yAxisId="left" />
               <YAxis yAxisId="right" orientation="right" />
               <Tooltip />
-
               <Legend />
               <Line yAxisId="left" type="monotone" dataKey="visits" stroke="#00C49F" strokeWidth={2} name="Visits" />
               <Line yAxisId="right" type="monotone" dataKey="conversion" stroke="#8884D8" strokeWidth={2} name="Conversion %" />
@@ -1418,7 +1873,7 @@ const currentDefaults = getCurrentPeriodDefaults();
           </ResponsiveContainer>
         </div>
         
-        {/* New Order Fulfillment Chart */}
+        {/* Order Fulfillment Chart */}
         <OrderFulfillmentChart data={dashboardData.detailedMetrics.fulfillmentMetrics} />
       </div>
 
@@ -1536,9 +1991,11 @@ const currentDefaults = getCurrentPeriodDefaults();
               <span className="text-sm font-medium text-right flex-shrink-0">{dashboardData.overview.conversionRate}%</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600 truncate pr-2">Growth Rate</span>
-              <span className="text-sm font-medium text-green-600 text-right flex-shrink-0">+{dashboardData.detailedMetrics.revenueMetrics.growthRate}%</span>
-            </div>
+  <span className="text-sm text-gray-600 truncate pr-2">Conversion Growth</span>
+  <span className={`text-sm font-medium ${dashboardData.overview.conversionRateChange > 0 ? 'text-green-600' : 'text-red-600'} text-right flex-shrink-0`}>
+    {dashboardData.overview.conversionRateChange > 0 ? '+' : ''}{parseFloat(dashboardData.overview.conversionRateChange).toFixed(1)}%
+  </span>
+</div>
           </div>
         </div>
       </div>
