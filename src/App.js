@@ -1,6 +1,8 @@
-// Fixed App.js - Proper Weekly Revision Integration
+// App.js - Integrated with Authentication (All existing tabs preserved)
 
 import React, { useState, useEffect } from 'react';
+import ProtectedRoute from './components/ProtectedRoute';
+import authService from './services/AuthService';
 import EmergencyDashboard from './components/EmergencyDashboard';
 import VisitQualityMonitor from './components/VisitQualityMonitor';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
@@ -8,8 +10,6 @@ import RouteOptimizationDashboard from './components/RouteOptimizationDashboard'
 import GeocodingDashboard from './components/GeocodingDashboard';
 import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
 import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
-import LoginPage from './components/LoginPage';
-import { useAuth } from './hooks/useAuth';
 
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
@@ -30,17 +30,22 @@ import {
   User,
   ChevronDown,
   Search,
-  Filter
+  Filter,
+  LogOut,
+  Shield
 } from 'lucide-react';
 
 function App() {
-  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedMR, setSelectedMR] = useState(null);
   const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
   const [nbdDateRange, setNbdDateRange] = useState(30);
   const [nbdPerformanceFilter, setNbdPerformanceFilter] = useState('all');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   
   // Shared state for month/year - used by both Monthly Planning and Weekly Revision
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -54,6 +59,41 @@ function App() {
     totalMRs 
   } = useMedicalRepresentatives();
 
+  // Initialize authentication
+  useEffect(() => {
+    initializeAuth();
+    
+    // Listen for auth changes
+    const unsubscribe = authService.onAuthStateChange((event, userData) => {
+      if (event === 'SIGNED_IN') {
+        setCurrentUser(userData);
+        setAuthLoading(false);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+        setAuthLoading(false);
+        setActiveTab('overview'); // Reset to default tab
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const initializeAuth = async () => {
+    try {
+      setAuthLoading(true);
+      await authService.initialize();
+      const user = await authService.getCurrentSession();
+      
+      if (user) {
+        setCurrentUser(user);
+      }
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   // Set default MR when list loads
   useEffect(() => {
     if (mrList.length > 0 && !selectedMR) {
@@ -61,82 +101,112 @@ function App() {
     }
   }, [mrList, selectedMR]);
 
-  const navigationItems = [
-    {
-      id: 'overview',
-      name: 'Dashboard Overview',
-      icon: BarChart3,
-      description: 'Key metrics and insights',
-      color: 'blue'
-    },
-    {
-      id: 'monthly-planning',
-      name: 'Monthly Planning',
-      icon: Calendar,
-      description: 'AI-powered tour planning',
-      color: 'violet',
-      badge: 'NEW'
-    },
-    {
-      id: 'weekly-revision',
-      name: 'Weekly Revision',
-      icon: Activity,
-      description: 'Performance tracking',
-      color: 'green',
-      count: 3
-    },
-    {
-      id: 'emergency',
-      name: 'Emergency Territory',
-      icon: AlertTriangle,
-      description: 'Critical territory management',
-      color: 'red',
-      count: 2
-    },
-    {
-      id: 'quality',
-      name: 'Visit Quality',
-      icon: Target,
-      description: 'Quality monitoring',
-      color: 'purple',
-      count: 5
-    },
-    {
-      id: 'nbd',
-      name: 'NBD Performance',
-      icon: TrendingUp,
-      description: 'New business development',
-      color: 'emerald'
-    },
-    {
-      id: 'routes',
-      name: 'Route Optimization',
-      icon: Navigation,
-      description: 'AI route planning',
-      color: 'blue'
-    },
-    {
-      id: 'analytics',
-      name: 'Analytics',
-      icon: BarChart3,
-      description: 'Performance insights',
-      color: 'indigo'
-    },
-    {
-      id: 'geocoding',
-      name: 'Geocoding',
-      icon: MapPin,
-      description: 'GPS management',
-      color: 'teal'
-    },
-    {
-      id: 'reports',
-      name: 'Reports',
-      icon: FileText,
-      description: 'Territory reports',
-      color: 'amber'
-    }
-  ];
+  // Navigation items with access control
+  const getNavigationItems = () => {
+    const allItems = [
+      {
+        id: 'overview',
+        name: 'Dashboard Overview',
+        icon: BarChart3,
+        description: 'Key metrics and insights',
+        color: 'blue',
+        requiredAccess: 'viewer'
+      },
+      {
+        id: 'monthly-planning',
+        name: 'Monthly Planning',
+        icon: Calendar,
+        description: 'AI-powered tour planning',
+        color: 'violet',
+        badge: 'NEW',
+        requiredAccess: 'mr'
+      },
+      {
+        id: 'weekly-revision',
+        name: 'Weekly Revision',
+        icon: Activity,
+        description: 'Performance tracking',
+        color: 'green',
+        count: 3,
+        requiredAccess: 'mr'
+      },
+      {
+        id: 'emergency',
+        name: 'Emergency Territory',
+        icon: AlertTriangle,
+        description: 'Critical territory management',
+        color: 'red',
+        count: 2,
+        requiredAccess: 'manager'
+      },
+      {
+        id: 'quality',
+        name: 'Visit Quality',
+        icon: Target,
+        description: 'Quality monitoring',
+        color: 'purple',
+        count: 5,
+        requiredAccess: 'mr'
+      },
+      {
+        id: 'nbd',
+        name: 'NBD Performance',
+        icon: TrendingUp,
+        description: 'New business development',
+        color: 'emerald',
+        requiredAccess: 'mr'
+      },
+      {
+        id: 'routes',
+        name: 'Route Optimization',
+        icon: Navigation,
+        description: 'AI route planning',
+        color: 'blue',
+        requiredAccess: 'mr'
+      },
+      {
+        id: 'analytics',
+        name: 'Analytics',
+        icon: BarChart3,
+        description: 'Performance insights',
+        color: 'indigo',
+        requiredAccess: 'manager'
+      },
+      {
+        id: 'geocoding',
+        name: 'Geocoding',
+        icon: MapPin,
+        description: 'GPS management',
+        color: 'teal',
+        requiredAccess: 'admin'
+      },
+      {
+        id: 'reports',
+        name: 'Reports',
+        icon: FileText,
+        description: 'Territory reports',
+        color: 'amber',
+        requiredAccess: 'viewer'
+      }
+    ];
+
+    // Filter based on user access level
+    if (!currentUser?.profile?.access_level) return allItems;
+
+    const levelHierarchy = {
+      'viewer': 1,
+      'mr': 2,
+      'manager': 3,
+      'admin': 4
+    };
+
+    const userLevelNum = levelHierarchy[currentUser.profile.access_level] || 0;
+
+    return allItems.filter(item => {
+      const requiredLevelNum = levelHierarchy[item.requiredAccess] || 0;
+      return userLevelNum >= requiredLevelNum;
+    });
+  };
 
   const handleMRChange = (e) => {
     const selectedValue = e.target.value;
@@ -148,6 +218,24 @@ function App() {
       const mrData = getMRByName(selectedValue);
       setSelectedMR(mrData);
     }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
+  const getAccessLevelDisplay = (level) => {
+    const levels = {
+      'admin': { label: 'Administrator', color: 'text-red-600 bg-red-100' },
+      'manager': { label: 'Manager', color: 'text-purple-600 bg-purple-100' },
+      'mr': { label: 'Medical Representative', color: 'text-blue-600 bg-blue-100' },
+      'viewer': { label: 'Viewer', color: 'text-green-600 bg-green-100' }
+    };
+    return levels[level] || { label: level, color: 'text-gray-600 bg-gray-100' };
   };
 
   const getIconColor = (color, isActive) => {
@@ -183,14 +271,13 @@ function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} currentUser={currentUser} />;
       
       case 'monthly-planning':
         return (
           <MonthlyPlanDashboardV2
             selectedMR={selectedMR}
             selectedMRName={selectedMRName}
-            // Pass shared month/year state
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
             onMonthChange={setSelectedMonth}
@@ -199,16 +286,14 @@ function App() {
         );
       
       case 'weekly-revision':
-        // FIXED: Pass the correct props
         return (
           <WeeklyRevisionDashboard 
-            mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}  // Pass string, not null for ALL_MRS
+            mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
-            mrData={selectedMR}  // Pass full MR object for context
+            mrData={selectedMR}
             onRevisionComplete={(result) => {
               console.log('✅ Revision completed:', result);
-              // Optional: Show success message or refresh other components
             }}
           />
         );
@@ -239,17 +324,20 @@ function App() {
         return <ReportsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
       
       default:
-        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} currentUser={currentUser} />;
     }
   };
 
+  // Show loading while checking auth
   if (authLoading || mrLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading TourPlan Pro</h2>
-          <p className="text-gray-600">Connecting to territory management system...</p>
+          <p className="text-gray-600">
+            {authLoading ? 'Verifying authentication...' : 'Connecting to territory management system...'}
+          </p>
         </div>
       </div>
     );
@@ -276,258 +364,304 @@ function App() {
   }
 
   const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-  if (!user) {
-    return <LoginPage />;
-  }
+  const navigationItems = getNavigationItems();
 
   return (
-    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
-        sidebarCollapsed ? 'w-16' : 'w-64'
-      }`}>
-        {/* Logo & Collapse Button */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
-          {!sidebarCollapsed && (
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-violet-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TP</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="font-bold text-gray-900 truncate">TourPlan Pro</h1>
-                <p className="text-xs text-gray-500 truncate">Territory Management</p>
-              </div>
-            </div>
-          )}
-          <button 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${sidebarCollapsed ? 'rotate-90' : '-rotate-90'}`} />
-          </button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200 group ${
-                  isActive 
-                    ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-                title={sidebarCollapsed ? item.name : ''}
-              >
-                <Icon className={`h-5 w-5 ${getIconColor(item.color, isActive)} transition-colors flex-shrink-0`} />
-                {!sidebarCollapsed && (
-                  <>
-                    <div className="ml-3 flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{item.name}</div>
-                      <div className="text-xs text-gray-500 truncate">{item.description}</div>
-                    </div>
-                    <div className="flex items-center space-x-2 flex-shrink-0">
-                      {item.badge && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
-                      {item.count && (
-                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getBadgeColor(item.color)}`}>
-                          {item.count}
-                        </span>
-                      )}
-                    </div>
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User Profile */}
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="h-4 w-4 text-white" />
-            </div>
+    <ProtectedRoute requiredAccess="viewer">
+      <div className="min-h-screen bg-gray-50 overflow-x-hidden">
+        {/* Sidebar */}
+        <div className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
+          sidebarCollapsed ? 'w-16' : 'w-64'
+        }`}>
+          {/* Logo & Collapse Button */}
+          <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
             {!sidebarCollapsed && (
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-gray-900 truncate">Admin User</div>
-                <div className="text-xs text-gray-500 truncate">Territory Manager</div>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-violet-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">TP</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h1 className="font-bold text-gray-900 truncate">TourPlan Pro</h1>
+                  <p className="text-xs text-gray-500 truncate">Territory Management</p>
+                </div>
+              </div>
+            )}
+            <button 
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${sidebarCollapsed ? 'rotate-90' : '-rotate-90'}`} />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            {navigationItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200 group ${
+                    isActive 
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200' 
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title={sidebarCollapsed ? item.name : ''}
+                >
+                  <Icon className={`h-5 w-5 ${getIconColor(item.color, isActive)} transition-colors flex-shrink-0`} />
+                  {!sidebarCollapsed && (
+                    <>
+                      <div className="ml-3 flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{item.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{item.description}</div>
+                      </div>
+                      <div className="flex items-center space-x-2 flex-shrink-0">
+                        {item.badge && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 rounded-full">
+                            {item.badge}
+                          </span>
+                        )}
+                        {item.count && (
+                          <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${getBadgeColor(item.color)}`}>
+                            {item.count}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* User Profile */}
+          <div className="p-4 border-t border-gray-200">
+            {currentUser && (
+              <div className="space-y-3">
+                {/* User Info */}
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-gray-400 to-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-white" />
+                  </div>
+                  {!sidebarCollapsed && (
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-gray-900 truncate">
+                        {currentUser.profile?.full_name || 'Unknown User'}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {currentUser.profile?.employee_id || 'No ID'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Access Level Badge */}
+                {!sidebarCollapsed && currentUser.profile?.access_level && (
+                  <div className="flex items-center space-x-2">
+                    <Shield className="h-3 w-3 text-gray-400" />
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getAccessLevelDisplay(currentUser.profile.access_level).color}`}>
+                      {getAccessLevelDisplay(currentUser.profile.access_level).label}
+                    </span>
+                  </div>
+                )}
+
+                {/* Territory Info */}
+                {!sidebarCollapsed && currentUser.profile?.assigned_territories?.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="h-3 w-3 text-gray-400" />
+                    <span className="text-xs text-gray-600 truncate">
+                      {currentUser.profile.assigned_territories.slice(0, 2).join(', ')}
+                      {currentUser.profile.assigned_territories.length > 2 && '...'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Sign Out Button */}
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title={sidebarCollapsed ? 'Sign Out' : ''}
+                >
+                  <LogOut className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Sign Out</span>}
+                </button>
               </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-        {/* Fixed Top Section */}
-        <div className="fixed top-0 right-0 bg-white border-b border-gray-200 z-20" style={{ left: sidebarCollapsed ? '64px' : '256px' }}>
-          {/* Top Header */}
-          <header className="h-16 flex items-center justify-between px-4 lg:px-6">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-lg lg:text-xl font-bold text-gray-900 truncate">
-                {navigationItems.find(item => item.id === activeTab)?.name || 'Dashboard'}
-              </h2>
-              <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-500">
-                <Calendar className="h-4 w-4" />
-                <span>{new Date().toLocaleDateString('en-US', { 
-                  weekday: 'short', 
-                  year: 'numeric', 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 lg:space-x-4">
-              {/* MR Selector */}
-              <div className="flex items-center space-x-2 lg:space-x-3">
-                <label className="hidden lg:block text-sm font-medium text-gray-700">Medical Rep:</label>
-                <select 
-                  value={selectedMRName} 
-                  onChange={handleMRChange}
-                  className="bg-white border border-gray-300 rounded-lg px-2 lg:px-3 py-2 text-xs lg:text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-32 lg:min-w-48"
-                  disabled={mrList.length === 0}
-                >
-                  <option value="ALL_MRS">All MRs ({totalMRs})</option>
-                  {mrList.length === 0 ? (
-                    <option value="">No MRs Available</option>
-                  ) : (
-                    mrList.map((mr) => (
-                      <option key={mr.id} value={mr.name}>
-                        {mr.name} ({mr.employee_id})
-                      </option>
-                    ))
-                  )}
-                </select>
+        {/* Main Content */}
+        <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+          {/* Fixed Top Section */}
+          <div className="fixed top-0 right-0 bg-white border-b border-gray-200 z-20" style={{ left: sidebarCollapsed ? '64px' : '256px' }}>
+            {/* Top Header */}
+            <header className="h-16 flex items-center justify-between px-4 lg:px-6">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-lg lg:text-xl font-bold text-gray-900 truncate">
+                  {navigationItems.find(item => item.id === activeTab)?.name || 'Dashboard'}
+                </h2>
+                <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-500">
+                  <Calendar className="h-4 w-4" />
+                  <span>{new Date().toLocaleDateString('en-US', { 
+                    weekday: 'short', 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}</span>
+                </div>
               </div>
 
-              {/* Month/Year Selectors - Show for Monthly Planning and Weekly Revision */}
-              {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                <div className="flex items-center space-x-2">
-                  <select
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                    className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              <div className="flex items-center space-x-2 lg:space-x-4">
+                {/* MR Selector */}
+                <div className="flex items-center space-x-2 lg:space-x-3">
+                  <label className="hidden lg:block text-sm font-medium text-gray-700">Medical Rep:</label>
+                  <select 
+                    value={selectedMRName} 
+                    onChange={handleMRChange}
+                    className="bg-white border border-gray-300 rounded-lg px-2 lg:px-3 py-2 text-xs lg:text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-32 lg:min-w-48"
+                    disabled={mrList.length === 0}
                   >
-                    {monthNames.slice(1).map((month, index) => (
-                      <option key={index + 1} value={index + 1}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {[2024, 2025, 2026].map(year => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
+                    <option value="ALL_MRS">All MRs ({totalMRs})</option>
+                    {mrList.length === 0 ? (
+                      <option value="">No MRs Available</option>
+                    ) : (
+                      mrList.map((mr) => (
+                        <option key={mr.id} value={mr.name}>
+                          {mr.name} ({mr.employee_id})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
-              )}
 
-              {/* Action Buttons */}
-              <div className="flex items-center space-x-1 lg:space-x-2">
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Search className="h-4 w-4 lg:h-5 lg:w-5" />
-                </button>
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
-                </button>
-                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
-                </button>
-              </div>
-            </div>
-          </header>
-
-          {/* MR Details Bar */}
-          {selectedMR && selectedMRName !== 'ALL_MRS' && (
-            <div className="bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 px-4 lg:px-6 py-3">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
-                <div className="flex flex-wrap items-center gap-3 lg:gap-6">
+                {/* Month/Year Selectors - Show for Monthly Planning and Weekly Revision */}
+                {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
                   <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="font-semibold text-gray-900 text-sm lg:text-base">{selectedMR.name}</span>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {monthNames.slice(1).map((month, index) => (
+                        <option key={index + 1} value={index + 1}>
+                          {month}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {[2024, 2025, 2026].map(year => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
-                    <div className="flex items-center space-x-1">
-                      <MapPin className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                      <span className="text-gray-700">{selectedMR.territory}</span>
+                )}
+
+                {/* User Welcome */}
+                <div className="hidden lg:flex items-center space-x-2 text-sm">
+                  <span className="text-gray-600">Welcome,</span>
+                  <span className="font-medium text-gray-900">
+                    {currentUser?.profile?.full_name || 'User'}
+                  </span>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center space-x-1 lg:space-x-2">
+                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <Search className="h-4 w-4 lg:h-5 lg:w-5" />
+                  </button>
+                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
+                  </button>
+                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                    <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            {/* MR Details Bar */}
+            {selectedMR && selectedMRName !== 'ALL_MRS' && (
+              <div className="bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 px-4 lg:px-6 py-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
+                  <div className="flex flex-wrap items-center gap-3 lg:gap-6">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="font-semibold text-gray-900 text-sm lg:text-base">{selectedMR.name}</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Target className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                      <span className="text-gray-700">₹{selectedMR.monthly_target?.toLocaleString() || 'N/A'}</span>
-                    </div>
-                    {selectedMR.manager_name && (
+                    <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
                       <div className="flex items-center space-x-1">
-                        <Users className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                        <span className="text-gray-700">{selectedMR.manager_name}</span>
+                        <MapPin className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
+                        <span className="text-gray-700">{selectedMR.territory}</span>
                       </div>
+                      <div className="flex items-center space-x-1">
+                        <Target className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
+                        <span className="text-gray-700">₹{selectedMR.monthly_target?.toLocaleString() || 'N/A'}</span>
+                      </div>
+                      {selectedMR.manager_name && (
+                        <div className="flex items-center space-x-1">
+                          <Users className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
+                          <span className="text-gray-700">{selectedMR.manager_name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 lg:space-x-3 text-xs lg:text-sm text-gray-600">
+                    <span>Joined: {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}</span>
+                    <span className="hidden lg:inline">•</span>
+                    <span>ID: {selectedMR.employee_id}</span>
+                    {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
+                      <>
+                        <span className="hidden lg:inline">•</span>
+                        <span>{monthNames[selectedMonth]} {selectedYear}</span>
+                      </>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 lg:space-x-3 text-xs lg:text-sm text-gray-600">
-                  <span>Joined: {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}</span>
-                  <span className="hidden lg:inline">•</span>
-                  <span>ID: {selectedMR.employee_id}</span>
-                  {/* Show current month/year for planning tabs */}
-                  {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                    <>
-                      <span className="hidden lg:inline">•</span>
-                      <span>{monthNames[selectedMonth]} {selectedYear}</span>
-                    </>
-                  )}
-                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* All MRs Summary */}
-          {selectedMRName === 'ALL_MRS' && (
-            <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-100 px-4 lg:px-6 py-3">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
-                <div className="flex items-center space-x-2 lg:space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
-                    <span className="font-semibold text-gray-900 text-sm lg:text-base">Comprehensive Analysis</span>
+            {/* All MRs Summary */}
+            {selectedMRName === 'ALL_MRS' && (
+              <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-100 px-4 lg:px-6 py-3">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
+                  <div className="flex items-center space-x-2 lg:space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
+                      <span className="font-semibold text-gray-900 text-sm lg:text-base">Comprehensive Analysis</span>
+                    </div>
+                    <span className="text-gray-600 text-xs lg:text-sm">Viewing all {totalMRs} active Medical Representatives</span>
                   </div>
-                  <span className="text-gray-600 text-xs lg:text-sm">Viewing all {totalMRs} active Medical Representatives</span>
-                </div>
-                <div className="flex items-center space-x-2 lg:space-x-4 text-xs lg:text-sm text-gray-600">
-                  <span>Total Territories: {totalMRs}</span>
-                  <span className="hidden lg:inline">•</span>
-                  <span>System-wide Overview</span>
+                  <div className="flex items-center space-x-2 lg:space-x-4 text-xs lg:text-sm text-gray-600">
+                    <span>Total Territories: {totalMRs}</span>
+                    <span className="hidden lg:inline">•</span>
+                    <span>System-wide Overview</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Tab Content with proper top spacing */}
-        <main className="pt-32 lg:pt-28 p-4 lg:p-6">
-          {renderTabContent()}
-        </main>
+         {/* Tab Content with proper top spacing */}
+          <main className="pt-32 lg:pt-28 p-4 lg:p-6">
+            {renderTabContent()}
+          </main>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }
 
-// Dashboard Overview Component
-const DashboardOverview = ({ selectedMR, selectedMRName }) => (
+// Dashboard Overview Component - Updated with user info
+const DashboardOverview = ({ selectedMR, selectedMRName, currentUser }) => (
   <div className="space-y-6">
     <div className="text-center py-20">
       <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
@@ -537,6 +671,94 @@ const DashboardOverview = ({ selectedMR, selectedMRName }) => (
       <p className="text-gray-600 text-lg mb-8">
         {selectedMR ? `Territory insights for ${selectedMR.name}` : 'Complete territory management overview'}
       </p>
+      
+      {/* User Welcome Section */}
+      {currentUser && (
+        <div className="bg-gradient-to-r from-blue-50 to-violet-50 rounded-xl p-6 max-w-2xl mx-auto border border-blue-200 mb-8">
+          <div className="flex items-center justify-center space-x-4 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-violet-600 rounded-full flex items-center justify-center">
+              <User className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-left">
+              <h3 className="font-bold text-gray-900 text-lg">
+                Welcome, {currentUser.profile?.full_name}
+              </h3>
+              <p className="text-blue-700 text-sm">
+                {currentUser.profile?.access_level?.toUpperCase()} | {currentUser.profile?.employee_id}
+              </p>
+            </div>
+          </div>
+          
+          {/* User Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-lg border border-blue-200">
+              <div className="text-2xl font-bold text-blue-600 mb-1">
+                {currentUser.profile?.assigned_territories?.length || 0}
+              </div>
+              <div className="text-sm text-gray-600">Assigned Territories</div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg border border-blue-200">
+              <div className="text-2xl font-bold text-green-600 mb-1">
+                {currentUser.profile?.access_level?.toUpperCase() || 'UNKNOWN'}
+              </div>
+              <div className="text-sm text-gray-600">Access Level</div>
+            </div>
+            
+            <div className="bg-white p-4 rounded-lg border border-blue-200">
+              <div className="text-2xl font-bold text-purple-600 mb-1">
+                {currentUser.profile?.last_login 
+                  ? new Date(currentUser.profile.last_login).toLocaleDateString()
+                  : 'First Login'
+                }
+              </div>
+              <div className="text-sm text-gray-600">Last Login</div>
+            </div>
+          </div>
+          
+          {/* Territory Info */}
+          {currentUser.profile?.assigned_territories?.length > 0 && (
+            <div className="mt-4 bg-white p-4 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-gray-900 mb-2">Your Territories</h4>
+              <div className="flex flex-wrap gap-2">
+                {currentUser.profile.assigned_territories.map((territory, index) => (
+                  <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                    {territory}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Reporting Structure */}
+          {(currentUser.profile?.reporting_manager || currentUser.profile?.area_sales_manager) && (
+            <div className="mt-4 bg-white p-4 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-gray-900 mb-2">Reporting Structure</h4>
+              <div className="space-y-1 text-sm">
+                {currentUser.profile.reporting_manager && (
+                  <div className="flex items-center space-x-2">
+                    <Users className="h-4 w-4 text-gray-500" />
+                    <span className="text-gray-700">Manager: {currentUser.profile.reporting_manager}</span>
+                  </div>
+                )}
+                {currentUser.profile.area_sales_manager && (
+                  <div className="flex items-center space-x-2">
+                    <Target className="h-4 w-4 text-gray-500" />
+                    <span className="text-gray-700">ASM: {currentUser.profile.area_sales_manager}</span>
+                  </div>
+                )}
+                {currentUser.profile.regional_sales_manager && (
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="h-4 w-4 text-gray-500" />
+                    <span className="text-gray-700">RSM: {currentUser.profile.regional_sales_manager}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
       <div className="bg-blue-50 rounded-xl p-6 max-w-md mx-auto border border-blue-200">
         <h3 className="font-semibold text-blue-900 mb-2">Coming Soon</h3>
         <p className="text-blue-700 text-sm">
