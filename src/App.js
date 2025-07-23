@@ -10,6 +10,7 @@ import RouteOptimizationDashboard from './components/RouteOptimizationDashboard'
 import GeocodingDashboard from './components/GeocodingDashboard';
 import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
 import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
+import SalesPerformanceDashboard from './components/SalesPerformanceDashboard';
 
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
@@ -440,7 +441,7 @@ function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} currentUser={currentUser} />;
+         return <SalesPerformanceDashboard/>;
       
       case 'monthly-planning':
         return (
@@ -493,7 +494,7 @@ function App() {
         return <ReportsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
       
       default:
-        return <DashboardOverview selectedMR={selectedMR} selectedMRName={selectedMRName} currentUser={currentUser} />;
+        return <EmergencyDashboard />;
     }
   };
 
@@ -832,114 +833,7 @@ function App() {
   );
 }
 
-// Dashboard Overview Component - Updated with user info
-const DashboardOverview = ({ selectedMR, selectedMRName, currentUser }) => (
-  <div className="space-y-6">
-    <div className="text-center py-20">
-      <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-        <BarChart3 className="h-10 w-10 text-white" />
-      </div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">Dashboard Overview</h2>
-      <p className="text-gray-600 text-lg mb-8">
-        {selectedMR ? `Territory insights for ${selectedMR.name}` : 'Complete territory management overview'}
-      </p>
-      
-      {/* User Welcome Section */}
-      {currentUser && (
-        <div className="bg-gradient-to-r from-blue-50 to-violet-50 rounded-xl p-6 max-w-2xl mx-auto border border-blue-200 mb-8">
-          <div className="flex items-center justify-center space-x-4 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-violet-600 rounded-full flex items-center justify-center">
-              <User className="h-6 w-6 text-white" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-bold text-gray-900 text-lg">
-                Welcome, {currentUser.profile?.full_name}
-              </h3>
-              <p className="text-blue-700 text-sm">
-                {currentUser.profile?.access_level?.toUpperCase()} | {currentUser.profile?.employee_id}
-              </p>
-            </div>
-          </div>
-          
-          {/* User Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-lg border border-blue-200">
-              <div className="text-2xl font-bold text-blue-600 mb-1">
-                {currentUser.profile?.assigned_territories?.length || 0}
-              </div>
-              <div className="text-sm text-gray-600">Assigned Territories</div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg border border-blue-200">
-              <div className="text-2xl font-bold text-green-600 mb-1">
-                {currentUser.profile?.access_level?.toUpperCase() || 'UNKNOWN'}
-              </div>
-              <div className="text-sm text-gray-600">Access Level</div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg border border-blue-200">
-              <div className="text-2xl font-bold text-purple-600 mb-1">
-                {currentUser.profile?.last_login 
-                  ? new Date(currentUser.profile.last_login).toLocaleDateString()
-                  : 'First Login'
-                }
-              </div>
-              <div className="text-sm text-gray-600">Last Login</div>
-            </div>
-          </div>
-          
-          {/* Territory Info */}
-          {currentUser.profile?.assigned_territories?.length > 0 && (
-            <div className="mt-4 bg-white p-4 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-gray-900 mb-2">Your Territories</h4>
-              <div className="flex flex-wrap gap-2">
-                {currentUser.profile.assigned_territories.map((territory, index) => (
-                  <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                    {territory}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Reporting Structure */}
-          {(currentUser.profile?.reporting_manager || currentUser.profile?.area_sales_manager) && (
-            <div className="mt-4 bg-white p-4 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-gray-900 mb-2">Reporting Structure</h4>
-              <div className="space-y-1 text-sm">
-                {currentUser.profile.reporting_manager && (
-                  <div className="flex items-center space-x-2">
-                    <Users className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-700">Manager: {currentUser.profile.reporting_manager}</span>
-                  </div>
-                )}
-                {currentUser.profile.area_sales_manager && (
-                  <div className="flex items-center space-x-2">
-                    <Target className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-700">ASM: {currentUser.profile.area_sales_manager}</span>
-                  </div>
-                )}
-                {currentUser.profile.regional_sales_manager && (
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-700">RSM: {currentUser.profile.regional_sales_manager}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      
-      <div className="bg-blue-50 rounded-xl p-6 max-w-md mx-auto border border-blue-200">
-        <h3 className="font-semibold text-blue-900 mb-2">Coming Soon</h3>
-        <p className="text-blue-700 text-sm">
-          Advanced dashboard overview with KPIs, charts, and performance metrics
-        </p>
-      </div>
-    </div>
-  </div>
-);
+
 
 // Analytics View Component  
 const AnalyticsView = ({ selectedMR, selectedMRName }) => (
