@@ -183,21 +183,23 @@ const handlePeriodChange = (newPeriod) => {
     try {
       const { start, end } = getDateRange();
       
-      // Build base query for orders
-      let orderQuery = supabase
-        .from('orders')
-        .select(`
-         order_id,
-         order_date,
-         net_amount,
-         order_type,
-         mr_name,
-         customer_code,
-         state
-          )
-        `)
-        .gte('order_date', start)
-        .lte('order_date', end);
+// Build base query for orders
+let orderQuery = supabase
+  .from('orders')
+  .select(`
+    order_id,
+    order_date,
+    net_amount,
+    order_type,
+    mr_name,
+    customer_code,
+    state
+  `)
+  .gte('order_date', start)
+  .lte('order_date', end)
+  .in('customer_type', ['Doctor', 'Retailer'])
+  .eq('status', 'Order Confirmed')
+  .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
 
       // Build base query for visits  
       let visitQuery = supabase
