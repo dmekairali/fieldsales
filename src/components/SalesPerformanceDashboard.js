@@ -110,6 +110,41 @@ const currentDefaults = getCurrentPeriodDefaults();
     };
   };
 
+  const getPreviousDateRange = () => {
+    const { start: currentStart } = getDateRange();
+    const startDate = new Date(currentStart);
+
+    let prevStart, prevEnd;
+
+    switch (selectedPeriod) {
+      case 'weekly':
+        prevStart = new Date(startDate);
+        prevStart.setDate(startDate.getDate() - 7);
+        prevEnd = new Date(startDate);
+        prevEnd.setDate(startDate.getDate() - 1);
+        break;
+      case 'monthly':
+        prevStart = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
+        prevEnd = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
+        break;
+      case 'quarterly':
+        prevStart = new Date(startDate.getFullYear(), startDate.getMonth() - 3, 1);
+        prevEnd = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
+        break;
+      case 'yearly':
+        prevStart = new Date(startDate.getFullYear() - 1, 0, 1);
+        prevEnd = new Date(startDate.getFullYear() - 1, 11, 31);
+        break;
+      default:
+        return null;
+    }
+
+    return {
+      start: prevStart.toISOString().split('T')[0],
+      end: prevEnd.toISOString().split('T')[0],
+    };
+  };
+
   // Updated period change handler
   const handlePeriodChange = (newPeriod) => {
     setSelectedPeriod(newPeriod);
@@ -227,6 +262,7 @@ const currentDefaults = getCurrentPeriodDefaults();
     setLoading(true);
     try {
       const { start, end } = getDateRange();
+      const previousDateRange = getPreviousDateRange();
       
       // Build base query for orders with enhanced fields
       let orderQuery = supabase
@@ -313,24 +349,77 @@ const currentDefaults = getCurrentPeriodDefaults();
         orderQuery = orderQuery.eq('state', selectedState);
       }
 
-      // Execute queries
-      const [orderData, visitData, targetData, mrData, allVisitsData] = await Promise.all([
-        orderQuery,
-        visitQuery,
+      const fetchDataForPeriod = async (startDate, endDate) => {
+        let periodOrderQuery = supabase
+          .from('orders')
+          .select(`
+            order_id,
+            order_date,
+            net_amount,
+            order_type,
+            mr_name,
+            customer_code,
+            state,
+            status,
+            delivery_status,
+            payment_status
+          `)
+          .gte('order_date', startDate)
+          .lte('order_date', endDate)
+          .in('customer_type', ['Doctor', 'Retailer'])
+          .eq('status', 'Order Confirmed')
+          .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
+
+        let periodVisitQuery = supabase
+          .from('mr_visits')
+          .select(`
+            "visitId",
+            "dcrDate",
+            "empName",
+            "clientMobileNo",
+            "clientName",
+            "amountOfSale"
+          `)
+          .gte('"dcrDate"', startDate)
+          .lte('"dcrDate"', endDate);
+
+        if (selectedMR !== 'all') {
+            const selectedMRData = medicalReps.find(mr => mr.employee_id === selectedMR);
+            if (selectedMRData) {
+                periodOrderQuery = periodOrderQuery.eq('mr_name', selectedMRData.name);
+                periodVisitQuery = periodVisitQuery.eq('"empName"', selectedMRData.name);
+            }
+        }
+
+        const [orderData, visitData] = await Promise.all([
+            periodOrderQuery,
+            periodVisitQuery,
+        ]);
+
+        return {
+            orders: orderData.data || [],
+            visits: visitData.data || [],
+        };
+      };
+
+      const [currentPeriodData, previousPeriodData, targetData, mrData, allVisitsData] = await Promise.all([
+        fetchDataForPeriod(start, end),
+        previousDateRange ? fetchDataForPeriod(previousDateRange.start, previousDateRange.end) : Promise.resolve({ orders: [], visits: [] }),
         targetQuery,
         supabase
           .from('medical_representatives')
           .select('employee_id, name, role_level, region, state, is_active, area_sales_manager_name, regional_sales_manager_name'),
-        allVisitsQuery
+        allVisitsQuery,
       ]);
 
       // Process data to calculate conversions
       const processedData = processDataWithConversions(
-        orderData.data || [],
-        visitData.data || [],
+        currentPeriodData.orders,
+        currentPeriodData.visits,
         targetData.data || [],
         mrData.data || [],
-        allVisitsData.data || []
+        allVisitsData.data || [],
+        previousPeriodData
       );
 
       setDashboardData(processedData);
@@ -341,7 +430,52 @@ const currentDefaults = getCurrentPeriodDefaults();
     }
   };
 
-  const processDataWithConversions = (orders, visits, targets, mrs, allVisits) => {
+  const processDataWithConversions = (orders, visits, targets, mrs, allVisits, previousPeriodData) => {
+    const calculateMetrics = (periodOrders, periodVisits) => {
+        const totalRevenue = periodOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+        const totalVisits = periodVisits.length;
+        const convertedVisits = new Set();
+        const visitMap = new Map();
+        periodVisits.forEach(visit => {
+            const dateKey = visit.dcrDate;
+            const customerKey = visit.clientMobileNo;
+            if (!visitMap.has(dateKey)) {
+                visitMap.set(dateKey, new Map());
+            }
+            visitMap.get(dateKey).set(customerKey, visit);
+        });
+        periodOrders.forEach(order => {
+            const dateKey = order.order_date;
+            const dayVisits = visitMap.get(dateKey);
+            if (dayVisits) {
+                dayVisits.forEach((visit, customerKey) => {
+                    if (customerKey === order.customer_code ||
+                        (visit.clientMobileNo && order.customer_code &&
+                            visit.clientMobileNo === order.customer_code)) {
+                        convertedVisits.add(visit.visitId);
+                    }
+                });
+            }
+        });
+        const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100) : 0;
+        const avgOrderValue = periodOrders.length > 0 ? totalRevenue / periodOrders.length : 0;
+        return { totalRevenue, totalVisits, conversionRate, avgOrderValue };
+    };
+
+    const currentMetrics = calculateMetrics(orders, visits);
+    const previousMetrics = calculateMetrics(previousPeriodData.orders, previousPeriodData.visits);
+
+    const calculateChange = (current, previous) => {
+        if (previous === 0) {
+            return current > 0 ? 100 : 0;
+        }
+        return ((current - previous) / previous) * 100;
+    };
+
+    const totalRevenueChange = calculateChange(currentMetrics.totalRevenue, previousMetrics.totalRevenue);
+    const totalVisitsChange = calculateChange(currentMetrics.totalVisits, previousMetrics.totalVisits);
+    const conversionRateChange = calculateChange(currentMetrics.conversionRate, previousMetrics.conversionRate);
+    const avgOrderValueChange = calculateChange(currentMetrics.avgOrderValue, previousMetrics.avgOrderValue);
     // Create a map of visits by date and customer for conversion tracking
     const visitMap = new Map();
     visits.forEach(visit => {
@@ -557,14 +691,18 @@ const currentDefaults = getCurrentPeriodDefaults();
 
     return {
       overview: {
-        totalRevenue,
-        totalVisits,
-        conversionRate,
+        totalRevenue: currentMetrics.totalRevenue,
+        totalVisits: currentMetrics.totalVisits,
+        conversionRate: currentMetrics.conversionRate,
         activeReps,
         targetAchievement,
-        avgOrderValue,
+        avgOrderValue: currentMetrics.avgOrderValue,
         billsPending,
-        paymentPending
+        paymentPending,
+        totalRevenueChange,
+        totalVisitsChange,
+        conversionRateChange,
+        avgOrderValueChange,
       },
       trends,
       allPerformers,
@@ -1283,21 +1421,21 @@ const currentDefaults = getCurrentPeriodDefaults();
         <KPICard
           title="Total Revenue"
           value={formatCurrency(dashboardData.overview.totalRevenue)}
-          change={12.5}
+          change={dashboardData.overview.totalRevenueChange.toFixed(1)}
           icon={DollarSign}
           color="bg-blue-600"
         />
         <KPICard
           title="Total Visits"
           value={dashboardData.overview.totalVisits.toLocaleString()}
-          change={8.3}
+          change={dashboardData.overview.totalVisitsChange.toFixed(1)}
           icon={MapPin}
           color="bg-green-600"
         />
         <KPICard
           title="Conversion Rate"
-          value={`${dashboardData.overview.conversionRate}%`}
-          change={5.2}
+          value={`${dashboardData.overview.conversionRate.toFixed(1)}%`}
+          change={dashboardData.overview.conversionRateChange.toFixed(1)}
           icon={TrendingUp}
           color="bg-purple-600"
         />
@@ -1318,7 +1456,7 @@ const currentDefaults = getCurrentPeriodDefaults();
         <KPICard
           title="Avg Order Value"
           value={formatCurrency(dashboardData.overview.avgOrderValue)}
-          change={3.7}
+          change={dashboardData.overview.avgOrderValueChange.toFixed(1)}
           icon={ShoppingCart}
           color="bg-indigo-600"
         />
