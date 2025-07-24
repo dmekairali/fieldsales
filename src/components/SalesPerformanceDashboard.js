@@ -373,6 +373,23 @@ const SalesPerformanceDashboard = () => {
     }
   };
 
+  const fetchChartData = async (range) => {
+    const { start, end } = range;
+    let query = supabase
+      .from('orders')
+      .select('order_date, net_amount, order_type')
+      .gte('order_date', start)
+      .lte('order_date', end)
+      .in('customer_type', ['Doctor', 'Retailer'])
+      .eq('status', 'Order Confirmed');
+    const { data, error } = await query;
+    if (error) {
+      console.error('Error fetching chart data:', error);
+      return [];
+    }
+    return data;
+  };
+
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
@@ -530,9 +547,10 @@ const SalesPerformanceDashboard = () => {
         }
       };
 
-      const [currentData, previousData] = await Promise.all([
+      const [currentData, previousData, chartData] = await Promise.all([
         fetchDataForRange(currentRange),
-        fetchDataForRange(previousRange)
+        fetchDataForRange(previousRange),
+        fetchChartData(currentRange)
       ]);
 
       console.log('Final data summary:', {
@@ -550,7 +568,7 @@ const SalesPerformanceDashboard = () => {
         previousData.orders,
         previousData.visits,
         medicalReps,
-        currentData.visits // Using current visits as allVisits
+        chartData
       );
 
       setDashboardData(processedData);
@@ -564,7 +582,7 @@ const SalesPerformanceDashboard = () => {
   const processDataWithConversions = (
   currentOrders, currentVisits, currentTargets,
   previousOrders, previousVisits,
-  mrs, allVisits
+  mrs, chartData
 ) => {
   // Helper function to calculate metrics for a period
   const calculateMetrics = (orders, visits) => {
@@ -635,14 +653,14 @@ const SalesPerformanceDashboard = () => {
 
   // Create map to track first visits ever for new prospects calculation
   const firstVisitMap = new Map();
-  const sortedAllVisits = allVisits.sort((a, b) => new Date(a.dcrDate) - new Date(b.dcrDate));
+  const sortedChartData = chartData.sort((a, b) => new Date(a.order_date) - new Date(b.order_date));
   
-  sortedAllVisits.forEach(visit => {
-    const customerKey = visit.clientMobileNo;
+  sortedChartData.forEach(order => {
+    const customerKey = order.customer_code;
     if (!firstVisitMap.has(customerKey)) {
       firstVisitMap.set(customerKey, {
-        mrName: visit.empName,
-        firstDate: visit.dcrDate
+        mrName: order.mr_name,
+        firstDate: order.order_date
       });
     }
   });
@@ -688,7 +706,7 @@ const SalesPerformanceDashboard = () => {
   const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
   // Group data by time period for trends
-  const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet, currentMetrics.totalRevenue);
+  const trends = groupDataByPeriod(chartData, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet);
 
   // Calculate detailed performer metrics
   const performerMap = {};
@@ -924,7 +942,7 @@ const SalesPerformanceDashboard = () => {
   };
 };
 
-  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, totalRevenue) => {
+  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits) => {
     const groupedData = {};
 
     const getGroupKey = (date) => {
@@ -954,7 +972,7 @@ const SalesPerformanceDashboard = () => {
     orders.forEach(order => {
       const groupKey = getGroupKey(order.order_date);
       initializeGroup(groupKey);
-      groupedData[groupKey].revenue = totalRevenue;
+      groupedData[groupKey].revenue += order.net_amount || 0;
       groupedData[groupKey].orders += 1;
       if (order.order_type === 'NBD') {
         groupedData[groupKey].nbd += order.net_amount || 0;
