@@ -1051,7 +1051,15 @@ useEffect(() => {
   selectedWeek, 
   selectedQuarter,
   selectedYear,
-  historicalData   // Pass historical data as parameter
+  currentOrders,
+  currentVisits,
+  currentTargets,
+  selectedPeriod,
+  currentMetrics.convertedVisitsSet,
+  selectedMonth,
+  selectedWeek,
+  selectedQuarter,
+  selectedYear
 );
 
   // Calculate detailed performer metrics
@@ -1288,44 +1296,26 @@ useEffect(() => {
   };
 };
 
- const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear, historicalData) => {
+ const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear) => {
   console.log('🔧 Generating trends for period:', period);
-  
-   
-  // Use the same filtering logic as KPI cards - filter historical data first by current filters
-  const filteredHistoricalData = historicalData;
 
-  // 🔍 DEBUG 3: Check July 2025 specific data in filtered historical data
-  const july2025Orders = filteredHistoricalData.orders.filter(order => {
-    const orderDate = new Date(order.order_date);
-    return orderDate >= new Date('2025-07-01') && orderDate <= new Date('2025-07-31');
-  });
-  
-  const july2025Visits = filteredHistoricalData.visits.filter(visit => {
-    const visitDate = new Date(visit.dcrDate);
-    return visitDate >= new Date('2025-07-01') && visitDate <= new Date('2025-07-31');
-  });
-
-  console.log('🔍 DEBUG - July 2025 data in filteredHistoricalData:', {
-    july2025Orders: july2025Orders.length,
-    july2025Revenue: july2025Orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
-    july2025Visits: july2025Visits.length,
-    july2025OrderSample: july2025Orders[0],
-    july2025VisitSample: july2025Visits[0]
-  });
-
+  const data = {
+    orders,
+    visits,
+    targets
+  };
 
   switch (period) {
     case 'monthly':
-      return generateMonthlyHistoricalData(selectedMonth, filteredHistoricalData);
+      return generateMonthlyHistoricalData(selectedMonth, data);
     case 'weekly':
-      return generateWeeklyHistoricalData(selectedWeek, filteredHistoricalData);
+      return generateWeeklyHistoricalData(selectedWeek, data);
     case 'quarterly':
-      return generateQuarterlyHistoricalData(selectedQuarter, filteredHistoricalData);
+      return generateQuarterlyHistoricalData(selectedQuarter, data);
     case 'yearly':
-      return generateYearlyHistoricalData(selectedYear, filteredHistoricalData);
+      return generateYearlyHistoricalData(selectedYear, data);
     default:
-      return generateMonthlyHistoricalData(selectedMonth, filteredHistoricalData);
+      return generateMonthlyHistoricalData(selectedMonth, data);
   }
 };
 

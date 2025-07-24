@@ -263,7 +263,13 @@ const useDashboardData = () => {
                 getFilteredMedicalReps,
                 medicalReps,
                 teams,
-                processDataWithConversions,
+                (currentOrders, currentVisits, currentTargets, previousOrders, previousVisits, mrs, allVisits) =>
+                    processDataWithConversions(
+                        currentOrders, currentVisits, currentTargets,
+                        previousOrders, previousVisits,
+                        mrs, allVisits,
+                        getFilteredMedicalReps()
+                    ),
                 getUnknownMRsFromSalesData
             );
             setDashboardData(data)
@@ -289,8 +295,18 @@ const useDashboardData = () => {
     const processDataWithConversions = (
         currentOrders, currentVisits, currentTargets,
         previousOrders, previousVisits,
-        mrs, allVisits
+        mrs, allVisits,
+        filteredMRs
     ) => {
+        const filteredOrders = currentOrders.filter(order => {
+            const mrName = order.mr_name_standardized || standardizeName(order.mr_name);
+            return filteredMRs.activeReps.some(rep => standardizeName(rep.name) === mrName);
+        });
+
+        const filteredVisits = currentVisits.filter(visit => {
+            const mrName = visit.empName_standardized || standardizeName(visit.empName);
+            return filteredMRs.activeReps.some(rep => standardizeName(rep.name) === mrName);
+        });
         const calculateMetrics = (orders, visits) => {
             const visitMap = new Map();
             visits.forEach(visit => {
@@ -346,7 +362,7 @@ const useDashboardData = () => {
             };
         };
 
-        const currentMetrics = calculateMetrics(currentOrders, currentVisits);
+        const currentMetrics = calculateMetrics(filteredOrders, filteredVisits);
         const previousMetrics = calculateMetrics(previousOrders, previousVisits);
 
         const calculateChange = (current, previous) => {
@@ -368,7 +384,7 @@ const useDashboardData = () => {
             }
         });
 
-        const activeMRNames = [...new Set(currentVisits.map(v => v.empName_standardized || standardizeName(v.empName)))];
+        const activeMRNames = [...new Set(filteredVisits.map(v => v.empName_standardized || standardizeName(v.empName)))];
         let activeReps = activeMRNames.length;
 
         if (selectedMR !== 'all') {
@@ -379,18 +395,18 @@ const useDashboardData = () => {
         const totalTarget = currentTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
         const targetAchievement = totalTarget > 0 ? ((currentMetrics.totalRevenue / totalTarget) * 100).toFixed(1) : 0;
 
-        const nbdRevenue = currentOrders
+        const nbdRevenue = filteredOrders
             .filter(order => order.order_type === 'NBD')
             .reduce((sum, order) => sum + (order.net_amount || 0), 0);
-        const crrRevenue = currentOrders
+        const crrRevenue = filteredOrders
             .filter(order => order.order_type === 'CRR')
             .reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
-        const confirmedOrders = currentOrders.filter(order => order.status === 'Order Confirmed');
-        const deliveredOrders = currentOrders.filter(order =>
+        const confirmedOrders = filteredOrders.filter(order => order.status === 'Order Confirmed');
+        const deliveredOrders = filteredOrders.filter(order =>
             order.status === 'Order Confirmed' && order.delivery_status === 'Dispatch Confirmed'
         );
-        const paidOrders = currentOrders.filter(order =>
+        const paidOrders = filteredOrders.filter(order =>
             order.status === 'Order Confirmed' && order.payment_status !== null
         );
 
@@ -410,7 +426,7 @@ const useDashboardData = () => {
 
         const monthlyData = {};
 
-        currentOrders.forEach(order => {
+        filteredOrders.forEach(order => {
             const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
             if (!monthlyData[month]) {
                 monthlyData[month] = { key: month, revenue: 0, visits: 0, orders: 0, nbd: 0, crr: 0, target: 0, converted: 0 };
@@ -424,7 +440,7 @@ const useDashboardData = () => {
             }
         });
 
-        currentVisits.forEach(visit => {
+        filteredVisits.forEach(visit => {
             const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
             if (!monthlyData[month]) {
                 monthlyData[month] = { key: month, revenue: 0, visits: 0, orders: 0, nbd: 0, crr: 0, target: 0, converted: 0 };
@@ -507,8 +523,8 @@ const useDashboardData = () => {
               };
             });
 
-            const allOrderMRs = [...new Set(currentOrders.map(order => order.mr_name_standardized || standardizeName(order.mr_name)))].filter(Boolean);
-            const allVisitMRs = [...new Set(currentVisits.map(visit => visit.empName_standardized || standardizeName(visit.empName)))].filter(Boolean);
+            const allOrderMRs = [...new Set(filteredOrders.map(order => order.mr_name_standardized || standardizeName(order.mr_name)))].filter(Boolean);
+            const allVisitMRs = [...new Set(filteredVisits.map(visit => visit.empName_standardized || standardizeName(visit.empName)))].filter(Boolean);
             const allActiveMRNames = [...new Set([...allOrderMRs, ...allVisitMRs])];
 
             allActiveMRNames.forEach(mrName => {
@@ -539,7 +555,7 @@ const useDashboardData = () => {
 
         console.log('Total performers initialized:', Object.keys(performerMap).length);
 
-        currentOrders.forEach(order => {
+        filteredOrders.forEach(order => {
             const mrName = order.mr_name_standardized || standardizeName(order.mr_name);
             if (performerMap[mrName]) {
               performerMap[mrName].revenue += order.net_amount || 0;
@@ -563,7 +579,7 @@ const useDashboardData = () => {
             }
         });
 
-        currentVisits.forEach(visit => {
+        filteredVisits.forEach(visit => {
             const mrName = visit.empName_standardized || standardizeName(visit.empName);
             const customerKey = visit.clientMobileNo;
 
@@ -575,7 +591,7 @@ const useDashboardData = () => {
               }
 
               const firstVisit = firstVisitMap.get(customerKey);
-              if (firstVisit && firstVisit.mrName === mrName) {
+              if (firstVisit && first_visit.mrName === mrName) {
                 const visitDate = new Date(visit.dcrDate);
                 const selectedPeriodStart = new Date(getDateRange().start);
                 const selectedPeriodEnd = new Date(getDateRange().end);
