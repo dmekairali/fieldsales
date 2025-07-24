@@ -824,10 +824,19 @@ useEffect(() => {
     
     console.log('📅 Date ranges:', { current: currentRange, previous: previousRange });
     
+    const filteredHistoricalData = dataCacheService.filterDataByFilters(historicalData, {
+      selectedMR,
+      selectedTeam,
+      selectedRegion,
+      selectedState,
+      medicalReps,
+      teams
+    });
+
     // Filter data for current period
     const currentData = dataCacheService.filterDataByDateRange(
-      historicalData, 
-      currentRange.start, 
+      filteredHistoricalData,
+      currentRange.start,
       currentRange.end
     );
     
@@ -840,8 +849,8 @@ useEffect(() => {
     
     // Filter data for previous period
     const previousData = dataCacheService.filterDataByDateRange(
-      historicalData, 
-      previousRange.start, 
+      filteredHistoricalData,
+      previousRange.start,
       previousRange.end
     );
     
@@ -852,14 +861,7 @@ useEffect(() => {
     });
     
     // Apply filters (MR, team, region, state)
-    const filteredCurrentData = dataCacheService.filterDataByFilters(currentData, {
-      selectedMR,
-      selectedTeam,
-      selectedRegion,
-      selectedState,
-      medicalReps,
-      teams
-    });
+    const filteredCurrentData = currentData;
     
     console.log('🔍 After filter application:', {
       filteredOrders: filteredCurrentData.orders.length,
@@ -869,14 +871,7 @@ useEffect(() => {
       uniqueMRsInVisits: [...new Set(filteredCurrentData.visits.map(v => v.empName_standardized))]
     });
     
-    const filteredPreviousData = dataCacheService.filterDataByFilters(previousData, {
-      selectedMR,
-      selectedTeam,
-      selectedRegion,
-      selectedState,
-      medicalReps,
-      teams
-    });
+    const filteredPreviousData = previousData;
     
     console.log('📊 Final data summary before processing:', {
       currentOrders: filteredCurrentData.orders.length,
@@ -896,7 +891,7 @@ useEffect(() => {
       filteredPreviousData.visits,
       medicalReps,
       historicalData.allVisits,
-      historicalData
+      filteredHistoricalData
     );
     
     console.log('✅ Final processed data:', {
@@ -1051,9 +1046,9 @@ useEffect(() => {
   selectedWeek, 
   selectedQuarter,
   selectedYear,
-  currentOrders,
-  currentVisits,
-  currentTargets,
+  historicalData.orders,
+  historicalData.visits,
+  historicalData.targets,
   selectedPeriod,
   currentMetrics.convertedVisitsSet,
   selectedMonth,
