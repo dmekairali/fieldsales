@@ -1292,8 +1292,17 @@ useEffect(() => {
   console.log('🔧 Generating trends for period:', period);
   
    
+    
+    const filteredHistoricalData = dataCacheService.filterDataByFilters(historicalData, {
+      selectedMR,
+      selectedTeam,
+      selectedRegion,
+      selectedState,
+      medicalReps,
+      teams
+    });
   // Use the same filtering logic as KPI cards - filter historical data first by current filters
-  const filteredHistoricalData = historicalData;
+  
 
   // 🔍 DEBUG 3: Check July 2025 specific data in filtered historical data
   const july2025Orders = filteredHistoricalData.orders.filter(order => {
