@@ -323,7 +323,14 @@ class DataCacheService {
     return filteredData;
   }
 
-  // If not filtering by specific MR, apply other filters
+  // If no specific MR selected, check if other filters are applied
+  if (selectedTeam === 'all' && selectedRegion === 'all' && selectedState === 'all') {
+    // NO FILTERING - return all data
+    console.log('🔍 No filters applied, returning all data');
+    return filteredData;
+  }
+
+  // Apply team/region/state filters only if they are selected
   let includedPersons = [];
 
   // Apply team filter
@@ -342,7 +349,6 @@ class DataCacheService {
         console.log('🔍 Found team data:', selectedTeamData);
         
         if (selectedTeamData.role_level === 'RSM') {
-          // Find all MRs under this RSM (directly or through ASMs)
           const rsmName = standardizeName(selectedTeamData.name);
           const asmUnderRSM = medicalReps.filter(rep => 
             rep.role_level === 'ASM' && standardizeName(rep.regional_sales_manager_name || '') === rsmName
@@ -356,7 +362,6 @@ class DataCacheService {
             )
           );
         } else if (selectedTeamData.role_level === 'ASM') {
-          // Find all MRs under this ASM
           const asmName = standardizeName(selectedTeamData.name);
           includedPersons = medicalReps.filter(rep => 
             rep.role_level === 'MR' && standardizeName(rep.area_sales_manager_name || '') === asmName
@@ -365,7 +370,7 @@ class DataCacheService {
       }
     }
   } else {
-    // Include all MRs
+    // Include all MRs if no team filter
     includedPersons = medicalReps.filter(rep => rep.role_level === 'MR');
   }
 
@@ -793,11 +798,13 @@ useEffect(() => {
     console.log('🔄 Fetching dashboard data with caching...');
     
     // ADD THIS DEBUG LOG TO CHECK FILTER VALUES
-    console.log('Current filter values:', {
+    console.log('🔍 Current filter values:', {
       selectedMR,
       selectedTeam,
       selectedRegion,
       selectedState,
+      selectedPeriod,
+      selectedMonth,
       medicalReps: medicalReps.length,
       teams: teams.length
     });
@@ -805,11 +812,17 @@ useEffect(() => {
     // Load historical data (cached for 1 hour)
     const historicalData = await dataCacheService.loadHistoricalData();
     
+    console.log('📊 Raw historical data loaded:', {
+      totalOrders: historicalData.orders.length,
+      totalVisits: historicalData.visits.length,
+      totalRevenue: historicalData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
+    });
+    
     // Get current and previous date ranges
     const currentRange = getDateRange();
     const previousRange = getPreviousDateRange(currentRange);
     
-    console.log('Date ranges:', { current: currentRange, previous: previousRange });
+    console.log('📅 Date ranges:', { current: currentRange, previous: previousRange });
     
     // Filter data for current period
     const currentData = dataCacheService.filterDataByDateRange(
@@ -818,6 +831,13 @@ useEffect(() => {
       currentRange.end
     );
     
+    console.log('📅 After date filtering (July 2025):', {
+      currentOrders: currentData.orders.length,
+      currentVisits: currentData.visits.length,
+      currentRevenue: currentData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
+      sampleOrder: currentData.orders[0]
+    });
+    
     // Filter data for previous period
     const previousData = dataCacheService.filterDataByDateRange(
       historicalData, 
@@ -825,7 +845,13 @@ useEffect(() => {
       previousRange.end
     );
     
-    // Apply filters (MR, team, region, state) - MAKE SURE ALL VARIABLES ARE ACCESSIBLE
+    console.log('📅 Previous period data (June 2025):', {
+      previousOrders: previousData.orders.length,
+      previousVisits: previousData.visits.length,
+      previousRevenue: previousData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
+    });
+    
+    // Apply filters (MR, team, region, state)
     const filteredCurrentData = dataCacheService.filterDataByFilters(currentData, {
       selectedMR,
       selectedTeam,
@@ -833,6 +859,14 @@ useEffect(() => {
       selectedState,
       medicalReps,
       teams
+    });
+    
+    console.log('🔍 After filter application:', {
+      filteredOrders: filteredCurrentData.orders.length,
+      filteredVisits: filteredCurrentData.visits.length,
+      filteredRevenue: filteredCurrentData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
+      uniqueMRsInOrders: [...new Set(filteredCurrentData.orders.map(o => o.mr_name_standardized))],
+      uniqueMRsInVisits: [...new Set(filteredCurrentData.visits.map(v => v.empName_standardized))]
     });
     
     const filteredPreviousData = dataCacheService.filterDataByFilters(previousData, {
@@ -844,12 +878,13 @@ useEffect(() => {
       teams
     });
     
-    console.log('Filtered data summary:', {
+    console.log('📊 Final data summary before processing:', {
       currentOrders: filteredCurrentData.orders.length,
       currentVisits: filteredCurrentData.visits.length,
       previousOrders: filteredPreviousData.orders.length,
       previousVisits: filteredPreviousData.visits.length,
-      totalHistoricalOrders: historicalData.orders.length
+      totalHistoricalOrders: historicalData.orders.length,
+      currentRevenue: filteredCurrentData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
     });
     
     // Process data with enhanced function
@@ -863,6 +898,12 @@ useEffect(() => {
       historicalData.allVisits,
       historicalData
     );
+    
+    console.log('✅ Final processed data:', {
+      overviewRevenue: processedData.overview.totalRevenue,
+      trendsData: processedData.trends,
+      trendsJulyRevenue: processedData.trends.find(t => t.key === 'Jul')?.revenue || 'Not found'
+    });
     
     setDashboardData(processedData);
   } catch (error) {
@@ -1247,43 +1288,58 @@ useEffect(() => {
   };
 };
 
-  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear, historicalData) => {
+ const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear, historicalData) => {
   console.log('🔧 Generating trends for period:', period);
   
-  // Helper function to filter historical data by current filters
-  const getFilteredHistoricalData = () => {
-    return dataCacheService.filterDataByFilters(historicalData, {
-      selectedMR,
-      selectedTeam,
-      selectedRegion,
-      selectedState,
-      medicalReps,
-      teams
-    });
-  };
+   
+  // Use the same filtering logic as KPI cards - filter historical data first by current filters
+  const filteredHistoricalData = historicalData;
+
+  // 🔍 DEBUG 3: Check July 2025 specific data in filtered historical data
+  const july2025Orders = filteredHistoricalData.orders.filter(order => {
+    const orderDate = new Date(order.order_date);
+    return orderDate >= new Date('2025-07-01') && orderDate <= new Date('2025-07-31');
+  });
+  
+  const july2025Visits = filteredHistoricalData.visits.filter(visit => {
+    const visitDate = new Date(visit.dcrDate);
+    return visitDate >= new Date('2025-07-01') && visitDate <= new Date('2025-07-31');
+  });
+
+  console.log('🔍 DEBUG - July 2025 data in filteredHistoricalData:', {
+    july2025Orders: july2025Orders.length,
+    july2025Revenue: july2025Orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
+    july2025Visits: july2025Visits.length,
+    july2025OrderSample: july2025Orders[0],
+    july2025VisitSample: july2025Visits[0]
+  });
+
 
   switch (period) {
     case 'monthly':
-      return generateMonthlyHistoricalData(selectedMonth, historicalData, getFilteredHistoricalData);
+      return generateMonthlyHistoricalData(selectedMonth, filteredHistoricalData);
     case 'weekly':
-      return generateWeeklyHistoricalData(selectedWeek, historicalData, getFilteredHistoricalData);
+      return generateWeeklyHistoricalData(selectedWeek, filteredHistoricalData);
     case 'quarterly':
-      return generateQuarterlyHistoricalData(selectedQuarter, historicalData, getFilteredHistoricalData);
+      return generateQuarterlyHistoricalData(selectedQuarter, filteredHistoricalData);
     case 'yearly':
-      return generateYearlyHistoricalData(selectedYear, historicalData, getFilteredHistoricalData);
+      return generateYearlyHistoricalData(selectedYear, filteredHistoricalData);
     default:
-      return generateMonthlyHistoricalData(selectedMonth, historicalData, getFilteredHistoricalData);
+      return generateMonthlyHistoricalData(selectedMonth, filteredHistoricalData);
   }
 };
 
-// Helper functions for generating historical data
-const generateMonthlyHistoricalData = (selectedMonth, historicalData, getFilteredData) => {
+// Updated helper functions to use direct filtered data (same as KPI cards)
+const generateMonthlyHistoricalData = (selectedMonth, filteredHistoricalData) => {
   const [year, month] = selectedMonth.split('-');
   const selectedMonthNum = parseInt(month);
   const data = [];
   
-  // Get filtered historical data
-  const filteredData = getFilteredData();
+  console.log('📈 Generating monthly trends for:', selectedMonth);
+  console.log('📈 Using filtered data:', {
+    totalOrders: filteredHistoricalData.orders.length,
+    totalRevenue: filteredHistoricalData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
+  });
   
   // Start from April (month 4) to selected month
   for (let i = 4; i <= selectedMonthNum; i++) {
@@ -1291,28 +1347,28 @@ const generateMonthlyHistoricalData = (selectedMonth, historicalData, getFiltere
     const monthEnd = new Date(parseInt(year), i, 0);
     const monthName = monthStart.toLocaleDateString('en-US', { month: 'short' });
     
-    // Use filtered historical data instead of passed parameters
-    const monthOrders = filteredData.orders.filter(order => {
+    // Filter by date range only (same logic as KPI cards)
+    const monthOrders = filteredHistoricalData.orders.filter(order => {
       const orderDate = new Date(order.order_date);
       return orderDate >= monthStart && orderDate <= monthEnd;
     });
     
-    const monthVisits = filteredData.visits.filter(visit => {
+    const monthVisits = filteredHistoricalData.visits.filter(visit => {
       const visitDate = new Date(visit.dcrDate);
       return visitDate >= monthStart && visitDate <= monthEnd;
     });
     
-    const monthTargets = filteredData.targets.filter(target => {
+    const monthTargets = filteredHistoricalData.targets.filter(target => {
       const targetDate = new Date(target.target_date);
       return targetDate >= monthStart && targetDate <= monthEnd;
     });
     
-    // Calculate metrics
+    // Calculate metrics (same logic as KPI cards)
     const revenue = monthOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = monthTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = monthVisits.length;
     
-    // For conversion calculation, you'll need to recalculate converted visits for this month
+    // Calculate converted visits for this month (same logic as KPI cards)
     const monthConvertedVisits = new Set();
     monthOrders.forEach(order => {
       const orderDate = order.order_date;
@@ -1329,13 +1385,20 @@ const generateMonthlyHistoricalData = (selectedMonth, historicalData, getFiltere
     const nbdRevenue = monthOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const crrRevenue = monthOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     
+    console.log(`📈 ${monthName} ${year}:`, {
+      orders: monthOrders.length,
+      revenue: revenue,
+      visits: visitCount,
+      dateRange: `${monthStart.toISOString().split('T')[0]} to ${monthEnd.toISOString().split('T')[0]}`
+    });
+    
     data.push({
       key: monthName,
       month: monthName,
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100),1) : 0,
+      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
@@ -1347,13 +1410,12 @@ const generateMonthlyHistoricalData = (selectedMonth, historicalData, getFiltere
   return data;
 };
 
-const generateWeeklyHistoricalData = (selectedWeek, historicalData, getFilteredData) => {
+const generateWeeklyHistoricalData = (selectedWeek, filteredHistoricalData) => {
   const [year, weekStr] = selectedWeek.split('-W');
   const weekNum = parseInt(weekStr);
   const data = [];
   
-  // Get filtered historical data
-  const filteredData = getFilteredData();
+  console.log('📈 Generating weekly trends for:', selectedWeek);
   
   // Generate previous 5 weeks + selected week
   for (let i = -5; i <= 0; i++) {
@@ -1362,23 +1424,23 @@ const generateWeeklyHistoricalData = (selectedWeek, historicalData, getFilteredD
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     
-    // Use filtered historical data
-    const weekOrders = filteredData.orders.filter(order => {
+    // Filter by date range only (same logic as KPI cards)
+    const weekOrders = filteredHistoricalData.orders.filter(order => {
       const orderDate = new Date(order.order_date);
       return orderDate >= weekStart && orderDate <= weekEnd;
     });
     
-    const weekVisits = filteredData.visits.filter(visit => {
+    const weekVisits = filteredHistoricalData.visits.filter(visit => {
       const visitDate = new Date(visit.dcrDate);
       return visitDate >= weekStart && visitDate <= weekEnd;
     });
     
-    const weekTargets = filteredData.targets.filter(target => {
+    const weekTargets = filteredHistoricalData.targets.filter(target => {
       const targetDate = new Date(target.target_date);
       return targetDate >= weekStart && targetDate <= weekEnd;
     });
     
-    // Calculate metrics
+    // Calculate metrics (same logic as KPI cards)
     const revenue = weekOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = weekTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = weekVisits.length;
@@ -1406,7 +1468,7 @@ const generateWeeklyHistoricalData = (selectedWeek, historicalData, getFilteredD
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
@@ -1418,13 +1480,12 @@ const generateWeeklyHistoricalData = (selectedWeek, historicalData, getFilteredD
   return data;
 };
 
-const generateQuarterlyHistoricalData = (selectedQuarter, historicalData, getFilteredData) => {
+const generateQuarterlyHistoricalData = (selectedQuarter, filteredHistoricalData) => {
   const [year, quarterStr] = selectedQuarter.split('-Q');
   const quarterNum = parseInt(quarterStr);
   const data = [];
   
-  // Get filtered historical data
-  const filteredData = getFilteredData();
+  console.log('📈 Generating quarterly trends for:', selectedQuarter);
   
   // Start from Q2 if selected is Q3/Q4, or Q1 if selected is Q2
   const startQuarter = quarterNum > 2 ? 2 : 1;
@@ -1433,23 +1494,23 @@ const generateQuarterlyHistoricalData = (selectedQuarter, historicalData, getFil
     const quarterStart = new Date(parseInt(year), (i - 1) * 3, 1);
     const quarterEnd = new Date(parseInt(year), i * 3, 0);
     
-    // Use filtered historical data
-    const quarterOrders = filteredData.orders.filter(order => {
+    // Filter by date range only (same logic as KPI cards)
+    const quarterOrders = filteredHistoricalData.orders.filter(order => {
       const orderDate = new Date(order.order_date);
       return orderDate >= quarterStart && orderDate <= quarterEnd;
     });
     
-    const quarterVisits = filteredData.visits.filter(visit => {
+    const quarterVisits = filteredHistoricalData.visits.filter(visit => {
       const visitDate = new Date(visit.dcrDate);
       return visitDate >= quarterStart && visitDate <= quarterEnd;
     });
     
-    const quarterTargets = filteredData.targets.filter(target => {
+    const quarterTargets = filteredHistoricalData.targets.filter(target => {
       const targetDate = new Date(target.target_date);
       return targetDate >= quarterStart && targetDate <= quarterEnd;
     });
     
-    // Calculate metrics
+    // Calculate metrics (same logic as KPI cards)
     const revenue = quarterOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = quarterTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = quarterVisits.length;
@@ -1477,7 +1538,7 @@ const generateQuarterlyHistoricalData = (selectedQuarter, historicalData, getFil
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
@@ -1489,12 +1550,11 @@ const generateQuarterlyHistoricalData = (selectedQuarter, historicalData, getFil
   return data;
 };
 
-const generateYearlyHistoricalData = (selectedYear, historicalData, getFilteredData) => {
+const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
   const yearNum = parseInt(selectedYear);
   const data = [];
   
-  // Get filtered historical data
-  const filteredData = getFilteredData();
+  console.log('📈 Generating yearly trends for:', selectedYear);
   
   // Previous year and current year
   for (let i = -1; i <= 0; i++) {
@@ -1502,23 +1562,23 @@ const generateYearlyHistoricalData = (selectedYear, historicalData, getFilteredD
     const yearStart = new Date(currentYear, 0, 1);
     const yearEnd = new Date(currentYear, 11, 31);
     
-    // Use filtered historical data
-    const yearOrders = filteredData.orders.filter(order => {
+    // Filter by date range only (same logic as KPI cards)
+    const yearOrders = filteredHistoricalData.orders.filter(order => {
       const orderDate = new Date(order.order_date);
       return orderDate >= yearStart && orderDate <= yearEnd;
     });
     
-    const yearVisits = filteredData.visits.filter(visit => {
+    const yearVisits = filteredHistoricalData.visits.filter(visit => {
       const visitDate = new Date(visit.dcrDate);
       return visitDate >= yearStart && visitDate <= yearEnd;
     });
     
-    const yearTargets = filteredData.targets.filter(target => {
+    const yearTargets = filteredHistoricalData.targets.filter(target => {
       const targetDate = new Date(target.target_date);
       return targetDate >= yearStart && targetDate <= yearEnd;
     });
     
-    // Calculate metrics
+    // Calculate metrics (same logic as KPI cards)
     const revenue = yearOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = yearTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = yearVisits.length;
@@ -1546,7 +1606,7 @@ const generateYearlyHistoricalData = (selectedYear, historicalData, getFilteredD
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
