@@ -403,7 +403,50 @@ const useDashboardData = () => {
         const paidValue = paidOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
         const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
-        const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet, currentOrders, currentVisits);
+        const trends = {
+            weekly: [],
+            monthly: []
+        };
+
+        const monthlyData = {};
+
+        currentOrders.forEach(order => {
+            const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
+            if (!monthlyData[month]) {
+                monthlyData[month] = { key: month, revenue: 0, visits: 0, orders: 0, nbd: 0, crr: 0, target: 0, converted: 0 };
+            }
+            monthlyData[month].revenue += order.net_amount || 0;
+            monthlyData[month].orders += 1;
+            if (order.order_type === 'NBD') {
+                monthlyData[month].nbd += order.net_amount || 0;
+            } else {
+                monthlyData[month].crr += order.net_amount || 0;
+            }
+        });
+
+        currentVisits.forEach(visit => {
+            const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
+            if (!monthlyData[month]) {
+                monthlyData[month] = { key: month, revenue: 0, visits: 0, orders: 0, nbd: 0, crr: 0, target: 0, converted: 0 };
+            }
+            monthlyData[month].visits += 1;
+            if (currentMetrics.convertedVisitsSet.has(visit.visitId)) {
+                monthlyData[month].converted += 1;
+            }
+        });
+
+        currentTargets.forEach(target => {
+            const month = new Date(target.target_date).toLocaleString('default', { month: 'short' });
+            if (monthlyData[month]) {
+                monthlyData[month].target += target.total_revenue_target || 0;
+            }
+        });
+
+        Object.values(monthlyData).forEach(data => {
+            data.conversion = data.visits > 0 ? ((data.converted / data.visits) * 100).toFixed(0) : 0;
+        });
+
+        trends.monthly = Object.values(monthlyData);
 
         const performerMap = {};
 
@@ -622,86 +665,6 @@ const useDashboardData = () => {
         };
     };
 
-    const groupDataByPeriod = (
-        orders, visits, targets, period, convertedVisits,
-        currentOrders, currentVisits
-    ) => {
-        const grouped = {
-          weekly: [],
-          monthly: []
-        };
-
-        const monthlyData = {};
-
-        const processOrders = (orderList) => {
-            orderList.forEach(order => {
-                const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
-                if (!monthlyData[month]) {
-                    monthlyData[month] = {
-                      month,
-                      revenue: 0,
-                      visits: 0,
-                      orders: 0,
-                      nbd: 0,
-                      crr: 0,
-                      target: 0,
-                      converted: 0
-                    };
-                }
-                monthlyData[month].revenue += order.net_amount || 0;
-                monthlyData[month].orders += 1;
-                if (order.order_type === 'NBD') {
-                    monthlyData[month].nbd += order.net_amount || 0;
-                } else {
-                    monthlyData[month].crr += order.net_amount || 0;
-                }
-            });
-        };
-
-        const processVisits = (visitList) => {
-            visitList.forEach(visit => {
-                const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
-                if (!monthlyData[month]) {
-                    monthlyData[month] = {
-                      month,
-                      revenue: 0,
-                      visits: 0,
-                      orders: 0,
-                      nbd: 0,
-                      crr: 0,
-                      target: 0,
-                      converted: 0
-                    };
-                }
-                monthlyData[month].visits += 1;
-                if (convertedVisits.has(visit.visitId)) {
-                    monthlyData[month].converted += 1;
-                }
-            });
-        };
-
-        if (period === 'monthly' || period === 'custom') {
-            processOrders(currentOrders);
-            processVisits(currentVisits);
-        } else {
-            processOrders(orders);
-            processVisits(visits);
-        }
-
-        targets.forEach(target => {
-            const month = new Date(target.target_date).toLocaleString('default', { month: 'short' });
-            if (monthlyData[month]) {
-                monthlyData[month].target += target.total_revenue_target || 0;
-            }
-        });
-
-        Object.values(monthlyData).forEach(data => {
-            data.conversion = data.visits > 0 ? ((data.converted / data.visits) * 100).toFixed(0) : 0;
-        });
-
-        grouped.monthly = Object.values(monthlyData);
-        return grouped;
-    };
 
     const handleSort = (key) => {
         let direction = 'asc';
