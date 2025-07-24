@@ -2411,6 +2411,11 @@ const SortIcon = ({ column }) => {
         />
       </div>
 
+{/* Enhanced Top Performers Table */}
+      <div className="mb-8">
+        <EnhancedPerformanceTable data={dashboardData.allPerformers} />
+      </div>
+      
       {/* Enhanced Charts Section */}
 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
   {/* Revenue Trend Chart */}
