@@ -828,7 +828,7 @@ const SalesPerformanceDashboard = () => {
 
     const totalRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const totalVisits = visits.length;
-    const conversionRate = totalVisits > 0 ? ((convertedVisits.size / totalVisits) * 100) : 0;
+    const conversionRate = totalVisits > 0 ? Math.round(((convertedVisits.size / totalVisits) * 100),1) : 0;
     const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
     const billsPending = orders.filter(order => 
       order.status === 'Order Confirmed' && order.delivery_status === null
@@ -1255,7 +1255,7 @@ const generateMonthlyHistoricalData = (selectedMonth, historicalData, getFiltere
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100),1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
