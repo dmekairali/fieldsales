@@ -403,8 +403,7 @@ const SalesPerformanceDashboard = () => {
           .gte('order_date', start)
           .lte('order_date', end)
           .in('customer_type', ['Doctor', 'Retailer'])
-          .eq('status', 'Order Confirmed')
-          .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
+          .eq('status', 'Order Confirmed');
 
         let visitQuery = supabase
           .from('mr_visits')
