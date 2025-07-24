@@ -60,43 +60,39 @@ const useDashboardData = () => {
           return { start: dateRange.start, end: dateRange.end };
         }
 
+        const now = new Date();
         let start, end;
 
         switch (selectedPeriod) {
-            case 'weekly': {
-                const [year, week] = selectedWeek.split('-W');
-                const firstDayOfYear = new Date(parseInt(year), 0, 1);
-                const daysToAdd = (parseInt(week) - 1) * 7;
-                const endDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-                const dayOfWeek = endDate.getDay();
-                const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                endDate.setDate(endDate.getDate() + daysToMonday + 6);
-                end = endDate;
-                start = new Date(endDate);
-                start.setDate(endDate.getDate() - (5 * 7)); // 5 weeks before
-                break;
-            }
+          case 'weekly':
+            const [year, week] = selectedWeek.split('-W');
+            const firstDayOfYear = new Date(parseInt(year), 0, 1);
+            const daysToAdd = (parseInt(week) - 1) * 7;
+            start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+            const dayOfWeek = start.getDay();
+            const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            start.setDate(start.getDate() + daysToMonday);
+            end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            break;
 
-            case 'monthly': {
-                const [monthYear, monthNum] = selectedMonth.split('-');
-                end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
-                start = new Date(parseInt(monthYear), 3, 1); // April 1st
-                break;
-            }
+          case 'monthly':
+            const [monthYear, monthNum] = selectedMonth.split('-');
+            start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+            end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
+            break;
 
-            case 'quarterly': {
-                const [qYear, quarter] = selectedQuarter.split('-Q');
-                const qNum = parseInt(quarter);
-                end = new Date(parseInt(qYear), qNum * 3, 0);
-                start = new Date(parseInt(qYear), 3, 1); // April 1st
-                break;
-            }
+          case 'quarterly':
+            const [qYear, quarter] = selectedQuarter.split('-Q');
+            const qNum = parseInt(quarter);
+            start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
+            end = new Date(parseInt(qYear), qNum * 3, 0);
+            break;
 
-            case 'yearly': {
-                end = new Date(parseInt(selectedYear), 11, 31);
-                start = new Date(parseInt(selectedYear) - 1, 0, 1); // Previous year's Jan 1st
-                break;
-            }
+          case 'yearly':
+            start = new Date(parseInt(selectedYear), 0, 1);
+            end = new Date(parseInt(selectedYear), 11, 31);
+            break;
         }
 
         return {
@@ -295,54 +291,6 @@ const useDashboardData = () => {
         previousOrders, previousVisits,
         mrs, allVisits
     ) => {
-        const selectedPeriodRange = getDateRange();
-
-        const getSelectedPeriod = () => {
-            const now = new Date();
-            let start, end;
-
-            switch (selectedPeriod) {
-              case 'weekly':
-                const [year, week] = selectedWeek.split('-W');
-                const firstDayOfYear = new Date(parseInt(year), 0, 1);
-                const daysToAdd = (parseInt(week) - 1) * 7;
-                start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-                const dayOfWeek = start.getDay();
-                const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                start.setDate(start.getDate() + daysToMonday);
-                end = new Date(start);
-                end.setDate(start.getDate() + 6);
-                break;
-
-              case 'monthly':
-                const [monthYear, monthNum] = selectedMonth.split('-');
-                start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
-                end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
-                break;
-
-              case 'quarterly':
-                const [qYear, quarter] = selectedQuarter.split('-Q');
-                const qNum = parseInt(quarter);
-                start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
-                end = new Date(parseInt(qYear), qNum * 3, 0);
-                break;
-
-              case 'yearly':
-                start = new Date(parseInt(selectedYear), 0, 1);
-                end = new Date(parseInt(selectedYear), 11, 31);
-                break;
-            }
-
-            return {
-              start: start,
-              end: end
-            };
-        };
-
-        const selectedPeriodTime = getSelectedPeriod()
-        const selectedPeriodOrders = currentOrders.filter(o => new Date(o.order_date) >= selectedPeriodTime.start && new Date(o.order_date) <= selectedPeriodTime.end);
-        const selectedPeriodVisits = currentVisits.filter(v => new Date(v.dcrDate) >= selectedPeriodTime.start && new Date(v.dcrDate) <= selectedPeriodTime.end);
-        const selectedPeriodTargets = currentTargets.filter(t => new Date(t.target_date) >= selectedPeriodTime.start && new Date(t.target_date) <= selectedPeriodTime.end);
         const calculateMetrics = (orders, visits) => {
             const visitMap = new Map();
             visits.forEach(visit => {
@@ -398,12 +346,7 @@ const useDashboardData = () => {
             };
         };
 
-        const selectedPeriodRange = getSelectedPeriod();
-        const selectedPeriodOrders = currentOrders.filter(o => new Date(o.order_date) >= selectedPeriodRange.start && new Date(o.order_date) <= selectedPeriodRange.end);
-        const selectedPeriodVisits = currentVisits.filter(v => new Date(v.dcrDate) >= selectedPeriodRange.start && new Date(v.dcrDate) <= selectedPeriodRange.end);
-        const selectedPeriodTargets = currentTargets.filter(t => new Date(t.target_date) >= selectedPeriodRange.start && new Date(t.target_date) <= selectedPeriodRange.end);
-
-        const currentMetrics = calculateMetrics(selectedPeriodOrders, selectedPeriodVisits);
+        const currentMetrics = calculateMetrics(currentOrders, currentVisits);
         const previousMetrics = calculateMetrics(previousOrders, previousVisits);
 
         const calculateChange = (current, previous) => {
@@ -685,68 +628,70 @@ const useDashboardData = () => {
           monthly: []
         };
 
-        const data = {};
+        const monthlyData = {};
 
-        const getWeekNumber = (d) => {
-            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-            var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-            var weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
-            return `${d.getUTCFullYear()}-W${weekNo}`;
-        }
+        const totalOrderRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+        console.log('Total revenue from all orders:', totalOrderRevenue);
 
-        const processData = (item, date, type) => {
-            let key;
-            if (period === 'weekly') {
-                key = getWeekNumber(new Date(date));
-            } else if (period === 'monthly' || period === 'quarterly' || period === 'yearly') {
-                key = new Date(date).toLocaleString('default', { month: 'short', year: 'numeric' });
-            }
-
-            if (!data[key]) {
-                data[key] = {
-                    key,
-                    revenue: 0,
-                    visits: 0,
-                    orders: 0,
-                    nbd: 0,
-                    crr: 0,
-                    target: 0,
-                    converted: 0
-                };
-            }
-
-            if (type === 'order') {
-                data[key].revenue += item.net_amount || 0;
-                data[key].orders += 1;
-                if (item.order_type === 'NBD') {
-                    data[key].nbd += item.net_amount || 0;
-                } else {
-                    data[key].crr += item.net_amount || 0;
-                }
-            } else if (type === 'visit') {
-                data[key].visits += 1;
-                if (convertedVisits.has(item.visitId)) {
-                    data[key].converted += 1;
-                }
-            } else if (type === 'target') {
-                data[key].target += item.total_revenue_target || 0;
-            }
-        };
-
-        orders.forEach(order => processData(order, order.order_date, 'order'));
-        visits.forEach(visit => processData(visit, visit.dcrDate, 'visit'));
-        targets.forEach(target => processData(target, target.target_date, 'target'));
-
-        Object.values(data).forEach(d => {
-            d.conversion = d.visits > 0 ? ((d.converted / d.visits) * 100).toFixed(0) : 0;
+        orders.forEach(order => {
+          const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
+          if (!monthlyData[month]) {
+            monthlyData[month] = {
+              month,
+              revenue: 0,
+              visits: 0,
+              orders: 0,
+              nbd: 0,
+              crr: 0,
+              target: 0,
+              converted: 0
+            };
+          }
+          monthlyData[month].revenue += order.net_amount || 0;
+          monthlyData[month].orders += 1;
+          if (order.order_type === 'NBD') {
+            monthlyData[month].nbd += order.net_amount || 0;
+          } else {
+            monthlyData[month].crr += order.net_amount || 0;
+          }
         });
 
-        if (period === 'weekly') {
-            grouped.weekly = Object.values(data).sort((a,b) => a.key.localeCompare(b.key));
-        } else {
-            grouped.monthly = Object.values(data).sort((a,b) => new Date(a.key) - new Date(b.key));
-        }
+        visits.forEach(visit => {
+          const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
+          if (!monthlyData[month]) {
+            monthlyData[month] = {
+              month,
+              revenue: 0,
+              visits: 0,
+              orders: 0,
+              nbd: 0,
+              crr: 0,
+              target: 0,
+              converted: 0
+            };
+          }
+          monthlyData[month].visits += 1;
+          if (convertedVisits.has(visit.visitId)) {
+            monthlyData[month].converted += 1;
+          }
+        });
+
+        targets.forEach(target => {
+          const month = new Date(target.target_date).toLocaleString('default', { month: 'short' });
+          if (monthlyData[month]) {
+            monthlyData[month].target += target.total_revenue_target || 0;
+          }
+        });
+
+        Object.values(monthlyData).forEach(data => {
+          data.conversion = data.visits > 0 ? ((data.converted / data.visits) * 100).toFixed(0) : 0;
+        });
+
+        const chartTotalRevenue = Object.values(monthlyData).reduce((sum, month) => sum + month.revenue, 0);
+        console.log('Total revenue in chart data:', chartTotalRevenue);
+        console.log('Difference:', totalOrderRevenue - chartTotalRevenue);
+
+        grouped.monthly = Object.values(monthlyData);
 
         return grouped;
     };
