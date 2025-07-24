@@ -493,20 +493,19 @@ const SalesPerformanceDashboard = () => {
             targetQuery,
           ]);
 
-          // Standardize names in the results
           const standardizedOrders = (orderData.data || []).map(order => ({
             ...order,
-            mr_name_standardized: standardizeName(order.mr_name)
+            mr_name: standardizeName(order.mr_name)
           }));
 
           const standardizedVisits = (visitData.data || []).map(visit => ({
             ...visit,
-            empName_standardized: standardizeName(visit.empName)
+            empName: standardizeName(visit.empName)
           }));
 
           const standardizedTargets = (targetData.data || []).map(target => ({
             ...target,
-            mr_name_standardized: standardizeName(target.mr_name)
+            mr_name: standardizeName(target.mr_name)
           }));
 
           const results = {
@@ -530,20 +529,10 @@ const SalesPerformanceDashboard = () => {
         }
       };
 
-      const [currentData, previousData, allVisitsData] = await Promise.all([
+      const [currentData, previousData] = await Promise.all([
         fetchDataForRange(currentRange),
-        fetchDataForRange(previousRange),
-        supabase
-          .from('mr_visits')
-          .select(`"clientMobileNo", "empName", "dcrDate"`)
-          .order('"dcrDate"', { ascending: true })
+        fetchDataForRange(previousRange)
       ]);
-
-      // Standardize names in all visits data
-      const standardizedAllVisits = (allVisitsData.data || []).map(visit => ({
-        ...visit,
-        empName_standardized: standardizeName(visit.empName)
-      }));
 
       console.log('Final data summary:', {
         currentOrders: currentData.orders.length,
@@ -560,7 +549,7 @@ const SalesPerformanceDashboard = () => {
         previousData.orders,
         previousData.visits,
         medicalReps,
-        standardizedAllVisits
+        currentData.visits // Using current visits as allVisits
       );
 
       setDashboardData(processedData);
@@ -649,17 +638,16 @@ const SalesPerformanceDashboard = () => {
   
   sortedAllVisits.forEach(visit => {
     const customerKey = visit.clientMobileNo;
-    const standardizedName = visit.empName_standardized || standardizeName(visit.empName);
     if (!firstVisitMap.has(customerKey)) {
       firstVisitMap.set(customerKey, {
-        mrName: standardizedName,
+        mrName: visit.empName,
         firstDate: visit.dcrDate
       });
     }
   });
 
   // Get unique MRs from current visits
-  const activeMRNames = [...new Set(currentVisits.map(v => v.empName_standardized || standardizeName(v.empName)))];
+  const activeMRNames = [...new Set(currentVisits.map(v => v.empName))];
   let activeReps = activeMRNames.length;
 
   // Handle single MR selection for active count
@@ -767,8 +755,8 @@ const SalesPerformanceDashboard = () => {
     });
 
     // Add any unknown MRs from actual data if not already included
-    const allOrderMRs = [...new Set(currentOrders.map(order => order.mr_name_standardized || standardizeName(order.mr_name)))].filter(Boolean);
-    const allVisitMRs = [...new Set(currentVisits.map(visit => visit.empName_standardized || standardizeName(visit.empName)))].filter(Boolean);
+    const allOrderMRs = [...new Set(currentOrders.map(order => order.mr_name))].filter(Boolean);
+    const allVisitMRs = [...new Set(currentVisits.map(visit => visit.empName))].filter(Boolean);
     const allActiveMRNames = [...new Set([...allOrderMRs, ...allVisitMRs])];
 
     allActiveMRNames.forEach(mrName => {
@@ -802,7 +790,7 @@ const SalesPerformanceDashboard = () => {
 
   // Group orders by MR
   currentOrders.forEach(order => {
-    const mrName = order.mr_name_standardized || standardizeName(order.mr_name);
+    const mrName = order.mr_name;
     if (performerMap[mrName]) {
       performerMap[mrName].revenue += order.net_amount || 0;
       performerMap[mrName].orders += 1;
@@ -827,7 +815,7 @@ const SalesPerformanceDashboard = () => {
 
   // Group visits by MR and calculate conversions and new prospects
   currentVisits.forEach(visit => {
-    const mrName = visit.empName_standardized || standardizeName(visit.empName);
+    const mrName = visit.empName;
     const customerKey = visit.clientMobileNo;
     
     if (performerMap[mrName]) {
