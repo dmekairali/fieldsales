@@ -52,7 +52,7 @@ const SalesPerformanceDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-6 overflow-x-hidden max-w-full">
-      <Filters {...props} />
+      <Filters {...props} salesAgents={props.salesAgents} />
       <KPICards dashboardData={dashboardData} />
       <Charts dashboardData={dashboardData} selectedPeriod={props.selectedPeriod} />
       <div className="mb-8">

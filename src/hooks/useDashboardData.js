@@ -727,6 +727,8 @@ const useDashboardData = () => {
         return performers;
     };
 
+    const salesAgents = unknownMRs.filter(rep => rep.role_level === 'SALES_AGENT');
+
     return {
         selectedPeriod,
         selectedMonth,
@@ -762,6 +764,7 @@ const useDashboardData = () => {
         getSortedPerformers,
         setVisiblePerformers,
         getFilteredMedicalReps,
+        salesAgents,
         fetchDashboardData: () => {
             setLoading(true)
             fetchDashboardData(
