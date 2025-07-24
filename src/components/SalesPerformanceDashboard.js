@@ -1064,58 +1064,71 @@ const SalesPerformanceDashboard = () => {
   };
 
   const getUnknownMRsFromSalesData = async () => {
-    try {
-      const currentRange = getDateRange();
-      
-      // Get all unique MR names from orders in current period
-      const { data: orderMRs } = await supabase
+  try {
+    // Wait for medicalReps to be loaded
+    if (medicalReps.length === 0) {
+      return [];
+    }
+
+    const currentRange = getDateRange();
+    
+    // Get all unique MR names from orders and visits
+    const [orderData, visitData] = await Promise.all([
+      supabase
         .from('orders')
         .select('mr_name')
         .gte('order_date', currentRange.start)
         .lte('order_date', currentRange.end)
         .in('customer_type', ['Doctor', 'Retailer'])
         .eq('status', 'Order Confirmed')
-        .not('mr_name', 'is', null);
-
-      // Get all unique MR names from visits in current period  
-      const { data: visitMRs } = await supabase
+        .not('mr_name', 'is', null),
+      
+      supabase
         .from('mr_visits')
         .select('"empName"')
         .gte('"dcrDate"', currentRange.start)
         .lte('"dcrDate"', currentRange.end)
-        .not('"empName"', 'is', null);
+        .not('"empName"', 'is', null)
+    ]);
 
-      // Standardize and combine names
-      const allActiveNames = [
-        ...new Set([
-          ...(orderMRs?.map(o => standardizeName(o.mr_name)) || []),
-          ...(visitMRs?.map(v => standardizeName(v.empName)) || [])
-        ])
-      ].filter(Boolean);
+    // Get unique standardized names from sales data
+    const salesMRNames = [
+      ...new Set([
+        ...(orderData.data?.map(o => standardizeName(o.mr_name)) || []),
+        ...(visitData.data?.map(v => standardizeName(v.empName)) || [])
+      ])
+    ].filter(Boolean);
 
-      // Get known MR names from medical_representatives (already standardized)
-      const knownMRNames = medicalReps.map(mr => mr.name);
+    // Get known MR names (already standardized)
+    const knownMRNames = medicalReps.map(mr => mr.name);
 
-      // Find unknown MRs (in sales data but not in medical_representatives)
-      const unknownMRNames = allActiveNames.filter(name => !knownMRNames.includes(name));
+    // Find unknown MRs
+    const unknownMRNames = salesMRNames.filter(name => 
+      !knownMRNames.includes(name) && 
+      !unknownMRs.some(unknown => unknown.name === name)
+    );
 
-      console.log('Unknown MRs found:', unknownMRNames);
+    console.log('Unknown MRs detection:', {
+      salesMRNames: salesMRNames.length,
+      knownMRNames: knownMRNames.length,
+      unknownMRNames: unknownMRNames.length
+    });
 
-      return unknownMRNames.map(name => ({
-        name: name,
-        role_level: 'SALES_AGENT',
-        is_active: true,
-        region: 'Unknown',
-        state: 'Unknown',
-        area_sales_manager_name: null,
-        regional_sales_manager_name: null
-      }));
+    return unknownMRNames.map(name => ({
+      name: name,
+      role_level: 'SALES_AGENT',
+      is_active: true,
+      region: 'Unknown',
+      state: 'Unknown',
+      area_sales_manager_name: null,
+      regional_sales_manager_name: null
+    }));
 
-    } catch (error) {
-      console.error('Error fetching unknown MRs:', error);
-      return [];
-    }
-  };
+  } catch (error) {
+    console.error('Error fetching unknown MRs:', error);
+    return [];
+  }
+};
 
   // Add these definitions before the return statement, around line 960 (after the getUnknownMRsFromSalesData function):
 
@@ -1820,14 +1833,14 @@ const SortIcon = ({ column }) => {
         <KPICard
           title="Bills Pending"
           value={dashboardData.overview.billsPending}
-          change={dashboardData.overview.billsPendingChange}
+          change={0}
           icon={AlertCircle}
           color="bg-yellow-500"
         />
         <KPICard
           title="Payment Pending"
           value={dashboardData.overview.paymentPending}
-          change={dashboardData.overview.paymentPendingChange}
+          change={0}
           icon={XCircle}
           color="bg-red-500"
         />
