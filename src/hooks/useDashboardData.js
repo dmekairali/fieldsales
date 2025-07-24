@@ -296,9 +296,53 @@ const useDashboardData = () => {
         mrs, allVisits
     ) => {
         const selectedPeriodRange = getDateRange();
-        const selectedPeriodOrders = currentOrders.filter(o => new Date(o.order_date) >= new Date(selectedPeriodRange.start) && new Date(o.order_date) <= new Date(selectedPeriodRange.end));
-        const selectedPeriodVisits = currentVisits.filter(v => new Date(v.dcrDate) >= new Date(selectedPeriodRange.start) && new Date(v.dcrDate) <= new Date(selectedPeriodRange.end));
-        const selectedPeriodTargets = currentTargets.filter(t => new Date(t.target_date) >= new Date(selectedPeriodRange.start) && new Date(t.target_date) <= new Date(selectedPeriodRange.end));
+
+        const getSelectedPeriod = () => {
+            const now = new Date();
+            let start, end;
+
+            switch (selectedPeriod) {
+              case 'weekly':
+                const [year, week] = selectedWeek.split('-W');
+                const firstDayOfYear = new Date(parseInt(year), 0, 1);
+                const daysToAdd = (parseInt(week) - 1) * 7;
+                start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+                const dayOfWeek = start.getDay();
+                const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                start.setDate(start.getDate() + daysToMonday);
+                end = new Date(start);
+                end.setDate(start.getDate() + 6);
+                break;
+
+              case 'monthly':
+                const [monthYear, monthNum] = selectedMonth.split('-');
+                start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+                end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
+                break;
+
+              case 'quarterly':
+                const [qYear, quarter] = selectedQuarter.split('-Q');
+                const qNum = parseInt(quarter);
+                start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
+                end = new Date(parseInt(qYear), qNum * 3, 0);
+                break;
+
+              case 'yearly':
+                start = new Date(parseInt(selectedYear), 0, 1);
+                end = new Date(parseInt(selectedYear), 11, 31);
+                break;
+            }
+
+            return {
+              start: start,
+              end: end
+            };
+        };
+
+        const selectedPeriodTime = getSelectedPeriod()
+        const selectedPeriodOrders = currentOrders.filter(o => new Date(o.order_date) >= selectedPeriodTime.start && new Date(o.order_date) <= selectedPeriodTime.end);
+        const selectedPeriodVisits = currentVisits.filter(v => new Date(v.dcrDate) >= selectedPeriodTime.start && new Date(v.dcrDate) <= selectedPeriodTime.end);
+        const selectedPeriodTargets = currentTargets.filter(t => new Date(t.target_date) >= selectedPeriodTime.start && new Date(t.target_date) <= selectedPeriodTime.end);
         const calculateMetrics = (orders, visits) => {
             const visitMap = new Map();
             visits.forEach(visit => {
@@ -354,11 +398,13 @@ const useDashboardData = () => {
             };
         };
 
+        const selectedPeriodRange = getSelectedPeriod();
+        const selectedPeriodOrders = currentOrders.filter(o => new Date(o.order_date) >= selectedPeriodRange.start && new Date(o.order_date) <= selectedPeriodRange.end);
+        const selectedPeriodVisits = currentVisits.filter(v => new Date(v.dcrDate) >= selectedPeriodRange.start && new Date(v.dcrDate) <= selectedPeriodRange.end);
+        const selectedPeriodTargets = currentTargets.filter(t => new Date(t.target_date) >= selectedPeriodRange.start && new Date(t.target_date) <= selectedPeriodRange.end);
+
         const currentMetrics = calculateMetrics(selectedPeriodOrders, selectedPeriodVisits);
-        const previousPeriodRange = getPreviousDateRange(selectedPeriodRange);
-        const selectedPreviousPeriodOrders = previousOrders.filter(o => new Date(o.order_date) >= new Date(previousPeriodRange.start) && new Date(o.order_date) <= new Date(previousPeriodRange.end));
-        const selectedPreviousPeriodVisits = previousVisits.filter(v => new Date(v.dcrDate) >= new Date(previousPeriodRange.start) && new Date(v.dcrDate) <= new Date(previousPeriodRange.end));
-        const previousMetrics = calculateMetrics(selectedPreviousPeriodOrders, selectedPreviousPeriodVisits);
+        const previousMetrics = calculateMetrics(previousOrders, previousVisits);
 
         const calculateChange = (current, previous) => {
             if (previous === 0) return current > 0 ? 100 : 0;
