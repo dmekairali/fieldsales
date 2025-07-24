@@ -108,53 +108,52 @@ const ChartWrapper = ({ children, title }) => (
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 const Charts = ({ dashboardData, selectedPeriod }) => {
+    const trendData = selectedPeriod === 'weekly' ? dashboardData.trends.weekly : dashboardData.trends.monthly;
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Trend</h3>
-            <ResponsiveContainer width="100%" height={300} minWidth={0}>
-                <AreaChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
-                <YAxis />
-                <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Legend />
-                <Area type="monotone" dataKey="revenue" stroke="#0088FE" fill="#0088FE" fillOpacity={0.6} name="Actual Revenue" />
-                <Area type="monotone" dataKey="target" stroke="#FF8042" fill="#FF8042" fillOpacity={0.3} name="Target Revenue" />
-                </AreaChart>
-            </ResponsiveContainer>
-            </div>
+            <ChartWrapper title="Revenue Trend">
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                    <AreaChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="key" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => formatCurrency(value)} />
+                        <Legend />
+                        <Area type="monotone" dataKey="revenue" stroke="#0088FE" fill="#0088FE" fillOpacity={0.6} name="Actual Revenue" />
+                        <Area type="monotone" dataKey="target" stroke="#FF8042" fill="#FF8042" fillOpacity={0.3} name="Target Revenue" />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Visits & Conversion Rate</h3>
-            <ResponsiveContainer width="100%" height={300} minWidth={0}>
-                <LineChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip />
-                <Legend />
-                <Line yAxisId="left" type="monotone" dataKey="visits" stroke="#00C49F" strokeWidth={2} name="Visits" />
-                <Line yAxisId="right" type="monotone" dataKey="conversion" stroke="#8884D8" strokeWidth={2} name="Conversion %" />
-                </LineChart>
-            </ResponsiveContainer>
-            </div>
+            <ChartWrapper title="Visits & Conversion Rate">
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                    <LineChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="key" />
+                        <YAxis yAxisId="left" />
+                        <YAxis yAxisId="right" orientation="right" />
+                        <Tooltip />
+                        <Legend />
+                        <Line yAxisId="left" type="monotone" dataKey="visits" stroke="#00C49F" strokeWidth={2} name="Visits" />
+                        <Line yAxisId="right" type="monotone" dataKey="conversion" stroke="#8884D8" strokeWidth={2} name="Conversion %" />
+                    </LineChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Distribution</h3>
-            <ResponsiveContainer width="100%" height={300} minWidth={0}>
-                <BarChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
-                <YAxis />
-                <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Legend />
-                <Bar dataKey="nbd" stackId="a" fill="#0088FE" name="New Business" />
-                <Bar dataKey="crr" stackId="a" fill="#00C49F" name="Repeat Revenue" />
-                </BarChart>
-            </ResponsiveContainer>
-            </div>
+            <ChartWrapper title="Revenue Distribution">
+                <ResponsiveContainer width="100%" height={300} minWidth={0}>
+                    <BarChart data={trendData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="key" />
+                        <YAxis />
+                        <Tooltip formatter={(value) => formatCurrency(value)} />
+                        <Legend />
+                        <Bar dataKey="nbd" stackId="a" fill="#0088FE" name="New Business" />
+                        <Bar dataKey="crr" stackId="a" fill="#00C49F" name="Repeat Revenue" />
+                    </BarChart>
+                </ResponsiveContainer>
+            </ChartWrapper>
 
             <OrderFulfillmentChart data={dashboardData.detailedMetrics.fulfillmentMetrics} />
         </div>
