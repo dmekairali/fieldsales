@@ -8,9 +8,14 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const SalesPerformanceDashboard = () => {
 
-  // CRITICAL: Name standardization function
+
+// Add these imports after your existing imports
+const CACHE_KEY = 'sales_dashboard_cache';
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
+
+ // CRITICAL: Name standardization function
   const standardizeName = (name) => {
     if (!name) return '';
     return name
@@ -22,6 +27,345 @@ const SalesPerformanceDashboard = () => {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize each word
       .join(' ');
   };
+
+// Add the cache service class before your main component
+class DataCacheService {
+  constructor() {
+    this.cache = this.loadFromStorage();
+  }
+
+  loadFromStorage() {
+    try {
+      const stored = localStorage.getItem(CACHE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Date.now() - parsed.timestamp < CACHE_DURATION) {
+          console.log('✅ Loading data from cache');
+          return parsed;
+        } else {
+          console.log('⏰ Cache expired, will fetch fresh data');
+          localStorage.removeItem(CACHE_KEY); // Clean up expired cache
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cache:', error);
+      localStorage.removeItem(CACHE_KEY); // Clean up corrupted cache
+    }
+    return null;
+  }
+
+  saveToStorage(data) {
+    try {
+      // Compress data by removing unnecessary fields
+      const compressedData = {
+        orders: data.orders.map(order => ({
+          order_id: order.order_id,
+          order_date: order.order_date,
+          net_amount: order.net_amount,
+          order_type: order.order_type,
+          mr_name_standardized: order.mr_name_standardized,
+          customer_code: order.customer_code,
+          state: order.state,
+          status: order.status,
+          delivery_status: order.delivery_status,
+          payment_status: order.payment_status
+        })),
+        visits: data.visits.map(visit => ({
+          visitId: visit.visitId,
+          dcrDate: visit.dcrDate,
+          empName_standardized: visit.empName_standardized,
+          clientMobileNo: visit.clientMobileNo
+        })),
+        targets: data.targets.map(target => ({
+          target_date: target.target_date,
+          mr_name_standardized: target.mr_name_standardized,
+          total_revenue_target: target.total_revenue_target,
+          total_visit_plan: target.total_visit_plan
+        })),
+        allVisits: data.allVisits.map(visit => ({
+          visitId: visit.visitId,
+          dcrDate: visit.dcrDate,
+          empName_standardized: visit.empName_standardized,
+          clientMobileNo: visit.clientMobileNo
+        })),
+        dateRange: data.dateRange
+      };
+
+      const cacheData = {
+        data: compressedData,
+        timestamp: Date.now()
+      };
+      
+      const jsonString = JSON.stringify(cacheData);
+      
+      // Check if data is too large (5MB limit for localStorage)
+      if (jsonString.length > 5 * 1024 * 1024) {
+        console.warn('⚠️ Cache data too large, skipping localStorage cache');
+        this.cache = { data: compressedData, timestamp: Date.now() };
+        return;
+      }
+      
+      localStorage.setItem(CACHE_KEY, jsonString);
+      console.log('💾 Data saved to cache', `${(jsonString.length / 1024 / 1024).toFixed(2)}MB`);
+      this.cache = { data: compressedData, timestamp: Date.now() };
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        console.warn('⚠️ localStorage quota exceeded, clearing cache and using memory only');
+        localStorage.removeItem(CACHE_KEY);
+        // Keep data in memory cache only
+        this.cache = { data: data, timestamp: Date.now() };
+      } else {
+        console.error('Error saving cache:', error);
+      }
+    }
+  }
+
+  async loadHistoricalData(currentYear = new Date().getFullYear()) {
+  if (this.cache && this.cache.data) {
+    return this.cache.data;
+  }
+
+  console.log('📊 Loading historical data from April to current month...');
+  
+  const startDate = `${currentYear}-04-01`;
+  const endDate = new Date().toISOString().split('T')[0];
+
+  try {
+    // Helper function to fetch all data with pagination
+    const fetchAllData = async (tableName, selectFields, dateField, additionalFilters = null) => {
+      let allData = [];
+      let from = 0;
+      const batchSize = 10000;
+      let hasMore = true;
+
+      console.log(`📥 Loading all data from ${tableName}...`);
+
+      while (hasMore) {
+        let query = supabase
+          .from(tableName)
+          .select(selectFields)
+          .gte(dateField, startDate)
+          .lte(dateField, endDate)
+          .range(from, from + batchSize - 1)
+          .order(dateField, { ascending: true });
+
+        // Apply additional filters if provided
+        if (additionalFilters) {
+          if (tableName === 'orders') {
+            query = query
+              .in('customer_type', ['Doctor', 'Retailer'])
+              .eq('status', 'Order Confirmed')
+              .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
+          }
+        }
+
+        const { data, error } = await query;
+        
+        if (error) {
+          console.error(`Error fetching ${tableName}:`, error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          console.log(`📥 Loaded ${allData.length} rows from ${tableName}...`);
+          
+          // If we got less than batchSize, we've reached the end
+          if (data.length < batchSize) {
+            hasMore = false;
+          } else {
+            from += batchSize;
+          }
+        } else {
+          hasMore = false;
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      console.log(`✅ Finished loading ${allData.length} rows from ${tableName}`);
+      return allData;
+    };
+
+    // Load all data with pagination
+    console.log('📊 Starting parallel data loading...');
+    
+    const [orderData, visitData, targetData, allVisitsData] = await Promise.all([
+      // Orders
+      fetchAllData(
+        'orders',
+        'order_id, order_date, net_amount, order_type, mr_name, customer_code, state, status, delivery_status, payment_status',
+        'order_date',
+        true // Apply additional filters
+      ),
+
+      // Visits
+      fetchAllData(
+        'mr_visits',
+        '"visitId", "dcrDate", "empName", "clientMobileNo"',
+        '"dcrDate"'
+      ),
+
+      // Targets
+      fetchAllData(
+        'mr_weekly_targets',
+        'target_date, mr_name, total_revenue_target, total_visit_plan',
+        'target_date'
+      ),
+
+      // All visits for conversion tracking (same as visits in this case)
+      fetchAllData(
+        'mr_visits',
+        '"visitId", "dcrDate", "empName", "clientMobileNo"',
+        '"dcrDate"'
+      )
+    ]);
+
+    console.log('📊 Processing and standardizing data...');
+
+    const data = {
+      orders: orderData.map(order => ({
+        ...order,
+        mr_name_standardized: standardizeName(order.mr_name)
+      })),
+      visits: visitData.map(visit => ({
+        ...visit,
+        empName_standardized: standardizeName(visit.empName)
+      })),
+      targets: targetData.map(target => ({
+        ...target,
+        mr_name_standardized: standardizeName(target.mr_name)
+      })),
+      allVisits: allVisitsData.map(visit => ({
+        ...visit,
+        empName_standardized: standardizeName(visit.empName)
+      })),
+      dateRange: { start: startDate, end: endDate }
+    };
+
+    // Save to cache
+    this.saveToStorage(data);
+
+    console.log('📈 Historical data loaded successfully:', {
+      orders: data.orders.length,
+      visits: data.visits.length,
+      targets: data.targets.length,
+      totalRevenue: data.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
+    });
+
+    return data;
+  } catch (error) {
+    console.error('Error loading historical data:', error);
+    return { orders: [], visits: [], targets: [], allVisits: [] };
+  }
+}
+
+
+  filterDataByDateRange(data, startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    return {
+      orders: data.orders.filter(order => {
+        const orderDate = new Date(order.order_date);
+        return orderDate >= start && orderDate <= end;
+      }),
+      visits: data.visits.filter(visit => {
+        const visitDate = new Date(visit.dcrDate);
+        return visitDate >= start && visitDate <= end;
+      }),
+      targets: data.targets.filter(target => {
+        const targetDate = new Date(target.target_date);
+        return targetDate >= start && targetDate <= end;
+      }),
+      allVisits: data.allVisits
+    };
+  }
+
+  filterDataByFilters(data, filters) {
+    const { selectedMR, selectedTeam, selectedRegion, selectedState, medicalReps, teams } = filters;
+    
+    let filteredData = { ...data };
+
+    if (selectedMR !== 'all') {
+      filteredData.orders = filteredData.orders.filter(order => 
+        order.mr_name_standardized === selectedMR
+      );
+      filteredData.visits = filteredData.visits.filter(visit => 
+        visit.empName_standardized === selectedMR
+      );
+      filteredData.targets = filteredData.targets.filter(target => 
+        target.mr_name_standardized === selectedMR
+      );
+    } else {
+      let includedPersons = [];
+
+      if (selectedTeam !== 'all') {
+        const selectedTeamData = teams.find(team => standardizeName(team.name) === selectedTeam);
+        if (selectedTeam === 'independent') {
+          includedPersons = medicalReps.filter(rep => 
+            rep.role_level === 'MR' && 
+            !rep.area_sales_manager_name && 
+            !rep.regional_sales_manager_name
+          );
+        } else if (selectedTeamData) {
+          includedPersons = medicalReps.filter(rep => {
+            const asmMatch = selectedTeamData.area_sales_manager_name && 
+              standardizeName(rep.area_sales_manager_name || '') === standardizeName(selectedTeamData.area_sales_manager_name);
+            const rsmMatch = selectedTeamData.regional_sales_manager_name && 
+              standardizeName(rep.regional_sales_manager_name || '') === standardizeName(selectedTeamData.regional_sales_manager_name);
+            return asmMatch || rsmMatch;
+          });
+        }
+      } else {
+        includedPersons = [...medicalReps];
+      }
+
+      if (selectedRegion !== 'all') {
+        includedPersons = includedPersons.filter(rep => rep.region === selectedRegion);
+      }
+
+      if (selectedState !== 'all') {
+        includedPersons = includedPersons.filter(rep => rep.state === selectedState);
+      }
+
+      if (includedPersons.length > 0) {
+        const personNames = includedPersons.map(person => person.name);
+        
+        filteredData.orders = filteredData.orders.filter(order => 
+          personNames.includes(order.mr_name_standardized)
+        );
+        filteredData.visits = filteredData.visits.filter(visit => 
+          personNames.includes(visit.empName_standardized)
+        );
+        filteredData.targets = filteredData.targets.filter(target => 
+          personNames.includes(target.mr_name_standardized)
+        );
+      }
+    }
+
+    if (selectedState !== 'all') {
+      filteredData.orders = filteredData.orders.filter(order => order.state === selectedState);
+    }
+
+    return filteredData;
+  }
+
+  clearCache() {
+    localStorage.removeItem(CACHE_KEY);
+    this.cache = null;
+    console.log('🗑️ Cache cleared');
+  }
+}
+
+// Create the cache service instance
+const dataCacheService = new DataCacheService();
+
+
+const SalesPerformanceDashboard = () => {
+
+ 
 
   // Helper function to get current period values
   const getCurrentPeriodDefaults = () => {
@@ -374,208 +718,84 @@ const SalesPerformanceDashboard = () => {
   };
 
   const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const currentRange = getDateRange();
-      const previousRange = getPreviousDateRange(currentRange);
-
-      console.log('Date ranges:', { current: currentRange, previous: previousRange });
-      console.log('Current filters:', { selectedRegion, selectedTeam, selectedState, selectedMR });
-
-      const fetchDataForRange = async (range) => {
-        const { start, end } = range;
-        
-        // Build base queries
-        let orderQuery = supabase
-          .from('orders')
-          .select(`
-            order_id,
-            order_date,
-            net_amount,
-            order_type,
-            mr_name,
-            customer_code,
-            state,
-            status,
-            delivery_status,
-            payment_status
-          `)
-          .gte('order_date', start)
-          .lte('order_date', end)
-          .in('customer_type', ['Doctor', 'Retailer'])
-          .eq('status', 'Order Confirmed')
-          .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
-
-        let visitQuery = supabase
-          .from('mr_visits')
-          .select(`
-            "visitId",
-            "dcrDate",
-            "empName",
-            "clientMobileNo",
-            "clientName",
-            "amountOfSale"
-          `)
-          .gte('"dcrDate"', start)
-          .lte('"dcrDate"', end);
-
-        let targetQuery = supabase
-          .from('mr_weekly_targets')
-          .select('*')
-          .gte('target_date', start)
-          .lte('target_date', end);
-
-        // Handle MR selection by name
-        if (selectedMR !== 'all') {
-          console.log('Selected MR:', selectedMR);
-          
-          // For regular MRs and Sales Agents, filter by standardized name
-          orderQuery = orderQuery.ilike('mr_name', `%${selectedMR}%`);
-          visitQuery = visitQuery.ilike('"empName"', `%${selectedMR}%`);
-          targetQuery = targetQuery.ilike('mr_name', `%${selectedMR}%`);
-          
-        } else {
-          // Handle team-based filtering
-          if (selectedTeam === 'all' && selectedRegion === 'all' && selectedState === 'all') {
-            console.log('Showing ALL data without MR filtering');
-          } else {
-            let allIncludedPersons = [];
-            
-            if (selectedTeam === 'independent') {
-              const independentMRs = medicalReps.filter(rep => 
-                rep.role_level === 'MR' && 
-                !rep.area_sales_manager_name && 
-                !rep.regional_sales_manager_name
-              );
-              
-              let filteredIndependent = [...independentMRs];
-              if (selectedRegion !== 'all') {
-                filteredIndependent = filteredIndependent.filter(rep => rep.region === selectedRegion);
-              }
-              if (selectedState !== 'all') {
-                filteredIndependent = filteredIndependent.filter(rep => rep.state === selectedState);
-              }
-              
-              allIncludedPersons = filteredIndependent;
-              
-            } else {
-              const { activeReps, inactiveReps } = getFilteredMedicalReps();
-              allIncludedPersons = [...activeReps, ...inactiveReps];
-              
-              if (selectedTeam !== 'all') {
-                const selectedTeamData = teams.find(team => standardizeName(team.name) === selectedTeam);
-                if (selectedTeamData) {
-                  allIncludedPersons.push(selectedTeamData);
-                }
-              }
-            }
-            
-            if (allIncludedPersons.length === 0) {
-              return { orders: [], visits: [], targets: [] };
-            }
-            
-            // Use original names for database queries
-            const personNames = allIncludedPersons.map(person => person.original_name || person.name);
-            orderQuery = orderQuery.in('mr_name', personNames);
-            visitQuery = visitQuery.in('"empName"', personNames);
-            targetQuery = targetQuery.in('mr_name', personNames);
-          }
-        }
-
-        // Apply state filter to orders if needed
-        if (selectedState !== 'all') {
-          orderQuery = orderQuery.eq('state', selectedState);
-        }
-
-        try {
-          const [orderData, visitData, targetData] = await Promise.all([
-            orderQuery,
-            visitQuery,
-            targetQuery,
-          ]);
-
-          // Standardize names in the results
-          const standardizedOrders = (orderData.data || []).map(order => ({
-            ...order,
-            mr_name_standardized: standardizeName(order.mr_name)
-          }));
-
-          const standardizedVisits = (visitData.data || []).map(visit => ({
-            ...visit,
-            empName_standardized: standardizeName(visit.empName)
-          }));
-
-          const standardizedTargets = (targetData.data || []).map(target => ({
-            ...target,
-            mr_name_standardized: standardizeName(target.mr_name)
-          }));
-
-          const results = {
-            orders: standardizedOrders,
-            visits: standardizedVisits,
-            targets: standardizedTargets,
-          };
-
-          console.log('Query results:', {
-            selectedMR: selectedMR,
-            orders: results.orders.length,
-            visits: results.visits.length,
-            totalRevenue: results.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
-          });
-
-          return results;
-
-        } catch (error) {
-          console.error('Database query error:', error);
-          return { orders: [], visits: [], targets: [] };
-        }
-      };
-
-      const [currentData, previousData, allVisitsData] = await Promise.all([
-        fetchDataForRange(currentRange),
-        fetchDataForRange(previousRange),
-        supabase
-          .from('mr_visits')
-          .select(`"clientMobileNo", "empName", "dcrDate"`)
-          .order('"dcrDate"', { ascending: true })
-      ]);
-
-      // Standardize names in all visits data
-      const standardizedAllVisits = (allVisitsData.data || []).map(visit => ({
-        ...visit,
-        empName_standardized: standardizeName(visit.empName)
-      }));
-
-      console.log('Final data summary:', {
-        currentOrders: currentData.orders.length,
-        currentVisits: currentData.visits.length,
-        previousOrders: previousData.orders.length,
-        previousVisits: previousData.visits.length
-      });
-
-      // Process data
-      const processedData = processDataWithConversions(
-        currentData.orders,
-        currentData.visits,
-        currentData.targets,
-        previousData.orders,
-        previousData.visits,
-        medicalReps,
-        standardizedAllVisits
-      );
-
-      setDashboardData(processedData);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    console.log('🔄 Fetching dashboard data with caching...');
+    
+    // Load historical data (cached for 1 hour)
+    const historicalData = await dataCacheService.loadHistoricalData();
+    
+    // Get current and previous date ranges
+    const currentRange = getDateRange();
+    const previousRange = getPreviousDateRange(currentRange);
+    
+    console.log('Date ranges:', { current: currentRange, previous: previousRange });
+    
+    // Filter data for current period
+    const currentData = dataCacheService.filterDataByDateRange(
+      historicalData, 
+      currentRange.start, 
+      currentRange.end
+    );
+    
+    // Filter data for previous period
+    const previousData = dataCacheService.filterDataByDateRange(
+      historicalData, 
+      previousRange.start, 
+      previousRange.end
+    );
+    
+    // Apply filters (MR, team, region, state)
+    const filteredCurrentData = dataCacheService.filterDataByFilters(currentData, {
+      selectedMR,
+      selectedTeam,
+      selectedRegion,
+      selectedState,
+      medicalReps,
+      teams
+    });
+    
+    const filteredPreviousData = dataCacheService.filterDataByFilters(previousData, {
+      selectedMR,
+      selectedTeam,
+      selectedRegion,
+      selectedState,
+      medicalReps,
+      teams
+    });
+    
+    console.log('Filtered data summary:', {
+      currentOrders: filteredCurrentData.orders.length,
+      currentVisits: filteredCurrentData.visits.length,
+      previousOrders: filteredPreviousData.orders.length,
+      previousVisits: filteredPreviousData.visits.length,
+      totalHistoricalOrders: historicalData.orders.length
+    });
+    
+    // Process data with enhanced function - PASS historicalData as the last parameter
+    const processedData = processDataWithConversions(
+      filteredCurrentData.orders,
+      filteredCurrentData.visits,
+      filteredCurrentData.targets,
+      filteredPreviousData.orders,
+      filteredPreviousData.visits,
+      medicalReps,
+      historicalData.allVisits,
+      historicalData // ← Make sure this is passed correctly
+    );
+    
+    setDashboardData(processedData);
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const processDataWithConversions = (
   currentOrders, currentVisits, currentTargets,
   previousOrders, previousVisits,
-  mrs, allVisits
+  mrs, allVisits, historicalData
 ) => {
   // Helper function to calculate metrics for a period
   const calculateMetrics = (orders, visits) => {
@@ -700,7 +920,18 @@ const SalesPerformanceDashboard = () => {
   const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
   // Group data by time period for trends
-  const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet);
+  const trends = groupDataByPeriod(
+  currentOrders,   // Use current filtered orders for now
+  currentVisits,   // Use current filtered visits for now
+  currentTargets,  // Use current filtered targets for now
+  selectedPeriod, 
+  currentMetrics.convertedVisitsSet,
+  selectedMonth,
+  selectedWeek, 
+  selectedQuarter,
+  selectedYear,
+  historicalData   // Pass historical data as parameter
+);
 
   // Calculate detailed performer metrics
   const performerMap = {};
@@ -936,85 +1167,327 @@ const SalesPerformanceDashboard = () => {
   };
 };
 
-  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits) => {
-    const grouped = {
-      weekly: [],
-      monthly: []
-    };
-
-    // Monthly grouping with standardized names
-    const monthlyData = {};
-    
-    // Debug: Log total revenue from orders
-    const totalOrderRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
-    console.log('Total revenue from all orders:', totalOrderRevenue);
-    
-    orders.forEach(order => {
-      const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
-      if (!monthlyData[month]) {
-        monthlyData[month] = {
-          month,
-          revenue: 0,
-          visits: 0,
-          orders: 0,
-          nbd: 0,
-          crr: 0,
-          target: 0,
-          converted: 0
-        };
-      }
-      monthlyData[month].revenue += order.net_amount || 0;
-      monthlyData[month].orders += 1;
-      if (order.order_type === 'NBD') {
-        monthlyData[month].nbd += order.net_amount || 0;
-      } else {
-        monthlyData[month].crr += order.net_amount || 0;
-      }
+  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear, historicalData) => {
+  console.log('🔧 Generating trends for period:', period);
+  
+  // Helper function to filter historical data by current filters
+  const getFilteredHistoricalData = () => {
+    return dataCacheService.filterDataByFilters(historicalData, {
+      selectedMR,
+      selectedTeam,
+      selectedRegion,
+      selectedState,
+      medicalReps,
+      teams
     });
-
-    // Add visit counts and conversions
-    visits.forEach(visit => {
-      const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
-      if (!monthlyData[month]) {
-        monthlyData[month] = {
-          month,
-          revenue: 0,
-          visits: 0,
-          orders: 0,
-          nbd: 0,
-          crr: 0,
-          target: 0,
-          converted: 0
-        };
-      }
-      monthlyData[month].visits += 1;
-      if (convertedVisits.has(visit.visitId)) {
-        monthlyData[month].converted += 1;
-      }
-    });
-
-    // Add targets
-    targets.forEach(target => {
-      const month = new Date(target.target_date).toLocaleString('default', { month: 'short' });
-      if (monthlyData[month]) {
-        monthlyData[month].target += target.total_revenue_target || 0;
-      }
-    });
-
-    // Calculate conversion rates
-    Object.values(monthlyData).forEach(data => {
-      data.conversion = data.visits > 0 ? ((data.converted / data.visits) * 100).toFixed(0) : 0;
-    });
-
-    // Debug: Log chart total
-    const chartTotalRevenue = Object.values(monthlyData).reduce((sum, month) => sum + month.revenue, 0);
-    console.log('Total revenue in chart data:', chartTotalRevenue);
-    console.log('Difference:', totalOrderRevenue - chartTotalRevenue);
-
-    grouped.monthly = Object.values(monthlyData);
-
-    return grouped;
   };
+
+  switch (period) {
+    case 'monthly':
+      return generateMonthlyHistoricalData(selectedMonth, historicalData, getFilteredHistoricalData);
+    case 'weekly':
+      return generateWeeklyHistoricalData(selectedWeek, historicalData, getFilteredHistoricalData);
+    case 'quarterly':
+      return generateQuarterlyHistoricalData(selectedQuarter, historicalData, getFilteredHistoricalData);
+    case 'yearly':
+      return generateYearlyHistoricalData(selectedYear, historicalData, getFilteredHistoricalData);
+    default:
+      return generateMonthlyHistoricalData(selectedMonth, historicalData, getFilteredHistoricalData);
+  }
+};
+
+// Helper functions for generating historical data
+const generateMonthlyHistoricalData = (selectedMonth, historicalData, getFilteredData) => {
+  const [year, month] = selectedMonth.split('-');
+  const selectedMonthNum = parseInt(month);
+  const data = [];
+  
+  // Get filtered historical data
+  const filteredData = getFilteredData();
+  
+  // Start from April (month 4) to selected month
+  for (let i = 4; i <= selectedMonthNum; i++) {
+    const monthStart = new Date(parseInt(year), i - 1, 1);
+    const monthEnd = new Date(parseInt(year), i, 0);
+    const monthName = monthStart.toLocaleDateString('en-US', { month: 'short' });
+    
+    // Use filtered historical data instead of passed parameters
+    const monthOrders = filteredData.orders.filter(order => {
+      const orderDate = new Date(order.order_date);
+      return orderDate >= monthStart && orderDate <= monthEnd;
+    });
+    
+    const monthVisits = filteredData.visits.filter(visit => {
+      const visitDate = new Date(visit.dcrDate);
+      return visitDate >= monthStart && visitDate <= monthEnd;
+    });
+    
+    const monthTargets = filteredData.targets.filter(target => {
+      const targetDate = new Date(target.target_date);
+      return targetDate >= monthStart && targetDate <= monthEnd;
+    });
+    
+    // Calculate metrics
+    const revenue = monthOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const target = monthTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    const visitCount = monthVisits.length;
+    
+    // For conversion calculation, you'll need to recalculate converted visits for this month
+    const monthConvertedVisits = new Set();
+    monthOrders.forEach(order => {
+      const orderDate = order.order_date;
+      monthVisits.forEach(visit => {
+        if (visit.dcrDate === orderDate && 
+            (visit.clientMobileNo === order.customer_code || 
+             visit.clientMobileNo === order.customer_code)) {
+          monthConvertedVisits.add(visit.visitId);
+        }
+      });
+    });
+    
+    const convertedCount = monthConvertedVisits.size;
+    const nbdRevenue = monthOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const crrRevenue = monthOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    
+    data.push({
+      key: monthName,
+      month: monthName,
+      revenue,
+      target,
+      visits: visitCount,
+      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      nbd: nbdRevenue,
+      crr: crrRevenue,
+      converted: convertedCount,
+      orders: monthOrders.length,
+      isCurrent: i === selectedMonthNum
+    });
+  }
+  
+  return data;
+};
+
+const generateWeeklyHistoricalData = (selectedWeek, historicalData, getFilteredData) => {
+  const [year, weekStr] = selectedWeek.split('-W');
+  const weekNum = parseInt(weekStr);
+  const data = [];
+  
+  // Get filtered historical data
+  const filteredData = getFilteredData();
+  
+  // Generate previous 5 weeks + selected week
+  for (let i = -5; i <= 0; i++) {
+    const currentWeekNum = weekNum + i;
+    const weekStart = getWeekStartDate(parseInt(year), currentWeekNum);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    // Use filtered historical data
+    const weekOrders = filteredData.orders.filter(order => {
+      const orderDate = new Date(order.order_date);
+      return orderDate >= weekStart && orderDate <= weekEnd;
+    });
+    
+    const weekVisits = filteredData.visits.filter(visit => {
+      const visitDate = new Date(visit.dcrDate);
+      return visitDate >= weekStart && visitDate <= weekEnd;
+    });
+    
+    const weekTargets = filteredData.targets.filter(target => {
+      const targetDate = new Date(target.target_date);
+      return targetDate >= weekStart && targetDate <= weekEnd;
+    });
+    
+    // Calculate metrics
+    const revenue = weekOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const target = weekTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    const visitCount = weekVisits.length;
+    
+    // Calculate converted visits for this week
+    const weekConvertedVisits = new Set();
+    weekOrders.forEach(order => {
+      const orderDate = order.order_date;
+      weekVisits.forEach(visit => {
+        if (visit.dcrDate === orderDate && 
+            (visit.clientMobileNo === order.customer_code || 
+             visit.clientMobileNo === order.customer_code)) {
+          weekConvertedVisits.add(visit.visitId);
+        }
+      });
+    });
+    
+    const convertedCount = weekConvertedVisits.size;
+    const nbdRevenue = weekOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const crrRevenue = weekOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    
+    data.push({
+      key: `W${currentWeekNum}`,
+      week: `W${currentWeekNum}`,
+      revenue,
+      target,
+      visits: visitCount,
+      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      nbd: nbdRevenue,
+      crr: crrRevenue,
+      converted: convertedCount,
+      orders: weekOrders.length,
+      isCurrent: i === 0
+    });
+  }
+  
+  return data;
+};
+
+const generateQuarterlyHistoricalData = (selectedQuarter, historicalData, getFilteredData) => {
+  const [year, quarterStr] = selectedQuarter.split('-Q');
+  const quarterNum = parseInt(quarterStr);
+  const data = [];
+  
+  // Get filtered historical data
+  const filteredData = getFilteredData();
+  
+  // Start from Q2 if selected is Q3/Q4, or Q1 if selected is Q2
+  const startQuarter = quarterNum > 2 ? 2 : 1;
+  
+  for (let i = startQuarter; i <= quarterNum; i++) {
+    const quarterStart = new Date(parseInt(year), (i - 1) * 3, 1);
+    const quarterEnd = new Date(parseInt(year), i * 3, 0);
+    
+    // Use filtered historical data
+    const quarterOrders = filteredData.orders.filter(order => {
+      const orderDate = new Date(order.order_date);
+      return orderDate >= quarterStart && orderDate <= quarterEnd;
+    });
+    
+    const quarterVisits = filteredData.visits.filter(visit => {
+      const visitDate = new Date(visit.dcrDate);
+      return visitDate >= quarterStart && visitDate <= quarterEnd;
+    });
+    
+    const quarterTargets = filteredData.targets.filter(target => {
+      const targetDate = new Date(target.target_date);
+      return targetDate >= quarterStart && targetDate <= quarterEnd;
+    });
+    
+    // Calculate metrics
+    const revenue = quarterOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const target = quarterTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    const visitCount = quarterVisits.length;
+    
+    // Calculate converted visits for this quarter
+    const quarterConvertedVisits = new Set();
+    quarterOrders.forEach(order => {
+      const orderDate = order.order_date;
+      quarterVisits.forEach(visit => {
+        if (visit.dcrDate === orderDate && 
+            (visit.clientMobileNo === order.customer_code || 
+             visit.clientMobileNo === order.customer_code)) {
+          quarterConvertedVisits.add(visit.visitId);
+        }
+      });
+    });
+    
+    const convertedCount = quarterConvertedVisits.size;
+    const nbdRevenue = quarterOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const crrRevenue = quarterOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    
+    data.push({
+      key: `Q${i}`,
+      quarter: `Q${i}`,
+      revenue,
+      target,
+      visits: visitCount,
+      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      nbd: nbdRevenue,
+      crr: crrRevenue,
+      converted: convertedCount,
+      orders: quarterOrders.length,
+      isCurrent: i === quarterNum
+    });
+  }
+  
+  return data;
+};
+
+const generateYearlyHistoricalData = (selectedYear, historicalData, getFilteredData) => {
+  const yearNum = parseInt(selectedYear);
+  const data = [];
+  
+  // Get filtered historical data
+  const filteredData = getFilteredData();
+  
+  // Previous year and current year
+  for (let i = -1; i <= 0; i++) {
+    const currentYear = yearNum + i;
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31);
+    
+    // Use filtered historical data
+    const yearOrders = filteredData.orders.filter(order => {
+      const orderDate = new Date(order.order_date);
+      return orderDate >= yearStart && orderDate <= yearEnd;
+    });
+    
+    const yearVisits = filteredData.visits.filter(visit => {
+      const visitDate = new Date(visit.dcrDate);
+      return visitDate >= yearStart && visitDate <= yearEnd;
+    });
+    
+    const yearTargets = filteredData.targets.filter(target => {
+      const targetDate = new Date(target.target_date);
+      return targetDate >= yearStart && targetDate <= yearEnd;
+    });
+    
+    // Calculate metrics
+    const revenue = yearOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const target = yearTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
+    const visitCount = yearVisits.length;
+    
+    // Calculate converted visits for this year
+    const yearConvertedVisits = new Set();
+    yearOrders.forEach(order => {
+      const orderDate = order.order_date;
+      yearVisits.forEach(visit => {
+        if (visit.dcrDate === orderDate && 
+            (visit.clientMobileNo === order.customer_code || 
+             visit.clientMobileNo === order.customer_code)) {
+          yearConvertedVisits.add(visit.visitId);
+        }
+      });
+    });
+    
+    const convertedCount = yearConvertedVisits.size;
+    const nbdRevenue = yearOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const crrRevenue = yearOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    
+    data.push({
+      key: currentYear.toString(),
+      year: currentYear.toString(),
+      revenue,
+      target,
+      visits: visitCount,
+      conversion: visitCount > 0 ? ((convertedCount / visitCount) * 100) : 0,
+      nbd: nbdRevenue,
+      crr: crrRevenue,
+      converted: convertedCount,
+      orders: yearOrders.length,
+      isCurrent: i === 0
+    });
+  }
+  
+  return data;
+};
+
+// Helper function to get week start date
+const getWeekStartDate = (year, weekNumber) => {
+  const firstDayOfYear = new Date(year, 0, 1);
+  const daysToAdd = (weekNumber - 1) * 7;
+  const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+  const dayOfWeek = weekDate.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  weekDate.setDate(weekDate.getDate() + daysToMonday);
+  return weekDate;
+};
 
   // Sorting functionality
   const handleSort = (key) => {
@@ -1577,6 +2050,18 @@ const SortIcon = ({ column }) => {
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </button>
+            
+             <button 
+    onClick={() => {
+      dataCacheService.clearCache();
+      fetchDashboardData();
+    }}
+    className="flex items-center px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+    title="Clear cache and reload data"
+  >
+    🗑️ Clear Cache
+  </button>
+
             <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               <Download className="w-4 h-4 mr-2" />
               Export Report
@@ -1833,66 +2318,205 @@ const SortIcon = ({ column }) => {
         <KPICard
           title="Bills Pending"
           value={dashboardData.overview.billsPending}
-          change={0}
+          change={dashboardData.overview.billsPendingChange}
           icon={AlertCircle}
           color="bg-yellow-500"
         />
         <KPICard
           title="Payment Pending"
           value={dashboardData.overview.paymentPending}
-          change={0}
+          change={dashboardData.overview.paymentPendingChange}
           icon={XCircle}
           color="bg-red-500"
         />
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Trend</h3>
-          <ResponsiveContainer width="100%" height={300} minWidth={0}>
-            <AreaChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
-              <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend />
-              <Area type="monotone" dataKey="revenue" stroke="#0088FE" fill="#0088FE" fillOpacity={0.6} name="Actual Revenue" />
-              <Area type="monotone" dataKey="target" stroke="#FF8042" fill="#FF8042" fillOpacity={0.3} name="Target Revenue" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Visits & Conversion Rate</h3>
-          <ResponsiveContainer width="100%" height={300} minWidth={0}>
-            <LineChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="visits" stroke="#00C49F" strokeWidth={2} name="Visits" />
-              <Line yAxisId="right" type="monotone" dataKey="conversion" stroke="#8884D8" strokeWidth={2} name="Conversion %" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Distribution</h3>
-          <ResponsiveContainer width="100%" height={300} minWidth={0}>
-            <BarChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
-              <YAxis />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="nbd" stackId="a" fill="#0088FE" name="New Business" />
-              <Bar dataKey="crr" stackId="a" fill="#00C49F" name="Repeat Revenue" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Enhanced Charts Section */}
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  {/* Revenue Trend Chart */}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="text-lg font-semibold text-gray-900 truncate">Revenue Trend</h3>
+      <div className="text-xs text-gray-500">
+        {selectedPeriod === 'monthly' && 'Apr - Current Month'}
+        {selectedPeriod === 'weekly' && 'Last 5 Weeks + Current'}
+        {selectedPeriod === 'quarterly' && 'Previous Quarter - Current'}
+        {selectedPeriod === 'yearly' && 'Previous Year - Current'}
+      </div>
+    </div>
+    <ResponsiveContainer width="100%" height={300} minWidth={0}>
+      <AreaChart data={dashboardData.trends || []}>
+        <defs>
+          <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.8}/>
+            <stop offset="95%" stopColor="#2563eb" stopOpacity={0.1}/>
+          </linearGradient>
+          <linearGradient id="colorTarget" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.6}/>
+            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+        <XAxis 
+          dataKey="key" 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+        />
+        <YAxis 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+          tickFormatter={(value) => formatCurrency(value)}
+        />
+        <Tooltip 
+          formatter={(value, name) => [formatCurrency(value), name]}
+          labelStyle={{ color: '#1e293b' }}
+          contentStyle={{ 
+            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        />
+        <Legend />
+        <Area 
+          type="monotone" 
+          dataKey="revenue" 
+          stroke="#2563eb" 
+          strokeWidth={2}
+          fill="url(#colorRevenue)" 
+          name="Actual Revenue" 
+        />
+        <Area 
+          type="monotone" 
+          dataKey="target" 
+          stroke="#f59e0b" 
+          strokeWidth={2}
+          fill="url(#colorTarget)" 
+          fillOpacity={0.3} 
+          name="Target Revenue" 
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>
+  
+  {/* Visits & Conversion Rate Chart */}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="text-lg font-semibold text-gray-900 truncate">Visits & Conversion Rate</h3>
+      <div className="text-xs text-gray-500">Historical Trend</div>
+    </div>
+    <ResponsiveContainer width="100%" height={300} minWidth={0}>
+      <LineChart data={dashboardData.trends || []}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+        <XAxis 
+          dataKey="key" 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+        />
+        <YAxis 
+          yAxisId="left" 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+        />
+        <YAxis 
+          yAxisId="right" 
+          orientation="right" 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+          tickFormatter={(value) => `${value}%`}
+        />
+        <Tooltip 
+          formatter={(value, name) => [
+            name === 'Conversion %' ? `${value}%` : value, 
+            name
+          ]}
+          contentStyle={{ 
+            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        />
+        <Legend />
+        <Line 
+          yAxisId="left" 
+          type="monotone" 
+          dataKey="visits" 
+          stroke="#10b981" 
+          strokeWidth={3}
+          dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+          activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
+          name="Visits" 
+        />
+        <Line 
+          yAxisId="right" 
+          type="monotone" 
+          dataKey="conversion" 
+          stroke="#8b5cf6" 
+          strokeWidth={3}
+          dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+          activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2 }}
+          name="Conversion %" 
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
+  
+  {/* Revenue Distribution Chart */}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="text-lg font-semibold text-gray-900 truncate">Revenue Distribution</h3>
+      <div className="text-xs text-gray-500">NBD vs CRR Trend</div>
+    </div>
+    <ResponsiveContainer width="100%" height={300} minWidth={0}>
+      <BarChart data={dashboardData.trends || []}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+        <XAxis 
+          dataKey="key" 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+        />
+        <YAxis 
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 12, fill: '#64748b' }}
+          tickFormatter={(value) => formatCurrency(value)}
+        />
+        <Tooltip 
+          formatter={(value) => formatCurrency(value)}
+          contentStyle={{ 
+            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+          }}
+        />
+        <Legend />
+        <Bar 
+          dataKey="nbd" 
+          stackId="a" 
+          fill="#3b82f6" 
+          name="New Business"
+          radius={[0, 0, 0, 0]}
+        />
+        <Bar 
+          dataKey="crr" 
+          stackId="a" 
+          fill="#10b981" 
+          name="Repeat Revenue"
+          radius={[4, 4, 0, 0]}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+
+ 
         
         {/* Order Fulfillment Chart */}
         <OrderFulfillmentChart data={dashboardData.detailedMetrics.fulfillmentMetrics} />
@@ -2021,67 +2645,236 @@ const SortIcon = ({ column }) => {
         </div>
       </div>
 
-      {/* Performance Metrics Detail Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden mt-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Performance Metrics</h3>
-        <div className="space-y-6">
-          {/* Visit Metrics */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Visit Completion</h4>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Completed</span>
-                <span className="text-sm font-medium">{dashboardData.detailedMetrics.visitMetrics.completed}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full"
-                  style={{ width: `${dashboardData.detailedMetrics.visitMetrics.completionRate}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>Planned: {dashboardData.detailedMetrics.visitMetrics.planned}</span>
-                <span>Missed: {dashboardData.detailedMetrics.visitMetrics.missed}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Conversion Funnel */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Conversion Funnel</h4>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <div className="flex items-center">
-                  <Users className="w-4 h-4 text-blue-600 mr-2" />
-                  <span className="text-sm text-gray-700">Total Leads</span>
-                </div>
-                <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.totalLeads}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                <div className="flex items-center">
-                  <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                  <span className="text-sm text-gray-700">Converted</span>
-                </div>
-                <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.converted}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                <div className="flex items-center">
-                  <Clock className="w-4 h-4 text-yellow-600 mr-2" />
-                  <span className="text-sm text-gray-700">Pending</span>
-                </div>
-                <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.pending}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                <div className="flex items-center">
-                  <XCircle className="w-4 h-4 text-red-600 mr-2" />
-                  <span className="text-sm text-gray-700">Lost</span>
-                </div>
-                <span className="text-sm font-medium">{dashboardData.detailedMetrics.conversionMetrics.lost}</span>
-              </div>
+      {/* Enhanced Performance Metrics Detail Section */}
+<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
+  {/* Revenue Achievement Card */}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <h3 className="text-lg font-semibold text-gray-900 mb-6">Revenue Achievement</h3>
+    <div className="relative pt-4">
+      <div className="flex items-center justify-center">
+        <div className="relative">
+          <svg className="w-40 h-40">
+            <circle
+              cx="80"
+              cy="80"
+              r="70"
+              fill="none"
+              stroke="#e5e7eb"
+              strokeWidth="12"
+            />
+            <circle
+              cx="80"
+              cy="80"
+              r="70"
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth="12"
+              strokeDasharray={`${2 * Math.PI * 70 * (dashboardData.overview.targetAchievement / 100)} ${2 * Math.PI * 70}`}
+              strokeDashoffset="0"
+              transform="rotate(-90 80 80)"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-gray-900">{dashboardData.overview.targetAchievement}%</div>
+              <div className="text-sm text-gray-600">of target</div>
             </div>
           </div>
         </div>
       </div>
+      <div className="mt-6 space-y-3">
+        <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
+          <span className="text-gray-600 font-medium">Target</span>
+          <span className="font-semibold text-gray-900">{formatCurrency(dashboardData.detailedMetrics.revenueMetrics.target)}</span>
+        </div>
+        <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
+          <span className="text-gray-600 font-medium">Achieved</span>
+          <span className="font-semibold text-green-600">{formatCurrency(dashboardData.detailedMetrics.revenueMetrics.achieved)}</span>
+        </div>
+        <div className="flex justify-between items-center text-sm">
+          <span className="text-gray-600 font-medium">Gap</span>
+          <span className="font-semibold text-red-600">{formatCurrency(Math.abs(dashboardData.detailedMetrics.revenueMetrics.gap))}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* Revenue Distribution Card */}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <h3 className="text-lg font-semibold text-gray-900 mb-6">Revenue by Business Type</h3>
+    <div className="h-64 mb-4">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={dashboardData.performanceByCategory}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={({ percentage }) => `${percentage}%`}
+            outerRadius={80}
+            fill="#8884d8"
+            dataKey="value"
+          >
+            {dashboardData.performanceByCategory.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value) => formatCurrency(value)} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+    <div className="space-y-3">
+      {dashboardData.performanceByCategory.map((category, index) => (
+        <div key={index} className={`flex justify-between items-center p-3 rounded-lg ${index === 0 ? 'bg-blue-50 border border-blue-100' : 'bg-green-50 border border-green-100'}`}>
+          <div className="flex items-center">
+            <div className={`w-3 h-3 rounded-full mr-2 ${index === 0 ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+            <span className="text-sm font-medium text-gray-700">{category.category}</span>
+          </div>
+          <span className="font-semibold text-gray-900">{formatCurrency(category.value)}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  {/* Performance Metrics Card */}
+  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <h3 className="text-lg font-semibold text-gray-900 mb-6">Performance Metrics</h3>
+    
+    {/* Visit Completion Section */}
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold text-gray-700 flex items-center">
+          <Activity className="w-4 h-4 mr-2 text-blue-600" />
+          Visit Completion
+        </h4>
+        <span className="text-lg font-bold text-blue-600">
+          {dashboardData.detailedMetrics.visitMetrics.completionRate}%
+        </span>
+      </div>
+      
+      <div className="space-y-2 mb-4">
+        <div className="w-full bg-gray-200 rounded-full h-3">
+          <div
+            className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-1000 ease-out"
+            style={{ width: `${dashboardData.detailedMetrics.visitMetrics.completionRate}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-xs text-gray-600">
+          <span>Completed: <span className="font-semibold text-green-600">{dashboardData.detailedMetrics.visitMetrics.completed}</span></span>
+          <span>Planned: <span className="font-semibold text-gray-700">{dashboardData.detailedMetrics.visitMetrics.planned}</span></span>
+          <span>Missed: <span className="font-semibold text-red-600">{dashboardData.detailedMetrics.visitMetrics.missed}</span></span>
+        </div>
+      </div>
+    </div>
+
+    {/* Conversion Funnel Section */}
+    <div>
+      <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
+        <TrendingUp className="w-4 h-4 mr-2 text-green-600" />
+        Conversion Funnel
+      </h4>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-3">
+              <Users className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Total Leads</span>
+          </div>
+          <span className="text-lg font-bold text-blue-600">{dashboardData.detailedMetrics.conversionMetrics.totalLeads.toLocaleString()}</span>
+        </div>
+
+        <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border border-green-200">
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
+              <CheckCircle className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Converted</span>
+          </div>
+          <span className="text-lg font-bold text-green-600">{dashboardData.detailedMetrics.conversionMetrics.converted.toLocaleString()}</span>
+        </div>
+
+        <div className="flex items-center justify-between p-3 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg border border-yellow-200">
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center mr-3">
+              <Clock className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Pending</span>
+          </div>
+          <span className="text-lg font-bold text-yellow-600">{dashboardData.detailedMetrics.conversionMetrics.pending.toLocaleString()}</span>
+        </div>
+
+        <div className="flex items-center justify-between p-3 bg-gradient-to-r from-red-50 to-red-100 rounded-lg border border-red-200">
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mr-3">
+              <XCircle className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-medium text-gray-700">Lost</span>
+          </div>
+          <span className="text-lg font-bold text-red-600">{dashboardData.detailedMetrics.conversionMetrics.lost.toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{/* Enhanced Quick Stats Section */}
+<div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
+  <h3 className="text-lg font-semibold text-gray-900 mb-6">Key Performance Indicators</h3>
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+      <div>
+        <span className="text-sm text-gray-600 font-medium">Avg Visits per Rep</span>
+        <div className="text-2xl font-bold text-blue-600 mt-1">
+          {dashboardData.overview.activeReps > 0 
+            ? Math.round(dashboardData.overview.totalVisits / dashboardData.overview.activeReps)
+            : 0}
+        </div>
+      </div>
+      <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+        <Users className="w-6 h-6 text-white" />
+      </div>
+    </div>
+
+    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border border-green-200">
+      <div className="flex-1 min-w-0">
+        <span className="text-sm text-gray-600 font-medium">Avg Revenue per Visit</span>
+        <div className="text-xl font-bold text-green-600 mt-1 truncate" title={formatCurrency(dashboardData.overview.totalVisits > 0 ? dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits : 0)}>
+          {formatCurrency(dashboardData.overview.totalVisits > 0 ? dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits : 0)}
+        </div>
+      </div>
+      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+        <DollarSign className="w-6 h-6 text-white" />
+      </div>
+    </div>
+
+    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border border-purple-200">
+      <div>
+        <span className="text-sm text-gray-600 font-medium">Visit to Order Ratio</span>
+        <div className="text-2xl font-bold text-purple-600 mt-1">
+          {dashboardData.overview.conversionRate}%
+        </div>
+      </div>
+      <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
+        <TrendingUp className="w-6 h-6 text-white" />
+      </div>
+    </div>
+
+    <div className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-xl border border-orange-200">
+      <div>
+        <span className="text-sm text-gray-600 font-medium">Conversion Growth</span>
+        <div className={`text-2xl font-bold mt-1 ${dashboardData.overview.conversionRateChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
+          {dashboardData.overview.conversionRateChange > 0 ? '+' : ''}{parseFloat(dashboardData.overview.conversionRateChange).toFixed(1)}%
+        </div>
+      </div>
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${dashboardData.overview.conversionRateChange > 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+        <Activity className="w-6 h-6 text-white" />
+      </div>
+    </div>
+  </div>
+</div>
+
     </div>
   );
 };
