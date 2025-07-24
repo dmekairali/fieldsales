@@ -937,83 +937,68 @@ const SalesPerformanceDashboard = () => {
 };
 
   const groupDataByPeriod = (orders, visits, targets, period, convertedVisits) => {
-    const grouped = {
-      weekly: [],
-      monthly: []
+    const groupedData = {};
+
+    const getGroupKey = (date) => {
+      if (period === 'weekly') {
+        return getWeek(date);
+      }
+      // Default to monthly
+      const d = new Date(date);
+      return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
     };
 
-    // Monthly grouping with standardized names
-    const monthlyData = {};
-    
-    // Debug: Log total revenue from orders
-    const totalOrderRevenue = orders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
-    console.log('Total revenue from all orders:', totalOrderRevenue);
-    
+    const initializeGroup = (key) => {
+      if (!groupedData[key]) {
+        groupedData[key] = {
+          name: key,
+          revenue: 0,
+          visits: 0,
+          orders: 0,
+          nbd: 0,
+          crr: 0,
+          target: 0,
+          converted: 0,
+        };
+      }
+    };
+
     orders.forEach(order => {
-      const month = new Date(order.order_date).toLocaleString('default', { month: 'short' });
-      if (!monthlyData[month]) {
-        monthlyData[month] = {
-          month,
-          revenue: 0,
-          visits: 0,
-          orders: 0,
-          nbd: 0,
-          crr: 0,
-          target: 0,
-          converted: 0
-        };
-      }
-      monthlyData[month].revenue += order.net_amount || 0;
-      monthlyData[month].orders += 1;
+      const groupKey = getGroupKey(order.order_date);
+      initializeGroup(groupKey);
+      groupedData[groupKey].revenue += order.net_amount || 0;
+      groupedData[groupKey].orders += 1;
       if (order.order_type === 'NBD') {
-        monthlyData[month].nbd += order.net_amount || 0;
+        groupedData[groupKey].nbd += order.net_amount || 0;
       } else {
-        monthlyData[month].crr += order.net_amount || 0;
+        groupedData[groupKey].crr += order.net_amount || 0;
       }
     });
 
-    // Add visit counts and conversions
     visits.forEach(visit => {
-      const month = new Date(visit.dcrDate).toLocaleString('default', { month: 'short' });
-      if (!monthlyData[month]) {
-        monthlyData[month] = {
-          month,
-          revenue: 0,
-          visits: 0,
-          orders: 0,
-          nbd: 0,
-          crr: 0,
-          target: 0,
-          converted: 0
-        };
-      }
-      monthlyData[month].visits += 1;
+      const groupKey = getGroupKey(visit.dcrDate);
+      initializeGroup(groupKey);
+      groupedData[groupKey].visits += 1;
       if (convertedVisits.has(visit.visitId)) {
-        monthlyData[month].converted += 1;
+        groupedData[groupKey].converted += 1;
       }
     });
 
-    // Add targets
     targets.forEach(target => {
-      const month = new Date(target.target_date).toLocaleString('default', { month: 'short' });
-      if (monthlyData[month]) {
-        monthlyData[month].target += target.total_revenue_target || 0;
-      }
+      const groupKey = getGroupKey(target.target_date);
+      initializeGroup(groupKey);
+      groupedData[groupKey].target += target.total_revenue_target || 0;
     });
 
-    // Calculate conversion rates
-    Object.values(monthlyData).forEach(data => {
+    Object.values(groupedData).forEach(data => {
       data.conversion = data.visits > 0 ? ((data.converted / data.visits) * 100).toFixed(0) : 0;
     });
 
-    // Debug: Log chart total
-    const chartTotalRevenue = Object.values(monthlyData).reduce((sum, month) => sum + month.revenue, 0);
-    console.log('Total revenue in chart data:', chartTotalRevenue);
-    console.log('Difference:', totalOrderRevenue - chartTotalRevenue);
+    const sortedData = Object.values(groupedData).sort((a, b) => a.name.localeCompare(b.name));
 
-    grouped.monthly = Object.values(monthlyData);
-
-    return grouped;
+    return {
+      [period]: sortedData,
+    };
   };
 
   // Sorting functionality
@@ -1046,6 +1031,24 @@ const SalesPerformanceDashboard = () => {
     }
     
     return performers;
+  };
+
+  const getWeek = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${weekNo}`;
+  };
+
+  const formatXAxis = (tickItem) => {
+    if (tickItem.includes('-W')) {
+      return tickItem;
+    }
+    const [year, month] = tickItem.split('-');
+    const date = new Date(year, month - 1);
+    return date.toLocaleString('default', { month: 'short', year: 'numeric' });
   };
 
   const formatCurrency = (value) => {
@@ -1838,9 +1841,9 @@ const SortIcon = ({ column }) => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Trend</h3>
           <ResponsiveContainer width="100%" height={300} minWidth={0}>
-            <AreaChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
+            <AreaChart data={dashboardData.trends[selectedPeriod]}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
+              <XAxis dataKey="name" tickFormatter={formatXAxis} />
               <YAxis />
               <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
@@ -1853,9 +1856,9 @@ const SortIcon = ({ column }) => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Visits & Conversion Rate</h3>
           <ResponsiveContainer width="100%" height={300} minWidth={0}>
-            <LineChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
+            <LineChart data={dashboardData.trends[selectedPeriod]}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
+              <XAxis dataKey="name" tickFormatter={formatXAxis} />
               <YAxis yAxisId="left" />
               <YAxis yAxisId="right" orientation="right" />
               <Tooltip />
@@ -1869,9 +1872,9 @@ const SortIcon = ({ column }) => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:p-6 min-w-0 overflow-hidden">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 truncate">Revenue Distribution</h3>
           <ResponsiveContainer width="100%" height={300} minWidth={0}>
-            <BarChart data={dashboardData.trends[selectedPeriod] || dashboardData.trends.monthly}>
+            <BarChart data={dashboardData.trends[selectedPeriod]}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={selectedPeriod === 'weekly' ? 'week' : 'month'} />
+              <XAxis dataKey="name" tickFormatter={formatXAxis} />
               <YAxis />
               <Tooltip formatter={(value) => formatCurrency(value)} />
               <Legend />
