@@ -355,7 +355,10 @@ const useDashboardData = () => {
         };
 
         const currentMetrics = calculateMetrics(selectedPeriodOrders, selectedPeriodVisits);
-        const previousMetrics = calculateMetrics(previousOrders, previousVisits);
+        const previousPeriodRange = getPreviousDateRange(selectedPeriodRange);
+        const selectedPreviousPeriodOrders = previousOrders.filter(o => new Date(o.order_date) >= new Date(previousPeriodRange.start) && new Date(o.order_date) <= new Date(previousPeriodRange.end));
+        const selectedPreviousPeriodVisits = previousVisits.filter(v => new Date(v.dcrDate) >= new Date(previousPeriodRange.start) && new Date(v.dcrDate) <= new Date(previousPeriodRange.end));
+        const previousMetrics = calculateMetrics(selectedPreviousPeriodOrders, selectedPreviousPeriodVisits);
 
         const calculateChange = (current, previous) => {
             if (previous === 0) return current > 0 ? 100 : 0;
