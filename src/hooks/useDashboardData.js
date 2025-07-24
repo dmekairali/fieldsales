@@ -295,6 +295,10 @@ const useDashboardData = () => {
         previousOrders, previousVisits,
         mrs, allVisits
     ) => {
+        const selectedPeriodRange = getDateRange();
+        const selectedPeriodOrders = currentOrders.filter(o => new Date(o.order_date) >= new Date(selectedPeriodRange.start) && new Date(o.order_date) <= new Date(selectedPeriodRange.end));
+        const selectedPeriodVisits = currentVisits.filter(v => new Date(v.dcrDate) >= new Date(selectedPeriodRange.start) && new Date(v.dcrDate) <= new Date(selectedPeriodRange.end));
+        const selectedPeriodTargets = currentTargets.filter(t => new Date(t.target_date) >= new Date(selectedPeriodRange.start) && new Date(t.target_date) <= new Date(selectedPeriodRange.end));
         const calculateMetrics = (orders, visits) => {
             const visitMap = new Map();
             visits.forEach(visit => {
@@ -350,7 +354,7 @@ const useDashboardData = () => {
             };
         };
 
-        const currentMetrics = calculateMetrics(currentOrders, currentVisits);
+        const currentMetrics = calculateMetrics(selectedPeriodOrders, selectedPeriodVisits);
         const previousMetrics = calculateMetrics(previousOrders, previousVisits);
 
         const calculateChange = (current, previous) => {
