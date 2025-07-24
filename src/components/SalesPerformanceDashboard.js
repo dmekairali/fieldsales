@@ -403,7 +403,8 @@ const SalesPerformanceDashboard = () => {
           .gte('order_date', start)
           .lte('order_date', end)
           .in('customer_type', ['Doctor', 'Retailer'])
-          .eq('status', 'Order Confirmed');
+          .eq('status', 'Order Confirmed')
+          .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
 
         let visitQuery = supabase
           .from('mr_visits')
@@ -687,7 +688,7 @@ const SalesPerformanceDashboard = () => {
   const confirmedValue = confirmedOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
   // Group data by time period for trends
-  const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet);
+  const trends = groupDataByPeriod(currentOrders, currentVisits, currentTargets, selectedPeriod, currentMetrics.convertedVisitsSet, currentMetrics.totalRevenue);
 
   // Calculate detailed performer metrics
   const performerMap = {};
@@ -923,7 +924,7 @@ const SalesPerformanceDashboard = () => {
   };
 };
 
-  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits) => {
+  const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, totalRevenue) => {
     const groupedData = {};
 
     const getGroupKey = (date) => {
@@ -953,7 +954,7 @@ const SalesPerformanceDashboard = () => {
     orders.forEach(order => {
       const groupKey = getGroupKey(order.order_date);
       initializeGroup(groupKey);
-      groupedData[groupKey].revenue += order.net_amount || 0;
+      groupedData[groupKey].revenue = totalRevenue;
       groupedData[groupKey].orders += 1;
       if (order.order_type === 'NBD') {
         groupedData[groupKey].nbd += order.net_amount || 0;
