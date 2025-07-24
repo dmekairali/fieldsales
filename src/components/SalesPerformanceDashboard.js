@@ -284,73 +284,139 @@ class DataCacheService {
   }
 
   filterDataByFilters(data, filters) {
-    const { selectedMR, selectedTeam, selectedRegion, selectedState, medicalReps, teams } = filters;
+  const { selectedMR, selectedTeam, selectedRegion, selectedState, medicalReps, teams } = filters;
+  
+  console.log('🔍 Applying filters:', {
+    selectedMR,
+    selectedTeam,
+    selectedRegion,
+    selectedState,
+    availableMRs: medicalReps.length,
+    availableTeams: teams.length
+  });
+  
+  let filteredData = { 
+    orders: [...data.orders],
+    visits: [...data.visits], 
+    targets: [...data.targets],
+    allVisits: [...data.allVisits]
+  };
+
+  // Apply MR filter first
+  if (selectedMR !== 'all') {
+    console.log('🔍 Filtering by MR:', selectedMR);
+    filteredData.orders = filteredData.orders.filter(order => 
+      order.mr_name_standardized === selectedMR
+    );
+    filteredData.visits = filteredData.visits.filter(visit => 
+      visit.empName_standardized === selectedMR
+    );
+    filteredData.targets = filteredData.targets.filter(target => 
+      target.mr_name_standardized === selectedMR
+    );
     
-    let filteredData = { ...data };
-
-    if (selectedMR !== 'all') {
-      filteredData.orders = filteredData.orders.filter(order => 
-        order.mr_name_standardized === selectedMR
-      );
-      filteredData.visits = filteredData.visits.filter(visit => 
-        visit.empName_standardized === selectedMR
-      );
-      filteredData.targets = filteredData.targets.filter(target => 
-        target.mr_name_standardized === selectedMR
-      );
-    } else {
-      let includedPersons = [];
-
-      if (selectedTeam !== 'all') {
-        const selectedTeamData = teams.find(team => standardizeName(team.name) === selectedTeam);
-        if (selectedTeam === 'independent') {
-          includedPersons = medicalReps.filter(rep => 
-            rep.role_level === 'MR' && 
-            !rep.area_sales_manager_name && 
-            !rep.regional_sales_manager_name
-          );
-        } else if (selectedTeamData) {
-          includedPersons = medicalReps.filter(rep => {
-            const asmMatch = selectedTeamData.area_sales_manager_name && 
-              standardizeName(rep.area_sales_manager_name || '') === standardizeName(selectedTeamData.area_sales_manager_name);
-            const rsmMatch = selectedTeamData.regional_sales_manager_name && 
-              standardizeName(rep.regional_sales_manager_name || '') === standardizeName(selectedTeamData.regional_sales_manager_name);
-            return asmMatch || rsmMatch;
-          });
-        }
-      } else {
-        includedPersons = [...medicalReps];
-      }
-
-      if (selectedRegion !== 'all') {
-        includedPersons = includedPersons.filter(rep => rep.region === selectedRegion);
-      }
-
-      if (selectedState !== 'all') {
-        includedPersons = includedPersons.filter(rep => rep.state === selectedState);
-      }
-
-      if (includedPersons.length > 0) {
-        const personNames = includedPersons.map(person => person.name);
-        
-        filteredData.orders = filteredData.orders.filter(order => 
-          personNames.includes(order.mr_name_standardized)
-        );
-        filteredData.visits = filteredData.visits.filter(visit => 
-          personNames.includes(visit.empName_standardized)
-        );
-        filteredData.targets = filteredData.targets.filter(target => 
-          personNames.includes(target.mr_name_standardized)
-        );
-      }
-    }
-
-    if (selectedState !== 'all') {
-      filteredData.orders = filteredData.orders.filter(order => order.state === selectedState);
-    }
-
+    console.log('🔍 After MR filter:', {
+      orders: filteredData.orders.length,
+      visits: filteredData.visits.length
+    });
+    
     return filteredData;
   }
+
+  // If not filtering by specific MR, apply other filters
+  let includedPersons = [];
+
+  // Apply team filter
+  if (selectedTeam !== 'all') {
+    console.log('🔍 Filtering by team:', selectedTeam);
+    
+    if (selectedTeam === 'independent') {
+      includedPersons = medicalReps.filter(rep => 
+        rep.role_level === 'MR' && 
+        !rep.area_sales_manager_name && 
+        !rep.regional_sales_manager_name
+      );
+    } else {
+      const selectedTeamData = teams.find(team => standardizeName(team.name) === selectedTeam);
+      if (selectedTeamData) {
+        console.log('🔍 Found team data:', selectedTeamData);
+        
+        if (selectedTeamData.role_level === 'RSM') {
+          // Find all MRs under this RSM (directly or through ASMs)
+          const rsmName = standardizeName(selectedTeamData.name);
+          const asmUnderRSM = medicalReps.filter(rep => 
+            rep.role_level === 'ASM' && standardizeName(rep.regional_sales_manager_name || '') === rsmName
+          );
+          const asmNames = asmUnderRSM.map(asm => standardizeName(asm.name));
+          
+          includedPersons = medicalReps.filter(rep => 
+            rep.role_level === 'MR' && (
+              standardizeName(rep.regional_sales_manager_name || '') === rsmName ||
+              asmNames.includes(standardizeName(rep.area_sales_manager_name || ''))
+            )
+          );
+        } else if (selectedTeamData.role_level === 'ASM') {
+          // Find all MRs under this ASM
+          const asmName = standardizeName(selectedTeamData.name);
+          includedPersons = medicalReps.filter(rep => 
+            rep.role_level === 'MR' && standardizeName(rep.area_sales_manager_name || '') === asmName
+          );
+        }
+      }
+    }
+  } else {
+    // Include all MRs
+    includedPersons = medicalReps.filter(rep => rep.role_level === 'MR');
+  }
+
+  // Apply region filter
+  if (selectedRegion !== 'all') {
+    console.log('🔍 Filtering by region:', selectedRegion);
+    includedPersons = includedPersons.filter(rep => rep.region === selectedRegion);
+  }
+
+  // Apply state filter
+  if (selectedState !== 'all') {
+    console.log('🔍 Filtering by state:', selectedState);
+    includedPersons = includedPersons.filter(rep => rep.state === selectedState);
+  }
+
+  console.log('🔍 Final included persons:', includedPersons.length);
+
+  if (includedPersons.length > 0) {
+    const personNames = includedPersons.map(person => person.name);
+    console.log('🔍 Person names to filter by:', personNames);
+    
+    filteredData.orders = filteredData.orders.filter(order => 
+      personNames.includes(order.mr_name_standardized)
+    );
+    filteredData.visits = filteredData.visits.filter(visit => 
+      personNames.includes(visit.empName_standardized)
+    );
+    filteredData.targets = filteredData.targets.filter(target => 
+      personNames.includes(target.mr_name_standardized)
+    );
+  } else {
+    // If no persons match the filters, return empty data
+    console.log('🔍 No persons match filters, returning empty data');
+    filteredData.orders = [];
+    filteredData.visits = [];
+    filteredData.targets = [];
+  }
+
+  // Apply state filter to orders (additional filter for order state)
+  if (selectedState !== 'all') {
+    filteredData.orders = filteredData.orders.filter(order => order.state === selectedState);
+  }
+
+  console.log('🔍 Final filtered data:', {
+    orders: filteredData.orders.length,
+    visits: filteredData.visits.length,
+    targets: filteredData.targets.length
+  });
+
+  return filteredData;
+}
 
   clearCache() {
     localStorage.removeItem(CACHE_KEY);
@@ -621,14 +687,18 @@ const SalesPerformanceDashboard = () => {
   }, []);
 
   // Fetch dashboard data when filters change
-  useEffect(() => {
-    if (medicalReps.length > 0) {
-      // Refetch unknown MRs when period changes (they might be different)
-      getUnknownMRsFromSalesData().then(setUnknownMRs);
-      fetchDashboardData();
-    }
-  }, [selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
-      selectedRegion, selectedTeam, selectedState, selectedMR, dateRange, medicalReps]);
+ // Make sure this useEffect includes ALL filter dependencies
+useEffect(() => {
+  if (medicalReps.length > 0) {
+    // Refetch unknown MRs when period changes (they might be different)
+    getUnknownMRsFromSalesData().then(setUnknownMRs);
+    fetchDashboardData();
+  }
+}, [
+  selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
+  selectedRegion, selectedTeam, selectedState, selectedMR, dateRange, 
+  medicalReps // Make sure all filter dependencies are here
+]);
 
   // Reset MR selection when other filters change
   useEffect(() => {
@@ -717,10 +787,20 @@ const SalesPerformanceDashboard = () => {
     }
   };
 
-  const fetchDashboardData = async () => {
+ const fetchDashboardData = async () => {
   setLoading(true);
   try {
     console.log('🔄 Fetching dashboard data with caching...');
+    
+    // ADD THIS DEBUG LOG TO CHECK FILTER VALUES
+    console.log('Current filter values:', {
+      selectedMR,
+      selectedTeam,
+      selectedRegion,
+      selectedState,
+      medicalReps: medicalReps.length,
+      teams: teams.length
+    });
     
     // Load historical data (cached for 1 hour)
     const historicalData = await dataCacheService.loadHistoricalData();
@@ -745,7 +825,7 @@ const SalesPerformanceDashboard = () => {
       previousRange.end
     );
     
-    // Apply filters (MR, team, region, state)
+    // Apply filters (MR, team, region, state) - MAKE SURE ALL VARIABLES ARE ACCESSIBLE
     const filteredCurrentData = dataCacheService.filterDataByFilters(currentData, {
       selectedMR,
       selectedTeam,
@@ -772,7 +852,7 @@ const SalesPerformanceDashboard = () => {
       totalHistoricalOrders: historicalData.orders.length
     });
     
-    // Process data with enhanced function - PASS historicalData as the last parameter
+    // Process data with enhanced function
     const processedData = processDataWithConversions(
       filteredCurrentData.orders,
       filteredCurrentData.visits,
@@ -781,7 +861,7 @@ const SalesPerformanceDashboard = () => {
       filteredPreviousData.visits,
       medicalReps,
       historicalData.allVisits,
-      historicalData // ← Make sure this is passed correctly
+      historicalData
     );
     
     setDashboardData(processedData);
@@ -2522,129 +2602,7 @@ const SortIcon = ({ column }) => {
         <OrderFulfillmentChart data={dashboardData.detailedMetrics.fulfillmentMetrics} />
       </div>
 
-      {/* Enhanced Top Performers Table */}
-      <div className="mb-8">
-        <EnhancedPerformanceTable data={dashboardData.allPerformers} />
-      </div>
-
-      {/* Additional Insights */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Achievement</h3>
-          <div className="relative pt-4">
-            <div className="flex items-center justify-center">
-              <div className="relative">
-                <svg className="w-40 h-40">
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="70"
-                    fill="none"
-                    stroke="#e5e7eb"
-                    strokeWidth="12"
-                  />
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="70"
-                    fill="none"
-                    stroke="#3b82f6"
-                    strokeWidth="12"
-                    strokeDasharray={`${2 * Math.PI * 70 * (dashboardData.overview.targetAchievement / 100)} ${2 * Math.PI * 70}`}
-                    strokeDashoffset="0"
-                    transform="rotate(-90 80 80)"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-gray-900">{dashboardData.overview.targetAchievement}%</div>
-                    <div className="text-sm text-gray-600">of target</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Target</span>
-                <span className="font-medium">{formatCurrency(dashboardData.detailedMetrics.revenueMetrics.target)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Achieved</span>
-                <span className="font-medium text-green-600">{formatCurrency(dashboardData.detailedMetrics.revenueMetrics.achieved)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Gap</span>
-                <span className="font-medium text-red-600">{formatCurrency(Math.abs(dashboardData.detailedMetrics.revenueMetrics.gap))}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue by Business Type</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={dashboardData.performanceByCategory}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ percentage }) => `${percentage}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {dashboardData.performanceByCategory.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="mt-4 space-y-2">
-            <div className="text-sm text-gray-600">
-              {dashboardData.performanceByCategory.map((category, index) => (
-                <div key={index} className={`flex justify-between items-center p-2 ${index === 0 ? 'bg-blue-50' : 'bg-green-50'} rounded`}>
-                  <span>{category.category}</span>
-                  <span className="font-medium">{formatCurrency(category.value)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600 truncate pr-2">Avg Visits per Rep</span>
-              <span className="text-sm font-medium text-right flex-shrink-0">
-                {dashboardData.overview.activeReps > 0 
-                  ? Math.round(dashboardData.overview.totalVisits / dashboardData.overview.activeReps)
-                  : 0}
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600 truncate pr-2">Avg Revenue per Visit</span>
-              <span className="text-sm font-medium text-right flex-shrink-0" title={formatCurrency(dashboardData.overview.totalVisits > 0 ? dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits : 0)}>
-                {formatCurrency(dashboardData.overview.totalVisits > 0 ? dashboardData.overview.totalRevenue / dashboardData.overview.totalVisits : 0)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600 truncate pr-2">Visit to Order Ratio</span>
-              <span className="text-sm font-medium text-right flex-shrink-0">{dashboardData.overview.conversionRate}%</span>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-600 truncate pr-2">Conversion Growth</span>
-              <span className={`text-sm font-medium ${dashboardData.overview.conversionRateChange > 0 ? 'text-green-600' : 'text-red-600'} text-right flex-shrink-0`}>
-                {dashboardData.overview.conversionRateChange > 0 ? '+' : ''}{parseFloat(dashboardData.overview.conversionRateChange).toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      
       {/* Enhanced Performance Metrics Detail Section */}
 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
   {/* Revenue Achievement Card */}
