@@ -2318,14 +2318,14 @@ const SortIcon = ({ column }) => {
         <KPICard
           title="Bills Pending"
           value={dashboardData.overview.billsPending}
-          change={dashboardData.overview.billsPendingChange}
+          change={0}
           icon={AlertCircle}
           color="bg-yellow-500"
         />
         <KPICard
           title="Payment Pending"
           value={dashboardData.overview.paymentPending}
-          change={dashboardData.overview.paymentPendingChange}
+          change={0}
           icon={XCircle}
           color="bg-red-500"
         />
