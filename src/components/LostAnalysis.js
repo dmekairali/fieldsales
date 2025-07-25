@@ -612,11 +612,12 @@ const LostAnalysis = () => {
   ];
 
   return (
-    <div className="lost-analysis-dashboard">
+     <div className="lost-analysis-dashboard" style={{ marginTop: 24 }}>
       <div style={{ marginBottom: 24 }}>
         <Title level={2}>Customer Retention Dashboard</Title>
         <Text type="secondary">Monitor at-risk and lost customers with actionable insights</Text>
       </div>
+      
       
       <Divider />
       
