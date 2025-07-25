@@ -121,14 +121,33 @@ class DataCacheService {
   }
 
   async loadHistoricalData(currentYear = new Date().getFullYear()) {
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+ 
+      // 🔧 CHECK: Is cache valid for today's date?
   if (this.cache && this.cache.data) {
-    return this.cache.data;
+    const cacheDate = this.cache.data.dateRange?.end;
+    const cacheAge = Date.now() - this.cache.timestamp;
+    const oneHour = 60 * 60 * 1000;
+    
+    console.log(`📋 Cache info: cacheDate=${cacheDate}, today=${today}, age=${Math.round(cacheAge/1000/60)}min`);
+    
+    // 🔧 CRITICAL FIX: Cache is valid ONLY if it includes today's date AND is recent
+    if (cacheDate >= today && cacheAge < oneHour) {
+      console.log(`✅ Using cached data (valid for today: ${today})`);
+      return this.cache.data;
+    } else {
+      console.log(`❌ Cache outdated - cacheDate: ${cacheDate}, today: ${today}, age: ${Math.round(cacheAge/1000/60)}min`);
+      // Clear outdated cache
+      this.cache = null;
+      localStorage.removeItem(CACHE_KEY);
+    }
   }
 
-  console.log('📊 Loading historical data from April to current month...');
+  console.log('📊 Loading fresh historical data including today...');
   
-  const startDate = `${currentYear}-04-01`;
-  const endDate = new Date().toISOString().split('T')[0];
+   const startDate = `${currentYear}-04-01`;
+  const endDate = today; // Always use today's date
+  
 
   try {
     // Helper function to fetch all data with pagination
@@ -241,18 +260,19 @@ class DataCacheService {
         ...visit,
         empName_standardized: standardizeName(visit.empName)
       })),
-      dateRange: { start: startDate, end: endDate }
+      dateRange: { start: startDate, end: endDate } // ✅ Store actual date range used
     };
-
     // Save to cache
     this.saveToStorage(data);
 
-    console.log('📈 Historical data loaded successfully:', {
+ console.log('📈 Fresh historical data loaded successfully:', {
       orders: data.orders.length,
       visits: data.visits.length,
       targets: data.targets.length,
-      totalRevenue: data.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
+      totalRevenue: data.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
+      dateRange: `${startDate} to ${endDate}`
     });
+
 
     return data;
   } catch (error) {
@@ -262,38 +282,34 @@ class DataCacheService {
 }
 
 
-  filterDataByDateRange(data, startDate, endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+  // 🔧 FIXED: filterDataByDateRange function with consistent date parsing
+filterDataByDateRange(data, startDate, endDate) {
+  // 🔧 CRITICAL FIX: Parse start/end dates at noon to match chart boundaries
+  const start = new Date(startDate + 'T12:00:00');
+  const end = new Date(endDate + 'T12:00:00');
 
-    return {
-      orders: data.orders.filter(order => {
-        const orderDate = new Date(order.order_date);
-        return orderDate >= start && orderDate <= end;
-      }),
-      visits: data.visits.filter(visit => {
-        const visitDate = new Date(visit.dcrDate);
-        return visitDate >= start && visitDate <= end;
-      }),
-      targets: data.targets.filter(target => {
-        const targetDate = new Date(target.target_date);
-        return targetDate >= start && targetDate <= end;
-      }),
-      allVisits: data.allVisits
-    };
-  }
+  return {
+    orders: data.orders.filter(order => {
+      // 🔧 CRITICAL FIX: Parse order date at noon to match chart logic
+      const orderDate = new Date(order.order_date + 'T12:00:00');
+      return orderDate >= start && orderDate <= end;
+    }),
+    visits: data.visits.filter(visit => {
+      // 🔧 CRITICAL FIX: Parse visit date at noon to match chart logic
+      const visitDate = new Date(visit.dcrDate + 'T12:00:00');
+      return visitDate >= start && visitDate <= end;
+    }),
+    targets: data.targets.filter(target => {
+      // 🔧 CRITICAL FIX: Parse target date at noon to match chart logic
+      const targetDate = new Date(target.target_date + 'T12:00:00');
+      return targetDate >= start && targetDate <= end;
+    }),
+    allVisits: data.allVisits
+  };
+}
 
   filterDataByFilters(data, filters) {
   const { selectedMR, selectedTeam, selectedRegion, selectedState, medicalReps, teams } = filters;
-  
-  console.log('🔍 Applying filters:', {
-    selectedMR,
-    selectedTeam,
-    selectedRegion,
-    selectedState,
-    availableMRs: medicalReps.length,
-    availableTeams: teams.length
-  });
   
   let filteredData = { 
     orders: [...data.orders],
@@ -315,10 +331,6 @@ class DataCacheService {
       target.mr_name_standardized === selectedMR
     );
     
-    console.log('🔍 After MR filter:', {
-      orders: filteredData.orders.length,
-      visits: filteredData.visits.length
-    });
     
     return filteredData;
   }
@@ -403,7 +415,7 @@ class DataCacheService {
     );
   } else {
     // If no persons match the filters, return empty data
-    console.log('🔍 No persons match filters, returning empty data');
+   
     filteredData.orders = [];
     filteredData.visits = [];
     filteredData.targets = [];
@@ -414,11 +426,6 @@ class DataCacheService {
     filteredData.orders = filteredData.orders.filter(order => order.state === selectedState);
   }
 
-  console.log('🔍 Final filtered data:', {
-    orders: filteredData.orders.length,
-    visits: filteredData.visits.length,
-    targets: filteredData.targets.length
-  });
 
   return filteredData;
 }
@@ -479,7 +486,7 @@ const SalesPerformanceDashboard = () => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedState, setSelectedState] = useState('all');
   const [selectedMR, setSelectedMR] = useState('all');
-  const [dateRange, setDateRange] = useState({ start: '2024-01-01', end: '2024-12-31' });
+  const [dateRange, setDateRange] = useState({ start: '2025-01-01', end: '2025-12-31' });
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [teams, setTeams] = useState([]);
@@ -493,52 +500,73 @@ const SalesPerformanceDashboard = () => {
   const [visiblePerformers, setVisiblePerformers] = useState(10);
 
   // Helper function to get date range based on selected period
-  const getDateRange = () => {
-    if (selectedPeriod === 'custom') {
-      return { start: dateRange.start, end: dateRange.end };
-    }
+  // 🔧 FIXED: getDateRange function with correct monthly end date calculation
+const getDateRange = () => {
+  if (selectedPeriod === 'custom') {
+    return { start: dateRange.start, end: dateRange.end };
+  }
 
-    const now = new Date();
-    let start, end;
+  const now = new Date();
+  let start, end;
 
-    switch (selectedPeriod) {
-      case 'weekly':
-        const [year, week] = selectedWeek.split('-W');
-        const firstDayOfYear = new Date(parseInt(year), 0, 1);
-        const daysToAdd = (parseInt(week) - 1) * 7;
-        start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-        // Adjust to Monday
-        const dayOfWeek = start.getDay();
-        const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        start.setDate(start.getDate() + daysToMonday);
-        end = new Date(start);
-        end.setDate(start.getDate() + 6);
-        break;
+  switch (selectedPeriod) {
+    case 'weekly':
+      const [year, week] = selectedWeek.split('-W');
+      const firstDayOfYear = new Date(parseInt(year), 0, 1);
+      const daysToAdd = (parseInt(week) - 1) * 7;
+      start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+      // Adjust to Monday
+      const dayOfWeek = start.getDay();
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      start.setDate(start.getDate() + daysToMonday);
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      break;
 
-      case 'monthly':
-        const [monthYear, monthNum] = selectedMonth.split('-');
-        start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
-        end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
-        break;
+    case 'monthly':
+      const [monthYear, monthNum] = selectedMonth.split('-');
+      start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+      // 🔧 CRITICAL FIX: Calculate last day of the month correctly
+      end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
+      
+      console.log('🔧 Monthly date calculation DEBUG:', {
+        selectedMonth,
+        monthYear: parseInt(monthYear),
+        monthNum: parseInt(monthNum),
+        startCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum) - 1}, 1)`,
+        endCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum)}, 0)`,
+        actualStart: start.toISOString(),
+        actualEnd: end.toISOString(),
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+      });
+      break;
 
-      case 'quarterly':
-        const [qYear, quarter] = selectedQuarter.split('-Q');
-        const qNum = parseInt(quarter);
-        start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
-        end = new Date(parseInt(qYear), qNum * 3, 0);
-        break;
+    case 'quarterly':
+      const [qYear, quarter] = selectedQuarter.split('-Q');
+      const qNum = parseInt(quarter);
+      start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
+      end = new Date(parseInt(qYear), qNum * 3, 0);
+      break;
 
-      case 'yearly':
-        start = new Date(parseInt(selectedYear), 0, 1);
-        end = new Date(parseInt(selectedYear), 11, 31);
-        break;
-    }
+    case 'yearly':
+      start = new Date(parseInt(selectedYear), 0, 1);
+      end = new Date(parseInt(selectedYear), 11, 31);
+      break;
+  }
 
-    return {
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0]
-    };
+  const result = {
+    start: start.getFullYear() + '-' + 
+           String(start.getMonth() + 1).padStart(2, '0') + '-' + 
+           String(start.getDate()).padStart(2, '0'),
+    end: end.getFullYear() + '-' + 
+         String(end.getMonth() + 1).padStart(2, '0') + '-' + 
+         String(end.getDate()).padStart(2, '0')
   };
+  
+  console.log('📅 getDateRange result (using local dates):', result);
+  return result;
+};
 
   // Get previous period date range for comparison
   const getPreviousDateRange = (currentRange) => {
@@ -792,51 +820,27 @@ useEffect(() => {
     }
   };
 
- const fetchDashboardData = async () => {
+ // 🔍 COMPLETE fetchDashboardData with comprehensive debugging
+const fetchDashboardData = async () => {
   setLoading(true);
   try {
-    console.log('🔄 Fetching dashboard data with caching...');
-    
-    // ADD THIS DEBUG LOG TO CHECK FILTER VALUES
-    console.log('🔍 Current filter values:', {
-      selectedMR,
-      selectedTeam,
-      selectedRegion,
-      selectedState,
-      selectedPeriod,
-      selectedMonth,
-      medicalReps: medicalReps.length,
-      teams: teams.length
-    });
+   
     
     // Load historical data (cached for 1 hour)
     const historicalData = await dataCacheService.loadHistoricalData();
     
-    console.log('📊 Raw historical data loaded:', {
-      totalOrders: historicalData.orders.length,
-      totalVisits: historicalData.visits.length,
-      totalRevenue: historicalData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
-    });
-    
     // Get current and previous date ranges
     const currentRange = getDateRange();
     const previousRange = getPreviousDateRange(currentRange);
+   
     
-    console.log('📅 Date ranges:', { current: currentRange, previous: previousRange });
-    
-    // Filter data for current period
+    // Filter data for current period (KPI cards use this)
     const currentData = dataCacheService.filterDataByDateRange(
       historicalData, 
       currentRange.start, 
       currentRange.end
     );
     
-    console.log('📅 After date filtering (July 2025):', {
-      currentOrders: currentData.orders.length,
-      currentVisits: currentData.visits.length,
-      currentRevenue: currentData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
-      sampleOrder: currentData.orders[0]
-    });
     
     // Filter data for previous period
     const previousData = dataCacheService.filterDataByDateRange(
@@ -845,13 +849,7 @@ useEffect(() => {
       previousRange.end
     );
     
-    console.log('📅 Previous period data (June 2025):', {
-      previousOrders: previousData.orders.length,
-      previousVisits: previousData.visits.length,
-      previousRevenue: previousData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
-    });
-    
-    // Apply filters (MR, team, region, state)
+    // Apply filters (MR, team, region, state) to current data
     const filteredCurrentData = dataCacheService.filterDataByFilters(currentData, {
       selectedMR,
       selectedTeam,
@@ -861,14 +859,8 @@ useEffect(() => {
       teams
     });
     
-    console.log('🔍 After filter application:', {
-      filteredOrders: filteredCurrentData.orders.length,
-      filteredVisits: filteredCurrentData.visits.length,
-      filteredRevenue: filteredCurrentData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
-      uniqueMRsInOrders: [...new Set(filteredCurrentData.orders.map(o => o.mr_name_standardized))],
-      uniqueMRsInVisits: [...new Set(filteredCurrentData.visits.map(v => v.empName_standardized))]
-    });
     
+    // Apply filters to previous data
     const filteredPreviousData = dataCacheService.filterDataByFilters(previousData, {
       selectedMR,
       selectedTeam,
@@ -877,16 +869,7 @@ useEffect(() => {
       medicalReps,
       teams
     });
-    
-    console.log('📊 Final data summary before processing:', {
-      currentOrders: filteredCurrentData.orders.length,
-      currentVisits: filteredCurrentData.visits.length,
-      previousOrders: filteredPreviousData.orders.length,
-      previousVisits: filteredPreviousData.visits.length,
-      totalHistoricalOrders: historicalData.orders.length,
-      currentRevenue: filteredCurrentData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
-    });
-    
+
     // Process data with enhanced function
     const processedData = processDataWithConversions(
       filteredCurrentData.orders,
@@ -902,7 +885,7 @@ useEffect(() => {
     console.log('✅ Final processed data:', {
       overviewRevenue: processedData.overview.totalRevenue,
       trendsData: processedData.trends,
-      trendsJulyRevenue: processedData.trends.find(t => t.key === 'Jul')?.revenue || 'Not found'
+      trendsJulyRevenue: processedData.trends?.find(t => t.key === 'Jul')?.revenue || 'Not found'
     });
     
     setDashboardData(processedData);
@@ -1007,7 +990,7 @@ useEffect(() => {
   // Handle single MR selection for active count
   if (selectedMR !== 'all') {
     activeReps = activeMRNames.includes(selectedMR) ? 1 : 0;
-    console.log(`${selectedMR} is ${activeReps > 0 ? 'active' : 'inactive'} in this period`);
+    
   }
   
   // Calculate target achievement
@@ -1146,12 +1129,10 @@ useEffect(() => {
           billsPending: 0,
           paymentPending: 0
         };
-        console.log('Added MR from data:', mrName, 'with role:', performerMap[mrName].roleLevel);
       }
     });
   }
 
-  console.log('Total performers initialized:', Object.keys(performerMap).length);
 
   // Group orders by MR
   currentOrders.forEach(order => {
@@ -1288,41 +1269,22 @@ useEffect(() => {
   };
 };
 
- const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear, historicalData) => {
-  console.log('🔧 Generating trends for period:', period);
+// Fixed groupDataByPeriod function - ensures data consistency between KPI cards and charts
+const groupDataByPeriod = (orders, visits, targets, period, convertedVisits, selectedMonth, selectedWeek, selectedQuarter, selectedYear, historicalData) => {
+ 
   
-   
-    
-    const filteredHistoricalData = dataCacheService.filterDataByFilters(historicalData, {
-      selectedMR,
-      selectedTeam,
-      selectedRegion,
-      selectedState,
-      medicalReps,
-      teams
-    });
-  // Use the same filtering logic as KPI cards - filter historical data first by current filters
-  
-
-  // 🔍 DEBUG 3: Check July 2025 specific data in filtered historical data
-  const july2025Orders = filteredHistoricalData.orders.filter(order => {
-    const orderDate = new Date(order.order_date);
-    return orderDate >= new Date('2025-07-01') && orderDate <= new Date('2025-07-31');
+  // 🔄 CRITICAL FIX: For trends, we need ALL historical data filtered by user filters ONLY
+  // Don't apply date range filter here - let each period function handle its own date ranges
+  const filteredHistoricalData = dataCacheService.filterDataByFilters(historicalData, {
+    selectedMR,
+    selectedTeam,
+    selectedRegion,
+    selectedState,
+    medicalReps,
+    teams
   });
   
-  const july2025Visits = filteredHistoricalData.visits.filter(visit => {
-    const visitDate = new Date(visit.dcrDate);
-    return visitDate >= new Date('2025-07-01') && visitDate <= new Date('2025-07-31');
-  });
-
-  console.log('🔍 DEBUG - July 2025 data in filteredHistoricalData:', {
-    july2025Orders: july2025Orders.length,
-    july2025Revenue: july2025Orders.reduce((sum, order) => sum + (order.net_amount || 0), 0),
-    july2025Visits: july2025Visits.length,
-    july2025OrderSample: july2025Orders[0],
-    july2025VisitSample: july2025Visits[0]
-  });
-
+  
 
   switch (period) {
     case 'monthly':
@@ -1338,37 +1300,40 @@ useEffect(() => {
   }
 };
 
-// Updated helper functions to use direct filtered data (same as KPI cards)
+// Updated generateMonthlyHistoricalData with comprehensive debugging
 const generateMonthlyHistoricalData = (selectedMonth, filteredHistoricalData) => {
   const [year, month] = selectedMonth.split('-');
   const selectedMonthNum = parseInt(month);
   const data = [];
   
-  console.log('📈 Generating monthly trends for:', selectedMonth);
-  console.log('📈 Using filtered data:', {
-    totalOrders: filteredHistoricalData.orders.length,
-    totalRevenue: filteredHistoricalData.orders.reduce((sum, order) => sum + (order.net_amount || 0), 0)
-  });
+  
   
   // Start from April (month 4) to selected month
   for (let i = 4; i <= selectedMonthNum; i++) {
-    const monthStart = new Date(parseInt(year), i - 1, 1);
-    const monthEnd = new Date(parseInt(year), i, 0);
+    // 🔧 TIMEZONE FIX: Create dates at noon to avoid UTC conversion issues
+    const monthStart = new Date(parseInt(year), i - 1, 1, 12, 0, 0);  // First day of month at noon
+    const monthEnd = new Date(parseInt(year), i, 0, 12, 0, 0);        // Last day of month at noon
     const monthName = monthStart.toLocaleDateString('en-US', { month: 'short' });
     
     // Filter by date range only (same logic as KPI cards)
     const monthOrders = filteredHistoricalData.orders.filter(order => {
-      const orderDate = new Date(order.order_date);
-      return orderDate >= monthStart && orderDate <= monthEnd;
+      // 🔧 CRITICAL FIX: Parse order date correctly for comparison
+      const orderDate = new Date(order.order_date + 'T12:00:00'); // Add noon time to match boundaries
+      const inRange = orderDate >= monthStart && orderDate <= monthEnd;
+      
+      
+      return inRange;
     });
     
     const monthVisits = filteredHistoricalData.visits.filter(visit => {
-      const visitDate = new Date(visit.dcrDate);
+      // 🔧 CRITICAL FIX: Parse visit date correctly for comparison
+      const visitDate = new Date(visit.dcrDate + 'T12:00:00'); // Add noon time to match boundaries
       return visitDate >= monthStart && visitDate <= monthEnd;
     });
     
     const monthTargets = filteredHistoricalData.targets.filter(target => {
-      const targetDate = new Date(target.target_date);
+      // 🔧 CRITICAL FIX: Parse target date correctly for comparison
+      const targetDate = new Date(target.target_date + 'T12:00:00'); // Add noon time to match boundaries
       return targetDate >= monthStart && targetDate <= monthEnd;
     });
     
@@ -1394,12 +1359,6 @@ const generateMonthlyHistoricalData = (selectedMonth, filteredHistoricalData) =>
     const nbdRevenue = monthOrders.filter(order => order.order_type === 'NBD').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const crrRevenue = monthOrders.filter(order => order.order_type === 'CRR').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     
-    console.log(`📈 ${monthName} ${year}:`, {
-      orders: monthOrders.length,
-      revenue: revenue,
-      visits: visitCount,
-      dateRange: `${monthStart.toISOString().split('T')[0]} to ${monthEnd.toISOString().split('T')[0]}`
-    });
     
     data.push({
       key: monthName,
@@ -1407,7 +1366,8 @@ const generateMonthlyHistoricalData = (selectedMonth, filteredHistoricalData) =>
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
+      conversion: visitCount > 0 ? 
+        Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
@@ -1489,6 +1449,20 @@ const generateWeeklyHistoricalData = (selectedWeek, filteredHistoricalData) => {
   return data;
 };
 
+
+// Helper function to get week start date
+const getWeekStartDate = (year, weekNumber) => {
+  const firstDayOfYear = new Date(year, 0, 1);
+  const daysToAdd = (weekNumber - 1) * 7;
+  const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+  const dayOfWeek = weekDate.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  weekDate.setDate(weekDate.getDate() + daysToMonday);
+  return weekDate;
+};
+
+
+// 🔧 FIXED: Corrected quarterly data generation
 const generateQuarterlyHistoricalData = (selectedQuarter, filteredHistoricalData) => {
   const [year, quarterStr] = selectedQuarter.split('-Q');
   const quarterNum = parseInt(quarterStr);
@@ -1547,11 +1521,12 @@ const generateQuarterlyHistoricalData = (selectedQuarter, filteredHistoricalData
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
+      conversion: visitCount > 0 ? 
+        Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
-      orders: quarterOrders.length,
+      orders: quarterOrders.length, // 🔧 FIXED: Use quarterOrders, not monthOrders
       isCurrent: i === quarterNum
     });
   }
@@ -1559,6 +1534,7 @@ const generateQuarterlyHistoricalData = (selectedQuarter, filteredHistoricalData
   return data;
 };
 
+// 🔧 FIXED: Ensure yearly data uses correct order counts  
 const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
   const yearNum = parseInt(selectedYear);
   const data = [];
@@ -1615,11 +1591,12 @@ const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
       revenue,
       target,
       visits: visitCount,
-      conversion: visitCount > 0 ? Math.round(((convertedCount / visitCount) * 100), 1) : 0,
+      conversion: visitCount > 0 ? 
+        Math.round(((convertedCount / visitCount) * 100), 1) : 0,
       nbd: nbdRevenue,
       crr: crrRevenue,
       converted: convertedCount,
-      orders: yearOrders.length,
+      orders: yearOrders.length, // 🔧 FIXED: Use yearOrders, not monthOrders
       isCurrent: i === 0
     });
   }
@@ -1627,16 +1604,7 @@ const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
   return data;
 };
 
-// Helper function to get week start date
-const getWeekStartDate = (year, weekNumber) => {
-  const firstDayOfYear = new Date(year, 0, 1);
-  const daysToAdd = (weekNumber - 1) * 7;
-  const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-  const dayOfWeek = weekDate.getDay();
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  weekDate.setDate(weekDate.getDate() + daysToMonday);
-  return weekDate;
-};
+
 
   // Sorting functionality
   const handleSort = (key) => {
@@ -2261,14 +2229,11 @@ const SortIcon = ({ column }) => {
                     onChange={(e) => setSelectedQuarter(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="2024-Q1">2024 Q1</option>
-                    <option value="2024-Q2">2024 Q2</option>
-                    <option value="2024-Q3">2024 Q3</option>
-                    <option value="2024-Q4">2024 Q4</option>
-                    <option value="2023-Q1">2023 Q1</option>
-                    <option value="2023-Q2">2023 Q2</option>
-                    <option value="2023-Q3">2023 Q3</option>
-                    <option value="2023-Q4">2023 Q4</option>
+                    <option value="2025-Q1">2025-Q1(Jan,Feb,Mar)</option>
+                    <option value="2025-Q2">2025-Q2(Apr,May,Jun)</option>
+                    <option value="2025-Q3">2025-Q3(Jul,Aug,Sep)</option>
+                    <option value="2025-Q4">2025-Q4(Oct,Nov,Dec)</option>
+                  
                   </select>
                 )}
 
@@ -2279,10 +2244,7 @@ const SortIcon = ({ column }) => {
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="2025">2025</option>
-                    <option value="2024">2024</option>
-                    <option value="2023">2023</option>
-                    <option value="2022">2022</option>
-                    <option value="2021">2021</option>
+                    
                   </select>
                 )}
               </div>
@@ -2774,31 +2736,33 @@ const SortIcon = ({ column }) => {
     <h3 className="text-lg font-semibold text-gray-900 mb-6">Performance Metrics</h3>
     
     {/* Visit Completion Section */}
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold text-gray-700 flex items-center">
-          <Activity className="w-4 h-4 mr-2 text-blue-600" />
-          Visit Completion
-        </h4>
-        <span className="text-lg font-bold text-blue-600">
-          {dashboardData.detailedMetrics.visitMetrics.completionRate}%
-        </span>
-      </div>
-      
-      <div className="space-y-2 mb-4">
-        <div className="w-full bg-gray-200 rounded-full h-3">
-          <div
-            className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-1000 ease-out"
-            style={{ width: `${dashboardData.detailedMetrics.visitMetrics.completionRate}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-xs text-gray-600">
-          <span>Completed: <span className="font-semibold text-green-600">{dashboardData.detailedMetrics.visitMetrics.completed}</span></span>
-          <span>Planned: <span className="font-semibold text-gray-700">{dashboardData.detailedMetrics.visitMetrics.planned}</span></span>
-          <span>Missed: <span className="font-semibold text-red-600">{dashboardData.detailedMetrics.visitMetrics.missed}</span></span>
-        </div>
-      </div>
+<div className="mb-6">
+  <div className="flex items-center justify-between mb-3">
+    <h4 className="text-sm font-semibold text-gray-700 flex items-center">
+      <Activity className="w-4 h-4 mr-2 text-blue-600" />
+      Visit Completion
+    </h4>
+    <span className="text-lg font-bold text-blue-600">
+      {Math.min(dashboardData.detailedMetrics.visitMetrics.completionRate, 100)}%
+    </span>
+  </div>
+  
+  <div className="space-y-2 mb-4">
+    <div className="w-full bg-gray-200 rounded-full h-3">
+      <div
+        className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-1000 ease-out"
+        style={{ 
+          width: `${Math.min(dashboardData.detailedMetrics.visitMetrics.completionRate, 100)}%` 
+        }}
+      />
     </div>
+    <div className="flex justify-between text-xs text-gray-600">
+      <span>Completed: <span className="font-semibold text-green-600">{dashboardData.detailedMetrics.visitMetrics.completed}</span></span>
+      <span>Planned: <span className="font-semibold text-gray-700">{dashboardData.detailedMetrics.visitMetrics.planned}</span></span>
+      <span>Missed: <span className="font-semibold text-red-600">{dashboardData.detailedMetrics.visitMetrics.missed}</span></span>
+    </div>
+  </div>
+</div>
 
     {/* Conversion Funnel Section */}
     <div>
