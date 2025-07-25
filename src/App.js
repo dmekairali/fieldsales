@@ -11,6 +11,11 @@ import GeocodingDashboard from './components/GeocodingDashboard';
 import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
 import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
 import SalesPerformanceDashboard from './components/SalesPerformanceDashboard';
+import LiveTracker from './components/LiveTracker';
+import LostAnalysis from './components/LostAnalysis';
+import CriticalParameters from './components/CriticalParameters';
+import FiveForFive from './components/FiveForFive';
+
 
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
@@ -207,6 +212,7 @@ const SettingsDropdown = ({ currentUser, onSignOut }) => {
 
 function App() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [activeOverviewTab, setActiveOverviewTab] = useState('dashboard');
   const [selectedMR, setSelectedMR] = useState(null);
   const [selectedMRName, setSelectedMRName] = useState('ALL_MRS');
   const [nbdDateRange, setNbdDateRange] = useState(30);
@@ -441,8 +447,48 @@ function App() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-         return <SalesPerformanceDashboard/>;
-      
+        return (
+          <div>
+            <div className="flex border-b">
+              <button
+                onClick={() => setActiveOverviewTab('live-tracker')}
+                className={`py-2 px-4 ${activeOverviewTab === 'live-tracker' ? 'border-b-2 border-blue-500' : ''}`}
+              >
+                Live Tracker
+              </button>
+              <button
+                onClick={() => setActiveOverviewTab('dashboard')}
+                className={`py-2 px-4 ${activeOverviewTab === 'dashboard' ? 'border-b-2 border-blue-500' : ''}`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveOverviewTab('lost-analysis')}
+                className={`py-2 px-4 ${activeOverviewTab === 'lost-analysis' ? 'border-b-2 border-blue-500' : ''}`}
+              >
+                Lost Analysis
+              </button>
+              <button
+                onClick={() => setActiveOverviewTab('critical-parameters')}
+                className={`py-2 px-4 ${activeOverviewTab === 'critical-parameters' ? 'border-b-2 border-blue-500' : ''}`}
+              >
+                Critical Parameters
+              </button>
+              <button
+                onClick={() => setActiveOverviewTab('5-for-5')}
+                className={`py-2 px-4 ${activeOverviewTab === '5-for-5' ? 'border-b-2 border-blue-500' : ''}`}
+              >
+                5 for 5
+              </button>
+            </div>
+            {activeOverviewTab === 'live-tracker' && <LiveTracker />}
+            {activeOverviewTab === 'dashboard' && <SalesPerformanceDashboard />}
+            {activeOverviewTab === 'lost-analysis' && <LostAnalysis />}
+            {activeOverviewTab === 'critical-parameters' && <CriticalParameters />}
+            {activeOverviewTab === '5-for-5' && <FiveForFive />}
+          </div>
+        );
+
       case 'monthly-planning':
         return (
           <MonthlyPlanDashboardV2
