@@ -2150,7 +2150,6 @@ const SortIcon = ({ column }) => {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Sales Performance Dashboard</h1>
             <p className="text-gray-600 mt-1">
               {selectedPeriod === 'weekly' && `Week: ${selectedWeek}`}
               {selectedPeriod === 'monthly' && `Month: ${new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
