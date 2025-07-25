@@ -30,7 +30,6 @@ import {
   CheckCircleOutlined,
   StopOutlined,
   ExclamationCircleOutlined,
-  DollarOutlined,
   UserOutlined,
   HistoryOutlined,
   TeamOutlined,
@@ -298,7 +297,7 @@ const LostAnalysis = () => {
       key: 'lost_revenue',
       render: (amount) => (
         <Text type={amount > 0 ? 'danger' : 'secondary'}>
-          <DollarOutlined /> {amount.toFixed(2)}
+          <FontAwesomeIcon icon={faRupeeSign} /> {amount.toFixed(2)}
         </Text>
       ),
       sorter: true,
@@ -364,7 +363,7 @@ const LostAnalysis = () => {
               <Statistic
                 title="Potential Lost Revenue"
                 value={stats.totalLostRevenue}
-                prefix={<DollarOutlined />}
+                prefix={<FontAwesomeIcon icon={faRupeeSign} />}
                 valueStyle={{ color: '#ff4d4f' }}
                 precision={2}
               />
@@ -506,9 +505,9 @@ const LostAnalysis = () => {
               </Col>
               <Col span={8}>
                 <Card title="Financials" size="small">
-                  <p><Text strong>Lifetime Revenue:</Text> ${selectedCustomer.total_lifetime_revenue.toFixed(2)}</p>
-                  <p><Text strong>Estimated Lost Revenue:</Text> ${selectedCustomer.estimated_lost_revenue.toFixed(2)}</p>
-                  <p><Text strong>Avg Order Value (90d):</Text> ${selectedCustomer.avg_order_value_90d.toFixed(2)}</p>
+                  <p><Text strong>Lifetime Revenue:</Text> ₹{selectedCustomer.total_lifetime_revenue.toFixed(2)}</p>
+                  <p><Text strong>Estimated Lost Revenue:</Text> ₹{selectedCustomer.estimated_lost_revenue.toFixed(2)}</p>
+                  <p><Text strong>Avg Order Value (90d):</Text> ₹{selectedCustomer.avg_order_value_90d.toFixed(2)}</p>
                 </Card>
               </Col>
             </Row>
@@ -592,7 +591,7 @@ const LostAnalysis = () => {
                 title: 'Total Lost Revenue',
                 dataIndex: 'total_lost_revenue',
                 key: 'total_lost_revenue',
-                render: (value) => <Text type="danger">${value.toFixed(2)}</Text>,
+                render: (value) => <Text type="danger">₹{value.toFixed(2)}</Text>,
                 sorter: (a, b) => a.total_lost_revenue - b.total_lost_revenue,
               },
             ]}
