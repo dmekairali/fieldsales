@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { Calendar, TrendingUp, Users, Target, DollarSign, Activity, Award, AlertCircle, ChevronDown, Filter, Download, RefreshCw, User, MapPin, Phone, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
@@ -440,6 +440,69 @@ filterDataByDateRange(data, startDate, endDate) {
 // Create the cache service instance
 const dataCacheService = new DataCacheService();
 
+const LoadingTerminal = ({ logs, loading }) => {
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  const getLogColor = (type) => {
+    switch (type) {
+      case 'success':
+        return 'text-green-400';
+      case 'error':
+        return 'text-red-400';
+      default:
+        return 'text-gray-400';
+    }
+  };
+
+  const getLogIcon = (type) => {
+    switch (type) {
+      case 'success':
+        return <CheckCircle className="w-4 h-4 mr-2 text-green-400" />;
+      case 'error':
+        return <XCircle className="w-4 h-4 mr-2 text-red-400" />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="w-full max-w-2xl h-96 bg-gray-900 rounded-lg shadow-lg flex flex-col font-mono">
+        <div className="flex items-center justify-between p-2 bg-gray-800 rounded-t-lg">
+          <div className="flex space-x-2">
+            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+          </div>
+          <div className="text-sm text-gray-400">Loading Dashboard...</div>
+          <div></div>
+        </div>
+        <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto text-sm">
+          {logs.map((log, index) => (
+            <div key={index} className={`flex items-center ${getLogColor(log.type)}`}>
+              <span className="text-gray-500 mr-2">{log.timestamp}</span>
+              {getLogIcon(log.type)}
+              <span>{log.message}</span>
+            </div>
+          ))}
+          {loading && (
+            <div className="flex items-center">
+              <div className="w-4 h-4 border-2 border-dashed border-green-400 rounded-full animate-spin mr-2"></div>
+              <span className="text-green-400">Processing...</span>
+              <span className="w-2 h-4 bg-green-400 animate-pulse ml-2"></span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SalesPerformanceDashboard = () => {
 
@@ -488,6 +551,7 @@ const SalesPerformanceDashboard = () => {
   const [selectedMR, setSelectedMR] = useState('all');
   const [dateRange, setDateRange] = useState({ start: '2025-01-01', end: '2025-12-31' });
   const [loading, setLoading] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState([]);
   const [dashboardData, setDashboardData] = useState(null);
   const [teams, setTeams] = useState([]);
   const [states, setStates] = useState([]);
@@ -498,6 +562,11 @@ const SalesPerformanceDashboard = () => {
   // New state variables for enhanced functionality
   const [sortConfig, setSortConfig] = useState({ key: 'revenue', direction: 'desc' });
   const [visiblePerformers, setVisiblePerformers] = useState(10);
+
+  const addLog = (message, type = 'info') => {
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    setLoadingLogs(prev => [...prev, { timestamp, message, type }]);
+  };
 
   // Helper function to get date range based on selected period
   // 🔧 FIXED: getDateRange function with correct monthly end date calculation
@@ -747,8 +816,10 @@ useEffect(() => {
   }, [selectedRegion, selectedTeam, selectedState]);
 
   const fetchFilterData = async () => {
+    addLog('Fetching filter data...');
     try {
       // Fetch teams (ASM/RSM) - Using name as identifier
+      addLog('Fetching teams...');
       const { data: teamData } = await supabase
         .from('medical_representatives')
         .select('name, role_level, region')
@@ -758,6 +829,7 @@ useEffect(() => {
         .order('name');
 
       // Standardize team names
+      addLog('Processing teams...');
       const standardizedTeams = teamData?.map(team => ({
         ...team,
         name: standardizeName(team.name),
@@ -765,6 +837,7 @@ useEffect(() => {
       })) || [];
 
       // Fetch unique states
+      addLog('Fetching states...');
       const { data: stateData } = await supabase
         .from('medical_representatives')
         .select('state')
@@ -772,7 +845,8 @@ useEffect(() => {
         .eq('role_level', 'MR')
         .order('state');
 
-      // Fetch unique regions  
+      // Fetch unique regions
+      addLog('Fetching regions...');
       const { data: regionData } = await supabase
         .from('medical_representatives')
         .select('region')
@@ -784,6 +858,7 @@ useEffect(() => {
       const uniqueRegions = [...new Set(regionData?.map(item => item.region) || [])];
 
       // Fetch all medical representatives
+      addLog('Fetching medical representatives...');
       const { data: mrData } = await supabase
         .from('medical_representatives')
         .select('name, role_level, is_active, region, state, area_sales_manager_name, regional_sales_manager_name')
@@ -810,6 +885,7 @@ useEffect(() => {
         unknownMRs: unknownMRData.length
       });
 
+      addLog('Filter data loaded successfully.', 'success');
       setTeams(standardizedTeams);
       setStates(uniqueStates);
       setRegions(uniqueRegions);
@@ -817,17 +893,22 @@ useEffect(() => {
       setUnknownMRs(unknownMRData);
     } catch (error) {
       console.error('Error fetching filter data:', error);
+      addLog('Error fetching filter data.', 'error');
     }
   };
 
  // 🔍 COMPLETE fetchDashboardData with comprehensive debugging
 const fetchDashboardData = async () => {
   setLoading(true);
+  setLoadingLogs([]);
+  addLog('Dashboard loading started...');
   try {
-   
-    
+
+
     // Load historical data (cached for 1 hour)
+    addLog('Loading historical data...');
     const historicalData = await dataCacheService.loadHistoricalData();
+    addLog('Historical data loaded.', 'success');
     
     // Get current and previous date ranges
     const currentRange = getDateRange();
@@ -871,6 +952,7 @@ const fetchDashboardData = async () => {
     });
 
     // Process data with enhanced function
+    addLog('Processing data...');
     const processedData = processDataWithConversions(
       filteredCurrentData.orders,
       filteredCurrentData.visits,
@@ -881,6 +963,7 @@ const fetchDashboardData = async () => {
       historicalData.allVisits,
       historicalData
     );
+    addLog('Data processed successfully.', 'success');
     
     console.log('✅ Final processed data:', {
       overviewRevenue: processedData.overview.totalRevenue,
@@ -889,10 +972,12 @@ const fetchDashboardData = async () => {
     });
     
     setDashboardData(processedData);
+    addLog('Dashboard ready!', 'success');
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
+    addLog('An error occurred while loading the dashboard.', 'error');
   } finally {
-    setLoading(false);
+    setTimeout(() => setLoading(false), 1000);
   }
 };
 
@@ -2133,21 +2218,13 @@ const SortIcon = ({ column }) => {
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
-  if (loading || !dashboardData) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading dashboard data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-6 overflow-x-hidden max-w-full">
-      {/* Header */}
-      <div className="mb-8">
+    <div className="relative min-h-screen bg-gray-50">
+      {loading && <LoadingTerminal logs={loadingLogs} loading={loading} />}
+      {!loading && dashboardData && (
+        <div className="p-4 lg:p-6 overflow-x-hidden max-w-full">
+          {/* Header */}
+          <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Sales Performance Dashboard</h1>
@@ -2868,9 +2945,9 @@ const SortIcon = ({ column }) => {
         <Activity className="w-6 h-6 text-white" />
       </div>
     </div>
-  </div>
-</div>
-
+        </div>
+      </div>
+    )}
     </div>
   );
 };
