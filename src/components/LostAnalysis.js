@@ -127,38 +127,50 @@ const LostAnalysis = () => {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      // Get counts by status
-      const { data: statusCounts } = await supabase
-        .from('lost_client_analysis')
-        .select('lost_status, count(*)')
-        .group('lost_status');
+ const fetchStats = async () => {
+  try {
+    // Get counts by status
+    const { data: statusData, error: statusError } = await supabase
+      .from('lost_client_analysis')
+      .select('lost_status')
+      
+    if (statusError) throw statusError;
 
-      // Get total lost revenue
-      const { data: lostRevenue } = await supabase
-        .from('lost_client_analysis')
-        .select('sum(estimated_lost_revenue)')
-        .eq('lost_status', 'LOST');
+    // Manually group the status counts
+    const statusCounts = statusData.reduce((acc, item) => {
+      acc[item.lost_status] = (acc[item.lost_status] || 0) + 1;
+      return acc;
+    }, {});
 
-      // Get at-risk customer count
-      const { data: atRiskCount } = await supabase
-        .from('lost_client_analysis')
-        .select('count(*)')
-        .in('lost_status', ['AT_RISK', 'OVERDUE']);
+    // Get total lost revenue for LOST status customers
+    const { data: lostRevenueData, error: lostRevenueError } = await supabase
+      .from('lost_client_analysis')
+      .select('estimated_lost_revenue')
+      .eq('lost_status', 'LOST');
 
-      setStats({
-        statusCounts: statusCounts.reduce((acc, item) => {
-          acc[item.lost_status] = item.count;
-          return acc;
-        }, {}),
-        totalLostRevenue: lostRevenue[0]?.sum || 0,
-        atRiskCount: atRiskCount[0]?.count || 0,
-      });
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+    if (lostRevenueError) throw lostRevenueError;
+
+    const totalLostRevenue = lostRevenueData.reduce(
+      (sum, item) => sum + (item.estimated_lost_revenue || 0), 0
+    );
+
+    // Get at-risk customer count (AT_RISK and OVERDUE)
+    const { data: atRiskData, error: atRiskError } = await supabase
+      .from('lost_client_analysis')
+      .select('lost_status')
+      .in('lost_status', ['AT_RISK', 'OVERDUE']);
+
+    if (atRiskError) throw atRiskError;
+
+    setStats({
+      statusCounts,
+      totalLostRevenue,
+      atRiskCount: atRiskData.length,
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+  }
+};
 
   const fetchMrPerformance = async () => {
     try {
