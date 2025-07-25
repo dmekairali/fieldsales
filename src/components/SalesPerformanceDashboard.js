@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { Calendar, TrendingUp, Users, Target, DollarSign, Activity, Award, AlertCircle, ChevronDown, Filter, Download, RefreshCw, User, MapPin, Phone, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
@@ -8,7 +8,9 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+let globalAddLog = () => {};
 
+ 
 
 // Add these imports after your existing imports
 const CACHE_KEY = 'sales_dashboard_cache';
@@ -107,6 +109,7 @@ class DataCacheService {
       
       localStorage.setItem(CACHE_KEY, jsonString);
       console.log('💾 Data saved to cache', `${(jsonString.length / 1024 / 1024).toFixed(2)}MB`);
+      globalAddLog(`✓ Data cached successfully (${(jsonString.length / 1024 / 1024).toFixed(2)}MB)`, 'success');
       this.cache = { data: compressedData, timestamp: Date.now() };
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
@@ -144,7 +147,9 @@ class DataCacheService {
   }
 
   console.log('📊 Loading fresh historical data including today...');
-  
+  // Add logging for cache service if addLog is available
+globalAddLog('Cache miss - fetching fresh data from database...', 'info');
+
    const startDate = `${currentYear}-04-01`;
   const endDate = today; // Always use today's date
   
@@ -158,7 +163,7 @@ class DataCacheService {
       let hasMore = true;
 
       console.log(`📥 Loading all data from ${tableName}...`);
-
+     globalAddLog(`Loading ${tableName} data...`, 'info');
       while (hasMore) {
         let query = supabase
           .from(tableName)
@@ -204,12 +209,15 @@ class DataCacheService {
       }
 
       console.log(`✅ Finished loading ${allData.length} rows from ${tableName}`);
+      console.log(`✅ Finished loading ${allData.length} rows from ${tableName}`);
+globalAddLog(`✓ Loaded ${allData.length} rows from ${tableName}`, 'success');
       return allData;
     };
 
     // Load all data with pagination
     console.log('📊 Starting parallel data loading...');
-    
+   globalAddLog('Loading orders, visits, and targets in parallel...', 'info');
+
     const [orderData, visitData, targetData, allVisitsData] = await Promise.all([
       // Orders
       fetchAllData(
@@ -242,6 +250,8 @@ class DataCacheService {
     ]);
 
     console.log('📊 Processing and standardizing data...');
+
+   globalAddLog('Processing and standardizing data...', 'info');
 
     const data = {
       orders: orderData.map(order => ({
@@ -494,10 +504,161 @@ const SalesPerformanceDashboard = () => {
   const [regions, setRegions] = useState([]); 
   const [medicalReps, setMedicalReps] = useState([]);
   const [unknownMRs, setUnknownMRs] = useState([]);
-  
+  const [loadingLogs, setLoadingLogs] = useState([]);
+
   // New state variables for enhanced functionality
   const [sortConfig, setSortConfig] = useState({ key: 'revenue', direction: 'desc' });
   const [visiblePerformers, setVisiblePerformers] = useState(10);
+
+   const addLog = (message, type = 'info') => {
+  const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+  setLoadingLogs(prev => [...prev, { 
+    id: Date.now() + Math.random(),
+    timestamp, 
+    message, 
+    type 
+  }]);
+};
+// Set the global reference
+globalAddLog = addLog;
+
+const LoadingTerminal = () => {
+  const logsEndRef = useRef(null);
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [loadingLogs]);
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Sales Performance Dashboard</h1>
+            <p className="text-gray-600 mt-1">Loading system components...</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Terminal Container */}
+      <div className="bg-gray-900 rounded-xl shadow-2xl w-full max-w-6xl mx-auto overflow-hidden border border-gray-700">
+        {/* Terminal Header */}
+        <div className="bg-gray-800 px-4 py-3 flex items-center border-b border-gray-700">
+          <div className="flex space-x-2">
+            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+          </div>
+          <div className="flex-1 text-center text-gray-300 text-sm font-mono">
+            Sales Dashboard Terminal - Loading Components
+          </div>
+          <div className="flex items-center space-x-2">
+            <RefreshCw className="w-4 h-4 text-green-400 animate-spin" />
+            <span className="text-xs text-gray-400">Processing...</span>
+          </div>
+        </div>
+
+        {/* Terminal Body */}
+        <div className="bg-black p-6 font-mono text-sm h-96 overflow-y-auto">
+          <div className="text-green-400 mb-2 flex items-center">
+            <span className="mr-2">🚀</span>
+            Sales Performance Dashboard v2.0
+          </div>
+          <div className="text-gray-400 mb-4">
+            Initializing system components and loading data...
+          </div>
+
+          {/* Loading Logs */}
+          <div className="space-y-1">
+            {loadingLogs.map((log) => (
+              <div key={log.id} className="flex items-start space-x-2 py-0.5">
+                <span className="text-gray-500 text-xs min-w-[70px]">
+                  [{log.timestamp}]
+                </span>
+                <span className={`text-xs flex-1 ${
+                  log.type === 'success' ? 'text-green-400' : 
+                  log.type === 'error' ? 'text-red-400' : 
+                  'text-gray-300'
+                }`}>
+                  {log.type === 'success' && '✓ '}
+                  {log.type === 'error' && '✗ '}
+                  {log.type === 'info' && '▶ '}
+                  {log.message}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Animated Cursor */}
+          <div className="flex items-center mt-4">
+            <span className="text-green-400">dashboard$ </span>
+            <div className="w-2 h-4 bg-green-400 ml-1 animate-pulse"></div>
+          </div>
+
+          <div ref={logsEndRef} />
+        </div>
+
+        {/* Progress Bar */}
+        <div className="bg-gray-800 px-6 py-4 border-t border-gray-700">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-gray-300 text-sm font-mono">Loading Progress</span>
+            <span className="text-green-400 text-xs">
+              {loadingLogs.filter(log => log.type === 'success').length} / {loadingLogs.length} tasks completed
+            </span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div 
+              className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+              style={{ 
+                width: `${loadingLogs.length > 0 ? (loadingLogs.filter(log => log.type === 'success').length / loadingLogs.length) * 100 : 0}%` 
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Loading Status Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 max-w-6xl mx-auto">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg mr-3">
+              <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Data Loading</p>
+              <p className="text-xs text-gray-600">Fetching from database...</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg mr-3">
+              <Users className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Team Data</p>
+              <p className="text-xs text-gray-600">Processing representatives...</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg mr-3">
+              <TrendingUp className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Analytics</p>
+              <p className="text-xs text-gray-600">Calculating metrics...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
   // Helper function to get date range based on selected period
   // 🔧 FIXED: getDateRange function with correct monthly end date calculation
@@ -716,8 +877,14 @@ const getDateRange = () => {
 
   // Fetch initial data for filters
   useEffect(() => {
-    fetchFilterData();
-  }, []);
+  const initializeData = async () => {
+    setLoading(true);
+    setLoadingLogs([]);
+    addLog('System initialization started...', 'info');
+    await fetchFilterData();
+  };
+  initializeData();
+}, []);
 
   // Fetch dashboard data when filters change
  // Make sure this useEffect includes ALL filter dependencies
@@ -747,93 +914,110 @@ useEffect(() => {
   }, [selectedRegion, selectedTeam, selectedState]);
 
   const fetchFilterData = async () => {
-    try {
-      // Fetch teams (ASM/RSM) - Using name as identifier
-      const { data: teamData } = await supabase
-        .from('medical_representatives')
-        .select('name, role_level, region')
-        .in('role_level', ['ASM', 'RSM'])
-        .eq('is_active', true)
-        .order('role_level', { ascending: false })
-        .order('name');
+  try {
+    addLog('Starting filter data initialization...', 'info');
+    
+    addLog('Loading team data (ASM/RSM)...', 'info');
+    // Fetch teams (ASM/RSM) - Using name as identifier
+    const { data: teamData } = await supabase
+      .from('medical_representatives')
+      .select('name, role_level, region')
+      .in('role_level', ['ASM', 'RSM'])
+      .eq('is_active', true)
+      .order('role_level', { ascending: false })
+      .order('name');
 
-      // Standardize team names
-      const standardizedTeams = teamData?.map(team => ({
-        ...team,
-        name: standardizeName(team.name),
-        original_name: team.name
-      })) || [];
+    // Standardize team names
+    const standardizedTeams = teamData?.map(team => ({
+      ...team,
+      name: standardizeName(team.name),
+      original_name: team.name
+    })) || [];
+    addLog(`✓ Loaded ${standardizedTeams.length} teams`, 'success');
 
-      // Fetch unique states
-      const { data: stateData } = await supabase
-        .from('medical_representatives')
-        .select('state')
-        .not('state', 'is', null)
-        .eq('role_level', 'MR')
-        .order('state');
+    addLog('Loading states and regions...', 'info');
+    // Fetch unique states
+    const { data: stateData } = await supabase
+      .from('medical_representatives')
+      .select('state')
+      .not('state', 'is', null)
+      .eq('role_level', 'MR')
+      .order('state');
 
-      // Fetch unique regions  
-      const { data: regionData } = await supabase
-        .from('medical_representatives')
-        .select('region')
-        .not('region', 'is', null)
-        .eq('role_level', 'MR')
-        .order('region');
+    // Fetch unique regions  
+    const { data: regionData } = await supabase
+      .from('medical_representatives')
+      .select('region')
+      .not('region', 'is', null)
+      .eq('role_level', 'MR')
+      .order('region');
 
-      const uniqueStates = [...new Set(stateData?.map(item => item.state) || [])];
-      const uniqueRegions = [...new Set(regionData?.map(item => item.region) || [])];
+    const uniqueStates = [...new Set(stateData?.map(item => item.state) || [])];
+    const uniqueRegions = [...new Set(regionData?.map(item => item.region) || [])];
+    addLog(`✓ Loaded ${uniqueStates.length} states, ${uniqueRegions.length} regions`, 'success');
 
-      // Fetch all medical representatives
-      const { data: mrData } = await supabase
-        .from('medical_representatives')
-        .select('name, role_level, is_active, region, state, area_sales_manager_name, regional_sales_manager_name')
-        .order('name');
+    addLog('Loading medical representatives...', 'info');
+    // Fetch all medical representatives
+    const { data: mrData } = await supabase
+      .from('medical_representatives')
+      .select('name, role_level, is_active, region, state, area_sales_manager_name, regional_sales_manager_name')
+      .order('name');
 
-      // Standardize all names in medical reps data
-      const standardizedMRData = mrData?.map(rep => ({
-        ...rep,
-        name: standardizeName(rep.name),
-        area_sales_manager_name: standardizeName(rep.area_sales_manager_name),
-        regional_sales_manager_name: standardizeName(rep.regional_sales_manager_name),
-        original_name: rep.name
-      })) || [];
+    // Standardize all names in medical reps data
+    const standardizedMRData = mrData?.map(rep => ({
+      ...rep,
+      name: standardizeName(rep.name),
+      area_sales_manager_name: standardizeName(rep.area_sales_manager_name),
+      regional_sales_manager_name: standardizeName(rep.regional_sales_manager_name),
+      original_name: rep.name
+    })) || [];
+    addLog(`✓ Loaded ${standardizedMRData.length} medical representatives`, 'success');
 
-      // Fetch unknown MRs
-      const unknownMRData = await getUnknownMRsFromSalesData();
-      
-      console.log('Filter data loaded:', {
-        teams: standardizedTeams.length,
-        states: uniqueStates.length,
-        regions: uniqueRegions.length,
-        allReps: standardizedMRData.length,
-        mrOnly: standardizedMRData.filter(r => r.role_level === 'MR').length,
-        unknownMRs: unknownMRData.length
-      });
+    addLog('Identifying unknown sales agents...', 'info');
+    // Fetch unknown MRs
+    const unknownMRData = await getUnknownMRsFromSalesData();
+    addLog(`✓ Found ${unknownMRData.length} unknown sales agents`, 'success');
+    
+    addLog('Filter data initialization complete!', 'success');
 
-      setTeams(standardizedTeams);
-      setStates(uniqueStates);
-      setRegions(uniqueRegions);
-      setMedicalReps(standardizedMRData);
-      setUnknownMRs(unknownMRData);
-    } catch (error) {
-      console.error('Error fetching filter data:', error);
-    }
-  };
+    console.log('Filter data loaded:', {
+      teams: standardizedTeams.length,
+      states: uniqueStates.length,
+      regions: uniqueRegions.length,
+      allReps: standardizedMRData.length,
+      mrOnly: standardizedMRData.filter(r => r.role_level === 'MR').length,
+      unknownMRs: unknownMRData.length
+    });
+
+    setTeams(standardizedTeams);
+    setStates(uniqueStates);
+    setRegions(uniqueRegions);
+    setMedicalReps(standardizedMRData);
+    setUnknownMRs(unknownMRData);
+  } catch (error) {
+    addLog(`✗ Error loading filter data: ${error.message}`, 'error');
+    console.error('Error fetching filter data:', error);
+  }
+};
 
  // 🔍 COMPLETE fetchDashboardData with comprehensive debugging
 const fetchDashboardData = async () => {
   setLoading(true);
+  setLoadingLogs([]); // Clear previous logs
   try {
-   
+    addLog('Starting dashboard data fetch...', 'info');
     
+    addLog('Loading historical data from cache/database...', 'info');
     // Load historical data (cached for 1 hour)
     const historicalData = await dataCacheService.loadHistoricalData();
-    
+    addLog(`✓ Historical data loaded: ${historicalData.orders?.length || 0} orders, ${historicalData.visits?.length || 0} visits`, 'success');
+
     // Get current and previous date ranges
     const currentRange = getDateRange();
     const previousRange = getPreviousDateRange(currentRange);
-   
+    addLog(`Date range: ${currentRange.start} to ${currentRange.end}`, 'info');
     
+    addLog('Filtering data for current period...', 'info');
     // Filter data for current period (KPI cards use this)
     const currentData = dataCacheService.filterDataByDateRange(
       historicalData, 
@@ -841,7 +1025,7 @@ const fetchDashboardData = async () => {
       currentRange.end
     );
     
-    
+    addLog('Filtering data for previous period comparison...', 'info');
     // Filter data for previous period
     const previousData = dataCacheService.filterDataByDateRange(
       historicalData, 
@@ -849,6 +1033,7 @@ const fetchDashboardData = async () => {
       previousRange.end
     );
     
+    addLog('Applying user filters (MR, team, region, state)...', 'info');
     // Apply filters (MR, team, region, state) to current data
     const filteredCurrentData = dataCacheService.filterDataByFilters(currentData, {
       selectedMR,
@@ -859,7 +1044,6 @@ const fetchDashboardData = async () => {
       teams
     });
     
-    
     // Apply filters to previous data
     const filteredPreviousData = dataCacheService.filterDataByFilters(previousData, {
       selectedMR,
@@ -869,7 +1053,9 @@ const fetchDashboardData = async () => {
       medicalReps,
       teams
     });
+    addLog(`✓ Filtered data: ${filteredCurrentData.orders?.length || 0} current orders, ${filteredPreviousData.orders?.length || 0} previous orders`, 'success');
 
+    addLog('Processing performance metrics and calculations...', 'info');
     // Process data with enhanced function
     const processedData = processDataWithConversions(
       filteredCurrentData.orders,
@@ -882,17 +1068,25 @@ const fetchDashboardData = async () => {
       historicalData
     );
     
+    addLog('✓ Dashboard data processing complete!', 'success');
     console.log('✅ Final processed data:', {
       overviewRevenue: processedData.overview.totalRevenue,
       trendsData: processedData.trends,
       trendsJulyRevenue: processedData.trends?.find(t => t.key === 'Jul')?.revenue || 'Not found'
     });
     
-    setDashboardData(processedData);
+    // Add a small delay to show the completion message
+    setTimeout(() => {
+      setDashboardData(processedData);
+    }, 500);
+    
   } catch (error) {
+    addLog(`✗ Error fetching dashboard data: ${error.message}`, 'error');
     console.error('Error fetching dashboard data:', error);
   } finally {
-    setLoading(false);
+    setTimeout(() => {
+      setLoading(false);
+    }, 1000);
   }
 };
 
@@ -2134,15 +2328,8 @@ const SortIcon = ({ column }) => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
   if (loading || !dashboardData) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Loading dashboard data...</p>
-        </div>
-      </div>
-    );
-  }
+  return <LoadingTerminal />;
+}
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 lg:p-6 overflow-x-hidden max-w-full">
@@ -2150,6 +2337,7 @@ const SortIcon = ({ column }) => {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
+            <h1 className="text-3xl font-bold text-gray-900">Sales Performance Dashboard</h1>
             <p className="text-gray-600 mt-1">
               {selectedPeriod === 'weekly' && `Week: ${selectedWeek}`}
               {selectedPeriod === 'monthly' && `Month: ${new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`}
