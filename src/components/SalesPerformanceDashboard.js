@@ -2945,7 +2945,6 @@ const SortIcon = ({ column }) => {
         <Activity className="w-6 h-6 text-white" />
       </div>
     </div>
-        </div>
       </div>
     )}
     </div>
