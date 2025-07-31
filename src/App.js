@@ -1,4 +1,4 @@
-// App.js - Complete Integration with Authentication and Settings Dropdown Logout
+// App.js - Complete Integration with Authentication and Tab Switching Fix
 
 import React, { useState, useEffect, useRef } from 'react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -15,7 +15,6 @@ import LiveTracker from './components/LiveTracker';
 import LostAnalysis from './components/LostAnalysis';
 import CriticalParameters from './components/CriticalParameters';
 import FiveForFive from './components/FiveForFive';
-
 
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
 import './index.css';
@@ -77,104 +76,54 @@ const SettingsDropdown = ({ currentUser, onSignOut }) => {
         onClick={() => setIsOpen(!isOpen)}
         className={`p-2 rounded-lg transition-colors ${
           isOpen 
-            ? 'text-blue-600 bg-blue-100' 
-            : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+            ? 'bg-gray-100 text-gray-700' 
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-700'
         }`}
+        title="Settings & Profile"
       >
-        <Settings className="h-4 w-4 lg:h-5 lg:w-5" />
+        <Settings className="h-5 w-5" />
       </button>
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-100">
-            <div className="flex items-center space-x-2">
-              <Settings className="h-5 w-5 text-gray-600" />
-              <h3 className="font-semibold text-gray-900">Settings & Account</h3>
-            </div>
-          </div>
-
-          {/* User Info Section */}
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50">
+          {/* User Profile Header */}
           <div className="p-4 border-b border-gray-100">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-violet-600 rounded-full flex items-center justify-center">
-                <User className="h-5 w-5 text-white" />
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <User className="h-6 w-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 truncate">
+                <h3 className="font-semibold text-gray-900 truncate">
                   {currentUser?.profile?.full_name || 'Unknown User'}
-                </div>
-                <div className="text-sm text-gray-500 truncate">
-                  {currentUser?.profile?.email || 'No email'}
+                </h3>
+                <p className="text-sm text-gray-500 truncate">
+                  {currentUser?.profile?.employee_id || 'No Employee ID'}
+                </p>
+                <div className="flex items-center mt-1">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${accessLevel.bgColor} ${accessLevel.color}`}>
+                    {accessLevel.label}
+                  </span>
                 </div>
               </div>
             </div>
             
-            {/* Access Level & ID */}
-            <div className="mt-3 flex items-center justify-between">
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${accessLevel.color} ${accessLevel.bgColor}`}>
-                <Shield className="h-3 w-3 mr-1" />
-                {accessLevel.label}
-              </span>
-              <span className="text-xs text-gray-500">
-                ID: {currentUser?.profile?.employee_id || 'N/A'}
-              </span>
-            </div>
-          </div>
-
-          {/* Quick Info */}
-          <div className="p-4 space-y-3 border-b border-gray-100">
-            {/* Territories */}
+            {/* Territory Info */}
             {currentUser?.profile?.assigned_territories?.length > 0 && (
-              <div className="flex items-start space-x-2">
-                <MapPin className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Territories</div>
-                  <div className="text-sm text-gray-900 truncate">
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <MapPin className="h-4 w-4" />
+                  <span className="truncate">
                     {currentUser.profile.assigned_territories.slice(0, 2).join(', ')}
-                    {currentUser.profile.assigned_territories.length > 2 && 
-                      ` (+${currentUser.profile.assigned_territories.length - 2} more)`
-                    }
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Manager */}
-            {currentUser?.profile?.reporting_manager && (
-              <div className="flex items-start space-x-2">
-                <Users className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Reports To</div>
-                  <div className="text-sm text-gray-900 truncate">
-                    {currentUser.profile.reporting_manager}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Last Login */}
-            {currentUser?.profile?.last_login && (
-              <div className="flex items-start space-x-2">
-                <Calendar className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</div>
-                  <div className="text-sm text-gray-900">
-                    {new Date(currentUser.profile.last_login).toLocaleString()}
-                  </div>
+                    {currentUser.profile.assigned_territories.length > 2 && ` +${currentUser.profile.assigned_territories.length - 2} more`}
+                  </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Settings Options */}
-          <div className="p-4 space-y-1 border-b border-gray-100">
-            <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-              <User className="h-4 w-4 text-gray-400" />
-              <span>Profile Settings</span>
-            </button>
-            
+          {/* Menu Items */}
+          <div className="p-2">
             <button className="w-full flex items-center space-x-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
               <Bell className="h-4 w-4 text-gray-400" />
               <span>Notifications</span>
@@ -227,6 +176,9 @@ function App() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+  // 🔧 TAB SWITCHING FIX - Add component key to force remount after browser tab return
+  const [componentKey, setComponentKey] = useState(0);
+
   const { 
     mrList, 
     loading: mrLoading, 
@@ -234,6 +186,21 @@ function App() {
     getMRByName,
     totalMRs 
   } = useMedicalRepresentatives();
+
+  // 🔧 TAB SWITCHING FIX - Force component remount on browser tab focus
+  useEffect(() => {
+    const handleFocus = () => {
+      // Force refresh all components when browser tab gets focus
+      setComponentKey(prev => prev + 1);
+      console.log('🔄 Browser tab focused - components will refresh on next tab switch');
+    };
+
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
 
   // Initialize authentication
   useEffect(() => {
@@ -330,70 +297,42 @@ function App() {
         icon: TrendingUp,
         description: 'New business development',
         color: 'emerald',
+        badge: 'BETA',
         requiredAccess: 'mr'
       },
       {
-        id: 'routes',
+        id: 'route-optimization',
         name: 'Route Optimization',
         icon: Navigation,
-        description: 'AI route planning',
-        color: 'blue',
-        requiredAccess: 'mr'
-      },
-      {
-        id: 'analytics',
-        name: 'Analytics',
-        icon: BarChart3,
-        description: 'Performance insights',
+        description: 'Smart route planning',
         color: 'indigo',
-        requiredAccess: 'manager'
+        requiredAccess: 'mr'
       },
       {
         id: 'geocoding',
         name: 'Geocoding',
         icon: MapPin,
-        description: 'GPS management',
+        description: 'Location management',
         color: 'teal',
         requiredAccess: 'admin'
-      },
-      {
-        id: 'reports',
-        name: 'Reports',
-        icon: FileText,
-        description: 'Territory reports',
-        color: 'amber',
-        requiredAccess: 'viewer'
       }
     ];
 
     // Filter based on user access level
-    if (!currentUser?.profile?.access_level) return allItems;
+    if (!currentUser?.profile?.access_level) {
+      return allItems.filter(item => item.requiredAccess === 'viewer');
+    }
 
-    const levelHierarchy = {
-      'viewer': 1,
-      'mr': 2,
-      'manager': 3,
-      'admin': 4
+    const userAccess = currentUser.profile.access_level;
+    const accessHierarchy = {
+      'viewer': ['viewer'],
+      'mr': ['viewer', 'mr'],
+      'manager': ['viewer', 'mr', 'manager'],
+      'admin': ['viewer', 'mr', 'manager', 'admin']
     };
 
-    const userLevelNum = levelHierarchy[currentUser.profile.access_level] || 0;
-
-    return allItems.filter(item => {
-      const requiredLevelNum = levelHierarchy[item.requiredAccess] || 0;
-      return userLevelNum >= requiredLevelNum;
-    });
-  };
-
-  const handleMRChange = (e) => {
-    const selectedValue = e.target.value;
-    setSelectedMRName(selectedValue);
-    
-    if (selectedValue === 'ALL_MRS') {
-      setSelectedMR(null);
-    } else {
-      const mrData = getMRByName(selectedValue);
-      setSelectedMR(mrData);
-    }
+    const allowedAccess = accessHierarchy[userAccess] || ['viewer'];
+    return allItems.filter(item => allowedAccess.includes(item.requiredAccess));
   };
 
   const handleSignOut = async () => {
@@ -406,13 +345,52 @@ function App() {
 
   const getAccessLevelDisplay = (level) => {
     const levels = {
-      'admin': { label: 'Administrator', color: 'text-red-600 bg-red-100' },
-      'manager': { label: 'Manager', color: 'text-purple-600 bg-purple-100' },
-      'mr': { label: 'Medical Representative', color: 'text-blue-600 bg-blue-100' },
-      'viewer': { label: 'Viewer', color: 'text-green-600 bg-green-100' }
+      'admin': { label: 'Administrator', color: 'bg-red-100 text-red-700' },
+      'manager': { label: 'Manager', color: 'bg-purple-100 text-purple-700' },
+      'mr': { label: 'Medical Representative', color: 'bg-blue-100 text-blue-700' },
+      'viewer': { label: 'Viewer', color: 'bg-green-100 text-green-700' }
     };
-    return levels[level] || { label: level, color: 'text-gray-600 bg-gray-100' };
+    return levels[level] || { label: level, color: 'bg-gray-100 text-gray-700' };
   };
+
+  if (authLoading || mrLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-xl shadow-lg max-w-md border border-gray-200">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <BarChart3 className="h-8 w-8 text-blue-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">TourPlan Pro</h2>
+          <p className="text-gray-600">
+            {authLoading ? 'Verifying authentication...' : 'Connecting to territory management system...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (mrError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-xl shadow-lg max-w-md border border-gray-200">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="h-8 w-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h2>
+          <p className="text-gray-600 mb-4">{mrError}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const navigationItems = getNavigationItems();
 
   const getIconColor = (color, isActive) => {
     const colors = {
@@ -444,7 +422,10 @@ function App() {
     return colors[color] || 'bg-gray-100 text-gray-700';
   };
 
+  // 🔧 TAB SWITCHING FIX - Modified renderTabContent with unique keys
   const renderTabContent = () => {
+    const baseKey = `${activeTab}-${componentKey}`;
+    
     switch (activeTab) {
       case 'overview':
         return (
@@ -481,17 +462,18 @@ function App() {
                 5 for 5
               </button>
             </div>
-            {activeOverviewTab === 'live-tracker' && <LiveTracker />}
-            {activeOverviewTab === 'dashboard' && <SalesPerformanceDashboard />}
-            {activeOverviewTab === 'lost-analysis' && <LostAnalysis />}
-            {activeOverviewTab === 'critical-parameters' && <CriticalParameters />}
-            {activeOverviewTab === '5-for-5' && <FiveForFive />}
+            {activeOverviewTab === 'live-tracker' && <LiveTracker key={`tracker-${baseKey}`} />}
+            {activeOverviewTab === 'dashboard' && <SalesPerformanceDashboard key={`dashboard-${baseKey}`} />}
+            {activeOverviewTab === 'lost-analysis' && <LostAnalysis key={`lost-${baseKey}`} />}
+            {activeOverviewTab === 'critical-parameters' && <CriticalParameters key={`critical-${baseKey}`} />}
+            {activeOverviewTab === '5-for-5' && <FiveForFive key={`five-${baseKey}`} />}
           </div>
         );
 
       case 'monthly-planning':
         return (
           <MonthlyPlanDashboardV2
+            key={`monthly-${baseKey}`}
             selectedMR={selectedMR}
             selectedMRName={selectedMRName}
             selectedMonth={selectedMonth}
@@ -504,6 +486,7 @@ function App() {
       case 'weekly-revision':
         return (
           <WeeklyRevisionDashboard 
+            key={`weekly-${baseKey}`}
             mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
@@ -515,72 +498,46 @@ function App() {
         );
       
       case 'emergency':
-        return <EmergencyDashboard />;
+        return <EmergencyDashboard key={`emergency-${baseKey}`} />;
       
       case 'quality':
-        return <VisitQualityMonitor mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} />;
+        return (
+          <VisitQualityMonitor 
+            key={`quality-${baseKey}`}
+            mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} 
+          />
+        );
       
       case 'nbd':
-        return <NBDPerformanceDashboard 
-          mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
-          dateRange={nbdDateRange}
-          performanceFilter={nbdPerformanceFilter}
-        />;
+        return (
+          <NBDPerformanceDashboard 
+            key={`nbd-${baseKey}`}
+            mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
+            dateRange={nbdDateRange}
+            performanceFilter={nbdPerformanceFilter}
+          />
+        );
       
-      case 'routes':
-        return <RouteOptimizationDashboard mrName={selectedMR?.name} mrData={selectedMR} />;
+      case 'route-optimization':
+        return (
+          <RouteOptimizationDashboard 
+            key={`route-${baseKey}`}
+            mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
+            mrData={selectedMR}
+          />
+        );
       
       case 'geocoding':
-        return <GeocodingDashboard />;
-      
-      case 'analytics':
-        return <AnalyticsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
-      
-      case 'reports':
-        return <ReportsView selectedMR={selectedMR} selectedMRName={selectedMRName} />;
+        return <GeocodingDashboard key={`geocoding-${baseKey}`} />;
       
       default:
-        return <EmergencyDashboard />;
+        return (
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-500">Select a tab to view content</p>
+          </div>
+        );
     }
   };
-
-  // Show loading while checking auth
-  if (authLoading || mrLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading TourPlan Pro</h2>
-          <p className="text-gray-600">
-            {authLoading ? 'Verifying authentication...' : 'Connecting to territory management system...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (mrError) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-xl shadow-lg max-w-md border border-gray-200">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="h-8 w-8 text-red-600" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h2>
-          <p className="text-gray-600 mb-4">{mrError}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
-          >
-            Retry Connection
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const navigationItems = getNavigationItems();
 
   return (
     <ProtectedRoute requiredAccess="viewer">
@@ -713,214 +670,133 @@ function App() {
         <div className={`transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
           {/* Fixed Top Section */}
           <div className="fixed top-0 right-0 bg-white border-b border-gray-200 z-20" style={{ left: sidebarCollapsed ? '64px' : '256px' }}>
-            {/* Top Header */}
-            <header className="h-16 flex items-center justify-between px-4 lg:px-6">
-              <div className="flex items-center space-x-4">
-                <h2 className="text-lg lg:text-xl font-bold text-gray-900 truncate">
-                  {navigationItems.find(item => item.id === activeTab)?.name || 'Dashboard'}
-                </h2>
-                <div className="hidden lg:flex items-center space-x-2 text-sm text-gray-500">
-                  <Calendar className="h-4 w-4" />
-                  <span>{new Date().toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  })}</span>
-                </div>
-              </div>
-
-             <div className="flex items-center space-x-2 lg:space-x-4">
-                {/* MR Selector */}
-                <div className="flex items-center space-x-2 lg:space-x-3">
-                  <label className="hidden lg:block text-sm font-medium text-gray-700">Medical Rep:</label>
-                  <select 
-                    value={selectedMRName} 
-                    onChange={handleMRChange}
-                    className="bg-white border border-gray-300 rounded-lg px-2 lg:px-3 py-2 text-xs lg:text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent w-32 lg:min-w-48"
-                    disabled={mrList.length === 0}
-                  >
-                    <option value="ALL_MRS">All MRs ({totalMRs})</option>
-                    {mrList.length === 0 ? (
-                      <option value="">No MRs Available</option>
-                    ) : (
-                      mrList.map((mr) => (
-                        <option key={mr.id} value={mr.name}>
-                          {mr.name} ({mr.employee_id})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-
-                {/* Month/Year Selectors - Show for Monthly Planning and Weekly Revision */}
-                {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {monthNames.slice(1).map((month, index) => (
-                        <option key={index + 1} value={index + 1}>
-                          {month}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {[2024, 2025, 2026].map(year => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
+            <div className="px-6 py-4">
+              <div className="flex items-center justify-between">
+                {/* Page Title */}
+                <div className="flex items-center space-x-4">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">
+                      {navigationItems.find(item => item.id === activeTab)?.name || 'Dashboard'}
+                    </h1>
+                    <p className="text-sm text-gray-600">
+                      {navigationItems.find(item => item.id === activeTab)?.description || 'Territory management system'}
+                    </p>
                   </div>
-                )}
-
-                {/* User Welcome */}
-                <div className="hidden lg:flex items-center space-x-2 text-sm">
-                  <span className="text-gray-600">Welcome,</span>
-                  <span className="font-medium text-gray-900">
-                    {currentUser?.profile?.full_name || 'User'}
-                  </span>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center space-x-1 lg:space-x-2">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Search className="h-4 w-4 lg:h-5 lg:w-5" />
-                  </button>
-                  <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
-                  </button>
-                  
-                  {/* Settings Dropdown with Logout */}
+                {/* Top Right Actions */}
+                <div className="flex items-center space-x-4">
+                  {/* MR Selector - Show for relevant tabs */}
+                  {['monthly-planning', 'weekly-revision', 'quality', 'nbd', 'route-optimization'].includes(activeTab) && (
+                    <div className="flex items-center space-x-2">
+                      <Users className="h-4 w-4 text-gray-400" />
+                      <select
+                        value={selectedMRName}
+                        onChange={(e) => {
+                          const mrName = e.target.value;
+                          setSelectedMRName(mrName);
+                          const mrData = getMRByName(mrName);
+                          setSelectedMR(mrData);
+                        }}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[200px]"
+                      >
+                        <option value="ALL_MRS">All Medical Reps</option>
+                        {mrList.map((mr) => (
+                          <option key={mr.name} value={mr.name}>
+                            {mr.name} ({mr.territory || 'No Territory'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Month/Year Selector - Show for planning tabs */}
+                  {['monthly-planning', 'weekly-revision'].includes(activeTab) && (
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        {monthNames.slice(1).map((month, index) => (
+                          <option key={index + 1} value={index + 1}>
+                            {month}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value={2024}>2024</option>
+                        <option value={2025}>2025</option>
+                        <option value={2026}>2026</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* NBD Specific Controls */}
+                  {activeTab === 'nbd' && (
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={nbdDateRange}
+                        onChange={(e) => setNbdDateRange(Number(e.target.value))}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value={7}>Last 7 days</option>
+                        <option value={30}>Last 30 days</option>
+                        <option value={90}>Last 90 days</option>
+                      </select>
+                      <select
+                        value={nbdPerformanceFilter}
+                        onChange={(e) => setNbdPerformanceFilter(e.target.value)}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="all">All Performance</option>
+                        <option value="high">High Performers</option>
+                        <option value="low">Needs Improvement</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Settings Dropdown */}
                   <SettingsDropdown 
                     currentUser={currentUser} 
-                    onSignOut={handleSignOut}
+                    onSignOut={handleSignOut} 
                   />
                 </div>
               </div>
-            </header>
-
-            {/* MR Details Bar */}
-            {selectedMR && selectedMRName !== 'ALL_MRS' && (
-              <div className="bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 px-4 lg:px-6 py-3">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
-                  <div className="flex flex-wrap items-center gap-3 lg:gap-6">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="font-semibold text-gray-900 text-sm lg:text-base">{selectedMR.name}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 lg:gap-4 text-xs lg:text-sm">
-                      <div className="flex items-center space-x-1">
-                        <MapPin className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                        <span className="text-gray-700">{selectedMR.territory}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Target className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                        <span className="text-gray-700">₹{selectedMR.monthly_target?.toLocaleString() || 'N/A'}</span>
-                      </div>
-                      {selectedMR.manager_name && (
-                        <div className="flex items-center space-x-1">
-                          <Users className="h-3 w-3 lg:h-4 lg:w-4 text-gray-500" />
-                          <span className="text-gray-700">{selectedMR.manager_name}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 lg:space-x-3 text-xs lg:text-sm text-gray-600">
-                    <span>Joined: {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}</span>
-                    <span className="hidden lg:inline">•</span>
-                    <span>ID: {selectedMR.employee_id}</span>
-                    {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                      <>
-                        <span className="hidden lg:inline">•</span>
-                        <span>{monthNames[selectedMonth]} {selectedYear}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* All MRs Summary */}
-            {selectedMRName === 'ALL_MRS' && (
-              <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-b border-gray-100 px-4 lg:px-6 py-3">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-2 lg:space-y-0">
-                  <div className="flex items-center space-x-2 lg:space-x-4">
-                    <div className="flex items-center space-x-2">
-                      <BarChart3 className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600" />
-                      <span className="font-semibold text-gray-900 text-sm lg:text-base">Comprehensive Analysis</span>
-                    </div>
-                    <span className="text-gray-600 text-xs lg:text-sm">Viewing all {totalMRs} active Medical Representatives</span>
-                  </div>
-                  <div className="flex items-center space-x-2 lg:space-x-4 text-xs lg:text-sm text-gray-600">
-                    <span>Total Territories: {totalMRs}</span>
-                    <span className="hidden lg:inline">•</span>
-                    <span>System-wide Overview</span>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
-          {/* Tab Content with proper top spacing */}
-          <main className="pt-32 lg:pt-28 p-4 lg:p-6">
-            {renderTabContent()}
-          </main>
+          {/* Content Area */}
+          <div className="pt-24 pb-8">
+            <div className="px-6">
+              {renderTabContent()}
+            </div>
+          </div>
+        </div>
+
+        {/* Global Status Indicator */}
+        <div className="fixed bottom-4 right-4 z-50">
+          {mrLoading && (
+            <div className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span className="text-sm">Loading...</span>
+            </div>
+          )}
+          
+          {totalMRs > 0 && (
+            <div className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-medium">
+              {totalMRs} MRs Connected
+            </div>
+          )}
         </div>
       </div>
     </ProtectedRoute>
   );
 }
-
-
-
-// Analytics View Component  
-const AnalyticsView = ({ selectedMR, selectedMRName }) => (
-  <div className="space-y-6">
-    <div className="text-center py-20">
-      <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-        <BarChart3 className="h-10 w-10 text-white" />
-      </div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">Advanced Analytics</h2>
-      <p className="text-gray-600 text-lg mb-8">
-        Comprehensive performance insights and predictive analytics
-      </p>
-      <div className="bg-indigo-50 rounded-xl p-6 max-w-md mx-auto border border-indigo-200">
-        <h3 className="font-semibold text-indigo-900 mb-2">Coming Soon</h3>
-        <p className="text-indigo-700 text-sm">
-          Advanced analytics dashboard with trends and forecasting
-        </p>
-      </div>
-    </div>
-  </div>
-);
-
-// Reports View Component
-const ReportsView = ({ selectedMR, selectedMRName }) => (
-  <div className="space-y-6">
-    <div className="text-center py-20">
-      <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-        <FileText className="h-10 w-10 text-white" />
-      </div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">Reports Center</h2>
-      <p className="text-gray-600 text-lg mb-8">
-        Comprehensive reports and data exports
-      </p>
-      <div className="bg-amber-50 rounded-xl p-6 max-w-md mx-auto border border-amber-200">
-        <h3 className="font-semibold text-amber-900 mb-2">Coming Soon</h3>
-        <p className="text-amber-700 text-sm">
-          Advanced reporting system with custom exports
-        </p>
-      </div>
-    </div>
-  </div>
-);
 
 export default App;
