@@ -661,7 +661,7 @@ const LoadingTerminal = () => {
 };
 
   // Helper function to get date range based on selected period
-  // 🔧 FIXED: getDateRange function with correct monthly end date calculation
+ // 1. REMOVE console.log from getDateRange function
 const getDateRange = () => {
   if (selectedPeriod === 'custom') {
     return { start: dateRange.start, end: dateRange.end };
@@ -687,20 +687,10 @@ const getDateRange = () => {
     case 'monthly':
       const [monthYear, monthNum] = selectedMonth.split('-');
       start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
-      // 🔧 CRITICAL FIX: Calculate last day of the month correctly
       end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
       
-      console.log('🔧 Monthly date calculation DEBUG:', {
-        selectedMonth,
-        monthYear: parseInt(monthYear),
-        monthNum: parseInt(monthNum),
-        startCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum) - 1}, 1)`,
-        endCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum)}, 0)`,
-        actualStart: start.toISOString(),
-        actualEnd: end.toISOString(),
-        startDate: start.toISOString().split('T')[0],
-        endDate: end.toISOString().split('T')[0]
-      });
+      // 🔧 REMOVE this console.log - it's causing infinite loops!
+      // console.log('🔧 Monthly date calculation DEBUG:', { ... });
       break;
 
     case 'quarterly':
@@ -725,7 +715,8 @@ const getDateRange = () => {
          String(end.getDate()).padStart(2, '0')
   };
   
-  console.log('📅 getDateRange result (using local dates):', result);
+  // 🔧 REMOVE this console.log - it's causing infinite loops!
+  // console.log('📅 getDateRange result (using local dates):', result);
   return result;
 };
 
@@ -895,9 +886,17 @@ useEffect(() => {
     fetchDashboardData();
   }
 }, [
-  selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, 
-  selectedRegion, selectedTeam, selectedState, selectedMR, dateRange, 
-  medicalReps // Make sure all filter dependencies are here
+  selectedPeriod, 
+  selectedMonth, 
+  selectedWeek, 
+  selectedQuarter, 
+  selectedYear, 
+  selectedRegion, 
+  selectedTeam, 
+  selectedState, 
+  selectedMR, 
+  dateRange, 
+  medicalReps.length // 🔧 USE .length instead of full array to prevent infinite loops
 ]);
 
   // Reset MR selection when other filters change
