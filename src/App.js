@@ -199,10 +199,10 @@ function App() {
           console.log('🔄 Browser tab visible again - refreshing current tab data');
           
           // Instead of forcing remount, dispatch refresh events
-          const refreshEvent = new CustomEvent('refreshTabData', {
-            detail: { activeTab, activeOverviewTab }
-          });
-          window.dispatchEvent(refreshEvent);
+          //const refreshEvent = new CustomEvent('refreshTabData', {
+          //  detail: { activeTab, activeOverviewTab }
+         // });
+          //window.dispatchEvent(refreshEvent);
         }
         isTabVisible = true;
       }
