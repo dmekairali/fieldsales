@@ -176,9 +176,6 @@ function App() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  // 🔧 TAB SWITCHING FIX - Add component key to force remount after browser tab return
-  const [componentKey, setComponentKey] = useState(0);
-
   const { 
     mrList, 
     loading: mrLoading, 
@@ -187,20 +184,36 @@ function App() {
     totalMRs 
   } = useMedicalRepresentatives();
 
-  // 🔧 TAB SWITCHING FIX - Force component remount on browser tab focus
+  // 🔧 PROPER TAB SWITCHING FIX - Refresh data without forcing remount
   useEffect(() => {
-    const handleFocus = () => {
-      // Force refresh all components when browser tab gets focus
-      setComponentKey(prev => prev + 1);
-      console.log('🔄 Browser tab focused - components will refresh on next tab switch');
+    let isTabVisible = true;
+    
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab became hidden
+        isTabVisible = false;
+        console.log('🔄 Browser tab hidden');
+      } else {
+        // Tab became visible again
+        if (!isTabVisible) {
+          console.log('🔄 Browser tab visible again - refreshing current tab data');
+          
+          // Instead of forcing remount, dispatch refresh events
+          const refreshEvent = new CustomEvent('refreshTabData', {
+            detail: { activeTab, activeOverviewTab }
+          });
+          window.dispatchEvent(refreshEvent);
+        }
+        isTabVisible = true;
+      }
     };
 
-    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [activeTab, activeOverviewTab]);
 
   // Initialize authentication
   useEffect(() => {
@@ -422,10 +435,8 @@ function App() {
     return colors[color] || 'bg-gray-100 text-gray-700';
   };
 
-  // 🔧 TAB SWITCHING FIX - Modified renderTabContent with unique keys
+  // 🔧 FIXED renderTabContent - NO keys that force remounting
   const renderTabContent = () => {
-    const baseKey = `${activeTab}-${componentKey}`;
-    
     switch (activeTab) {
       case 'overview':
         return (
@@ -462,18 +473,18 @@ function App() {
                 5 for 5
               </button>
             </div>
-            {activeOverviewTab === 'live-tracker' && <LiveTracker key={`tracker-${baseKey}`} />}
-            {activeOverviewTab === 'dashboard' && <SalesPerformanceDashboard key={`dashboard-${baseKey}`} />}
-            {activeOverviewTab === 'lost-analysis' && <LostAnalysis key={`lost-${baseKey}`} />}
-            {activeOverviewTab === 'critical-parameters' && <CriticalParameters key={`critical-${baseKey}`} />}
-            {activeOverviewTab === '5-for-5' && <FiveForFive key={`five-${baseKey}`} />}
+            {/* NO KEYS - let components stay mounted */}
+            {activeOverviewTab === 'live-tracker' && <LiveTracker />}
+            {activeOverviewTab === 'dashboard' && <SalesPerformanceDashboard />}
+            {activeOverviewTab === 'lost-analysis' && <LostAnalysis />}
+            {activeOverviewTab === 'critical-parameters' && <CriticalParameters />}
+            {activeOverviewTab === '5-for-5' && <FiveForFive />}
           </div>
         );
 
       case 'monthly-planning':
         return (
           <MonthlyPlanDashboardV2
-            key={`monthly-${baseKey}`}
             selectedMR={selectedMR}
             selectedMRName={selectedMRName}
             selectedMonth={selectedMonth}
@@ -486,7 +497,6 @@ function App() {
       case 'weekly-revision':
         return (
           <WeeklyRevisionDashboard 
-            key={`weekly-${baseKey}`}
             mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}
             selectedMonth={selectedMonth}
             selectedYear={selectedYear}
@@ -498,12 +508,11 @@ function App() {
         );
       
       case 'emergency':
-        return <EmergencyDashboard key={`emergency-${baseKey}`} />;
+        return <EmergencyDashboard />;
       
       case 'quality':
         return (
           <VisitQualityMonitor 
-            key={`quality-${baseKey}`}
             mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName} 
           />
         );
@@ -511,7 +520,6 @@ function App() {
       case 'nbd':
         return (
           <NBDPerformanceDashboard 
-            key={`nbd-${baseKey}`}
             mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
             dateRange={nbdDateRange}
             performanceFilter={nbdPerformanceFilter}
@@ -521,14 +529,13 @@ function App() {
       case 'route-optimization':
         return (
           <RouteOptimizationDashboard 
-            key={`route-${baseKey}`}
             mrName={selectedMRName === 'ALL_MRS' ? null : selectedMRName}
             mrData={selectedMR}
           />
         );
       
       case 'geocoding':
-        return <GeocodingDashboard key={`geocoding-${baseKey}`} />;
+        return <GeocodingDashboard />;
       
       default:
         return (
