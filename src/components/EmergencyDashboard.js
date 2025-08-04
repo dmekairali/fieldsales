@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { 
   AlertTriangle, 
   TrendingDown, 
@@ -37,10 +38,16 @@ const EmergencyDashboard = () => {
     const [sortDirection, setSortDirection] = useState('desc');
     const [showFilters, setShowFilters] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const isOnline = useOnlineStatus();
 
     useEffect(() => {
-        fetchTerritoryData();
-        
+        if (isOnline) {
+            console.log('Online, fetching territory data...');
+            fetchTerritoryData();
+        }
+    }, [isOnline]);
+
+    useEffect(() => {
         // Auto-refresh every 30 minutes
         const interval = setInterval(fetchTerritoryData, 1800000);
         return () => clearInterval(interval);
