@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { Calendar, TrendingUp, Users, Target, DollarSign, Activity, Award, AlertCircle, ChevronDown, Filter, Download, RefreshCw, User, MapPin, Phone, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
@@ -496,7 +496,7 @@ const SalesPerformanceDashboard = () => {
   const [selectedTeam, setSelectedTeam] = useState('all');
   const [selectedState, setSelectedState] = useState('all');
   const [selectedMR, setSelectedMR] = useState('all');
-  const [dateRange, setDateRange] = useState({ start: '2025-01-01', end: '2025-12-31' });
+  const [customDateRange, setCustomDateRange] = useState({ start: '2025-01-01', end: '2025-12-31' });
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
   const [teams, setTeams] = useState([]);
@@ -662,72 +662,72 @@ const LoadingTerminal = () => {
 
   // Helper function to get date range based on selected period
   // 🔧 FIXED: getDateRange function with correct monthly end date calculation
-const getDateRange = () => {
-  if (selectedPeriod === 'custom') {
-    return { start: dateRange.start, end: dateRange.end };
-  }
+  const dateRange = useMemo(() => {
+    if (selectedPeriod === 'custom') {
+      return customDateRange;
+    }
 
-  const now = new Date();
-  let start, end;
+    const now = new Date();
+    let start, end;
 
-  switch (selectedPeriod) {
-    case 'weekly':
-      const [year, week] = selectedWeek.split('-W');
-      const firstDayOfYear = new Date(parseInt(year), 0, 1);
-      const daysToAdd = (parseInt(week) - 1) * 7;
-      start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-      // Adjust to Monday
-      const dayOfWeek = start.getDay();
-      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      start.setDate(start.getDate() + daysToMonday);
-      end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      break;
+    switch (selectedPeriod) {
+      case 'weekly':
+        const [year, week] = selectedWeek.split('-W');
+        const firstDayOfYear = new Date(parseInt(year), 0, 1);
+        const daysToAdd = (parseInt(week) - 1) * 7;
+        start = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+        // Adjust to Monday
+        const dayOfWeek = start.getDay();
+        const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        start.setDate(start.getDate() + daysToMonday);
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        break;
 
-    case 'monthly':
-      const [monthYear, monthNum] = selectedMonth.split('-');
-      start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
-      // 🔧 CRITICAL FIX: Calculate last day of the month correctly
-      end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
-      
-      console.log('🔧 Monthly date calculation DEBUG:', {
-        selectedMonth,
-        monthYear: parseInt(monthYear),
-        monthNum: parseInt(monthNum),
-        startCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum) - 1}, 1)`,
-        endCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum)}, 0)`,
-        actualStart: start.toISOString(),
-        actualEnd: end.toISOString(),
-        startDate: start.toISOString().split('T')[0],
-        endDate: end.toISOString().split('T')[0]
-      });
-      break;
+      case 'monthly':
+        const [monthYear, monthNum] = selectedMonth.split('-');
+        start = new Date(parseInt(monthYear), parseInt(monthNum) - 1, 1);
+        // 🔧 CRITICAL FIX: Calculate last day of the month correctly
+        end = new Date(parseInt(monthYear), parseInt(monthNum), 0);
 
-    case 'quarterly':
-      const [qYear, quarter] = selectedQuarter.split('-Q');
-      const qNum = parseInt(quarter);
-      start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
-      end = new Date(parseInt(qYear), qNum * 3, 0);
-      break;
+        console.log('🔧 Monthly date calculation DEBUG:', {
+          selectedMonth,
+          monthYear: parseInt(monthYear),
+          monthNum: parseInt(monthNum),
+          startCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum) - 1}, 1)`,
+          endCalc: `new Date(${parseInt(monthYear)}, ${parseInt(monthNum)}, 0)`,
+          actualStart: start.toISOString(),
+          actualEnd: end.toISOString(),
+          startDate: start.toISOString().split('T')[0],
+          endDate: end.toISOString().split('T')[0]
+        });
+        break;
 
-    case 'yearly':
-      start = new Date(parseInt(selectedYear), 0, 1);
-      end = new Date(parseInt(selectedYear), 11, 31);
-      break;
-  }
+      case 'quarterly':
+        const [qYear, quarter] = selectedQuarter.split('-Q');
+        const qNum = parseInt(quarter);
+        start = new Date(parseInt(qYear), (qNum - 1) * 3, 1);
+        end = new Date(parseInt(qYear), qNum * 3, 0);
+        break;
 
-  const result = {
-    start: start.getFullYear() + '-' + 
-           String(start.getMonth() + 1).padStart(2, '0') + '-' + 
-           String(start.getDate()).padStart(2, '0'),
-    end: end.getFullYear() + '-' + 
-         String(end.getMonth() + 1).padStart(2, '0') + '-' + 
-         String(end.getDate()).padStart(2, '0')
-  };
-  
-  console.log('📅 getDateRange result (using local dates):', result);
-  return result;
-};
+      case 'yearly':
+        start = new Date(parseInt(selectedYear), 0, 1);
+        end = new Date(parseInt(selectedYear), 11, 31);
+        break;
+    }
+
+    const result = {
+      start: start.getFullYear() + '-' +
+             String(start.getMonth() + 1).padStart(2, '0') + '-' +
+             String(start.getDate()).padStart(2, '0'),
+      end: end.getFullYear() + '-' +
+           String(end.getMonth() + 1).padStart(2, '0') + '-' +
+           String(end.getDate()).padStart(2, '0')
+    };
+
+    console.log('📅 getDateRange result (using local dates):', result);
+    return result;
+  }, [selectedPeriod, selectedMonth, selectedWeek, selectedQuarter, selectedYear, customDateRange]);
 
   // Get previous period date range for comparison
   const getPreviousDateRange = (currentRange) => {
@@ -1013,7 +1013,7 @@ const fetchDashboardData = async () => {
     addLog(`✓ Historical data loaded: ${historicalData.orders?.length || 0} orders, ${historicalData.visits?.length || 0} visits`, 'success');
 
     // Get current and previous date ranges
-    const currentRange = getDateRange();
+    const currentRange = dateRange;
     const previousRange = getPreviousDateRange(currentRange);
     addLog(`Date range: ${currentRange.start} to ${currentRange.end}`, 'info');
     
@@ -1370,8 +1370,8 @@ const fetchDashboardData = async () => {
       const firstVisit = firstVisitMap.get(customerKey);
       if (firstVisit && firstVisit.mrName === mrName) {
         const visitDate = new Date(visit.dcrDate);
-        const selectedPeriodStart = new Date(getDateRange().start);
-        const selectedPeriodEnd = new Date(getDateRange().end);
+        const selectedPeriodStart = new Date(dateRange.start);
+        const selectedPeriodEnd = new Date(dateRange.end);
         
         if (visitDate >= selectedPeriodStart && visitDate <= selectedPeriodEnd) {
           performerMap[mrName].newProspects += 1;
@@ -1854,7 +1854,7 @@ const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
       return [];
     }
 
-    const currentRange = getDateRange();
+    const currentRange = dateRange;
     
     // Get all unique MR names from orders and visits
     const [orderData, visitData] = await Promise.all([
@@ -2440,15 +2440,15 @@ const SortIcon = ({ column }) => {
                 <div className="flex items-center gap-2 mt-2">
                   <input
                     type="date"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                    value={customDateRange.start}
+                    onChange={(e) => setCustomDateRange({ ...customDateRange, start: e.target.value })}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <span className="text-gray-500">to</span>
                   <input
                     type="date"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                    value={customDateRange.end}
+                    onChange={(e) => setCustomDateRange({ ...customDateRange, end: e.target.value })}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
