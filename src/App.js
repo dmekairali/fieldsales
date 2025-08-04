@@ -1,8 +1,8 @@
 // App.js - Complete Integration with Authentication and Settings Dropdown Logout
 
 import React, { useState, useEffect, useRef } from 'react';
-import ProtectedRoute from './components/ProtectedRoute';
-import authService from './services/AuthService';
+// import ProtectedRoute from './components/ProtectedRoute';
+// import authService from './services/AuthService';
 import EmergencyDashboard from './components/EmergencyDashboard';
 import VisitQualityMonitor from './components/VisitQualityMonitor';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
@@ -220,8 +220,8 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Auth state
-  const [currentUser, setCurrentUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState({ profile: { access_level: 'admin' } });
+  const [authLoading, setAuthLoading] = useState(false);
   
   // Shared state for month/year - used by both Monthly Planning and Weekly Revision
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -236,39 +236,39 @@ function App() {
   } = useMedicalRepresentatives();
 
   // Initialize authentication
-  useEffect(() => {
-    initializeAuth();
+  // useEffect(() => {
+  //   initializeAuth();
     
-    // Listen for auth changes
-    const unsubscribe = authService.onAuthStateChange((event, userData) => {
-      if (event === 'SIGNED_IN') {
-        setCurrentUser(userData);
-        setAuthLoading(false);
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setAuthLoading(false);
-        setActiveTab('overview'); // Reset to default tab
-      }
-    });
+  //   // Listen for auth changes
+  //   const unsubscribe = authService.onAuthStateChange((event, userData) => {
+  //     if (event === 'SIGNED_IN') {
+  //       setCurrentUser(userData);
+  //       setAuthLoading(false);
+  //     } else if (event === 'SIGNED_OUT') {
+  //       setCurrentUser(null);
+  //       setAuthLoading(false);
+  //       setActiveTab('overview'); // Reset to default tab
+  //     }
+  //   });
 
-    return () => unsubscribe();
-  }, []);
+  //   return () => unsubscribe();
+  // }, []);
 
-  const initializeAuth = async () => {
-    try {
-      setAuthLoading(true);
-      await authService.initialize();
-      const user = await authService.getCurrentSession();
+  // const initializeAuth = async () => {
+  //   try {
+  //     setAuthLoading(true);
+  //     await authService.initialize();
+  //     const user = await authService.getCurrentSession();
       
-      if (user) {
-        setCurrentUser(user);
-      }
-    } catch (error) {
-      console.error('Auth initialization error:', error);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+  //     if (user) {
+  //       setCurrentUser(user);
+  //     }
+  //   } catch (error) {
+  //     console.error('Auth initialization error:', error);
+  //   } finally {
+  //     setAuthLoading(false);
+  //   }
+  // };
 
   // Set default MR when list loads
   useEffect(() => {
@@ -396,13 +396,14 @@ function App() {
     }
   };
 
-  const handleSignOut = async () => {
-    try {
-      await authService.signOut();
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
+  const handleSignOut = () => {};
+  // const handleSignOut = async () => {
+  //   try {
+  //     await authService.signOut();
+  //   } catch (error) {
+  //     console.error('Sign out error:', error);
+  //   }
+  // };
 
   const getAccessLevelDisplay = (level) => {
     const levels = {
@@ -583,7 +584,7 @@ function App() {
   const navigationItems = getNavigationItems();
 
   return (
-    <ProtectedRoute requiredAccess="viewer">
+    // <ProtectedRoute requiredAccess="viewer">
       <div className="min-h-screen bg-gray-50 overflow-x-hidden">
         {/* Sidebar */}
         <div className={`fixed left-0 top-0 h-full bg-white border-r border-gray-200 transition-all duration-300 z-30 ${
@@ -875,7 +876,7 @@ function App() {
           </main>
         </div>
       </div>
-    </ProtectedRoute>
+    // </ProtectedRoute>
   );
 }
 
