@@ -327,21 +327,35 @@ class AuthService {
 
       // Listen for auth changes
       supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth state changed:', event);
-        
-        if (event === 'SIGNED_OUT' || !session) {
-          this.currentUser = null;
-          this.notifyListeners('SIGNED_OUT', null);
-        } else if (event === 'SIGNED_IN' && session) {
-          // Validate and set user profile
-          const profile = await this.getUserProfile(session.user.email);
-          if (profile && profile.is_active) {
-            this.currentUser = {
-              ...session.user,
-              profile: profile
-            };
-            this.notifyListeners('SIGNED_IN', this.currentUser);
-          }
+        console.log('Auth state changed:', event, session);
+
+        switch (event) {
+          case 'SIGNED_IN':
+          case 'TOKEN_REFRESHED':
+          case 'USER_UPDATED':
+            if (session && session.user) {
+              const profile = await this.getUserProfile(session.user.email);
+              if (profile && profile.is_active) {
+                const newUserData = { ...session.user, profile };
+                // Avoid unnecessary notifications if user data is the same
+                if (JSON.stringify(this.currentUser) !== JSON.stringify(newUserData)) {
+                  this.currentUser = newUserData;
+                  this.notifyListeners('SIGNED_IN', this.currentUser);
+                }
+              } else {
+                // If profile is invalid, treat as sign out
+                this.currentUser = null;
+                this.notifyListeners('SIGNED_OUT', null);
+                await supabase.auth.signOut();
+              }
+            }
+            break;
+          case 'SIGNED_OUT':
+            this.currentUser = null;
+            this.notifyListeners('SIGNED_OUT', null);
+            break;
+          default:
+          // Do nothing for other events like 'PASSWORD_RECOVERY', etc.
         }
       });
 
