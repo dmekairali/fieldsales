@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { Calendar, TrendingUp, Users, Target, DollarSign, Activity, Award, AlertCircle, ChevronDown, Filter, Download, RefreshCw, User, MapPin, Phone, ShoppingCart, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import SetTargetModal from './SetTargetModal';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -509,6 +510,7 @@ const SalesPerformanceDashboard = () => {
   // New state variables for enhanced functionality
   const [sortConfig, setSortConfig] = useState({ key: 'revenue', direction: 'desc' });
   const [visiblePerformers, setVisiblePerformers] = useState(10);
+  const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
 
    const addLog = (message, type = 'info') => {
   const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
@@ -2533,9 +2535,29 @@ const SortIcon = ({ column }) => {
             
             {/* Enhanced Medical Rep Filter */}
             <EnhancedMedicalRepDropdown />
+             {/* Set Target Button */}
+            <div className="flex justify-end items-center col-span-1 sm:col-span-2 lg:col-span-3 xl:col-span-5 mt-4">
+              <button
+                onClick={() => setIsTargetModalOpen(true)}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Target className="w-4 h-4 mr-2" />
+                Set Target
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      <SetTargetModal
+        isOpen={isTargetModalOpen}
+        onClose={() => setIsTargetModalOpen(false)}
+        performers={getFilteredMedicalReps().activeReps}
+        onSave={(targets) => {
+          console.log('Targets to be saved:', targets);
+          // Backend call will be implemented here later
+        }}
+      />
 
       {/* Enhanced KPI Cards - Two Rows Layout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-4 min-w-0">
