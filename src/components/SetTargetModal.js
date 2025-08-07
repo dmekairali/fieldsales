@@ -24,14 +24,16 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
     nbd_conversion_percent_plan: 5,
     crr_conversion_percent_plan: 15,
     total_revenue_target: 50000,
+    nbd_revenue_split: 15,
+    crr_revenue_split: 85,
   });
 
   useEffect(() => {
     if (performers) {
       const initialTargets = {};
       performers.forEach(performer => {
-        const nbd_revenue_target = (defaultTargets.total_revenue_target * defaultTargets.nbd_conversion_percent_plan) / 100;
-        const crr_revenue_target = (defaultTargets.total_revenue_target * defaultTargets.crr_conversion_percent_plan) / 100;
+        const nbd_revenue_target = (defaultTargets.total_revenue_target * defaultTargets.nbd_revenue_split) / 100;
+        const crr_revenue_target = (defaultTargets.total_revenue_target * defaultTargets.crr_revenue_split) / 100;
 
         initialTargets[performer.id] = {
           ...defaultTargets,
@@ -135,10 +137,18 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
           </button>
         </div>
 
-        <div className="p-4 grid grid-cols-4 gap-4 border-b">
+        <div className="p-4 grid grid-cols-5 gap-4 border-b">
           <div>
             <label className="block text-sm font-medium text-gray-700">Total Revenue</label>
             <input type="number" value={defaultTargets.total_revenue_target} onChange={(e) => handleDefaultTargetChange('total_revenue_target', e.target.value)} className="w-full p-1 border rounded" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">NBD Revenue %</label>
+            <input type="number" value={defaultTargets.nbd_revenue_split} onChange={(e) => handleDefaultTargetChange('nbd_revenue_split', e.target.value)} className="w-full p-1 border rounded" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">CRR Revenue %</label>
+            <input type="number" value={defaultTargets.crr_revenue_split} onChange={(e) => handleDefaultTargetChange('crr_revenue_split', e.target.value)} className="w-full p-1 border rounded" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Total Visits</label>
