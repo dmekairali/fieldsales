@@ -308,6 +308,21 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave }) => {
     }
   };
 
+  const handleDefaultTargetChange = (field, value) => {
+    setDefaultTargets(prev => {
+      const newDefaults = { ...prev, [field]: value };
+      
+      // Ensure NBD + CRR splits add up to 100%
+      if (field === 'nbd_revenue_split') {
+        newDefaults.crr_revenue_split = 100 - value;
+      } else if (field === 'crr_revenue_split') {
+        newDefaults.nbd_revenue_split = 100 - value;
+      }
+      
+      return newDefaults;
+    });
+  };
+
   const handleAutoCompute = async () => {
     const today = new Date();
     const threeWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 21);
