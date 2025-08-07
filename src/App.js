@@ -461,45 +461,13 @@ function App() {
     switch (activeTab) {
       case 'overview':
         return (
-          <div>
-            <div className="flex border-b">
-              <button
-                onClick={() => setActiveOverviewTab('live-tracker')}
-                className={`py-2 px-4 ${activeOverviewTab === 'live-tracker' ? 'border-b-2 border-blue-500' : ''}`}
-              >
-                Live Tracker
-              </button>
-              <button
-                onClick={() => setActiveOverviewTab('dashboard')}
-                className={`py-2 px-4 ${activeOverviewTab === 'dashboard' ? 'border-b-2 border-blue-500' : ''}`}
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => setActiveOverviewTab('lost-analysis')}
-                className={`py-2 px-4 ${activeOverviewTab === 'lost-analysis' ? 'border-b-2 border-blue-500' : ''}`}
-              >
-                Lost Analysis
-              </button>
-              <button
-                onClick={() => setActiveOverviewTab('critical-parameters')}
-                className={`py-2 px-4 ${activeOverviewTab === 'critical-parameters' ? 'border-b-2 border-blue-500' : ''}`}
-              >
-                Critical Parameters
-              </button>
-              <button
-                onClick={() => setActiveOverviewTab('5-for-5')}
-                className={`py-2 px-4 ${activeOverviewTab === '5-for-5' ? 'border-b-2 border-blue-500' : ''}`}
-              >
-                5 for 5
-              </button>
-            </div>
+          <>
             {activeOverviewTab === 'live-tracker' && <LiveTracker />}
             {activeOverviewTab === 'dashboard' && <SalesPerformanceDashboard />}
             {activeOverviewTab === 'lost-analysis' && <LostAnalysis />}
             {activeOverviewTab === 'critical-parameters' && <CriticalParameters />}
             {activeOverviewTab === '5-for-5' && <FiveForFive />}
-          </div>
+          </>
         );
 
       case 'monthly-planning':
@@ -880,10 +848,48 @@ function App() {
                 </div>
               </div>
             )}
+
+            {/* Dashboard Overview Tabs */}
+            {activeTab === 'overview' && (
+              <div className="bg-white border-b border-gray-200">
+                <nav className="flex space-x-4 px-4 lg:px-6">
+                  <button
+                    onClick={() => setActiveOverviewTab('live-tracker')}
+                    className={`py-3 px-2 font-medium text-sm transition-colors ${activeOverviewTab === 'live-tracker' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    Live Tracker
+                  </button>
+                  <button
+                    onClick={() => setActiveOverviewTab('dashboard')}
+                    className={`py-3 px-2 font-medium text-sm transition-colors ${activeOverviewTab === 'dashboard' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => setActiveOverviewTab('lost-analysis')}
+                    className={`py-3 px-2 font-medium text-sm transition-colors ${activeOverviewTab === 'lost-analysis' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    Lost Analysis
+                  </button>
+                  <button
+                    onClick={() => setActiveOverviewTab('critical-parameters')}
+                    className={`py-3 px-2 font-medium text-sm transition-colors ${activeOverviewTab === 'critical-parameters' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    Critical Parameters
+                  </button>
+                  <button
+                    onClick={() => setActiveOverviewTab('5-for-5')}
+                    className={`py-3 px-2 font-medium text-sm transition-colors ${activeOverviewTab === '5-for-5' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    5 for 5
+                  </button>
+                </nav>
+              </div>
+            )}
           </div>
 
           {/* Tab Content with proper top spacing */}
-          <main className="pt-32 lg:pt-28 p-4 lg:p-6">
+          <main className="pt-44 lg:pt-40 p-4 lg:p-6">
             {renderTabContent()}
           </main>
         </div>
