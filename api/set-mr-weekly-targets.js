@@ -1,10 +1,25 @@
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Supabase URL and Key are required');
+}
+
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-module.exports = async (req, res) => {
+function getWeekStartDate(year, weekNumber) {
+    const firstDayOfYear = new Date(year, 0, 1);
+    const daysToAdd = (weekNumber - 1) * 7;
+    const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+    const dayOfWeek = weekDate.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    weekDate.setDate(weekDate.getDate() + daysToMonday);
+    return weekDate;
+}
+
+export default async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
@@ -23,7 +38,7 @@ module.exports = async (req, res) => {
 
         const record = {
           employee_id: mrId,
-          mr_name: performerTarget.name, // Assuming name is passed in targets
+          mr_name: performerTarget.name,
           week_number: week,
           week_year: year,
           week_start_date: weekStartDate.toISOString().split('T')[0],
@@ -41,7 +56,7 @@ module.exports = async (req, res) => {
           per_day_revenue_total: (performerTarget.total_revenue_target / 6).toFixed(2),
           per_day_nbd_revenue: (performerTarget.nbd_revenue_target / 6).toFixed(2),
           per_day_crr_revenue: (performerTarget.crr_revenue_target / 6).toFixed(2),
-          created_by: 'SYSTEM_MANUAL_ENTRY', // Or get from session
+          created_by: 'SYSTEM_MANUAL_ENTRY',
         };
         recordsToInsert.push(record);
       }
@@ -58,13 +73,3 @@ module.exports = async (req, res) => {
     res.status(500).json({ message: 'Error saving targets', error: error.message });
   }
 };
-
-function getWeekStartDate(year, weekNumber) {
-    const firstDayOfYear = new Date(year, 0, 1);
-    const daysToAdd = (weekNumber - 1) * 7;
-    const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-    const dayOfWeek = weekDate.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    weekDate.setDate(weekDate.getDate() + daysToMonday);
-    return weekDate;
-}
