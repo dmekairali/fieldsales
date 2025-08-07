@@ -179,24 +179,28 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
         <div className="p-4 overflow-y-auto">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10">
+              <thead className="bg-gray-100 sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">MR Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Visits</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Visits</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Visits</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Conv. %</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Conv. %</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Conv. %</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">S.No.</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider sticky left-0 bg-gray-100 z-10">MR Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Total Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">NBD Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">CRR Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Total Visits</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">NBD Visits</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">CRR Visits</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Total Conv. %</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">NBD Conv. %</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">CRR Conv. %</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {(performers || []).map((performer) => (
-                  <tr key={performer.id}>
+                {(performers || []).map((performer, index) => (
+                  <tr key={performer.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10">{performer.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{performer.role_level}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.total_revenue_target} onChange={(e) => handleInputChange(performer.id, 'total_revenue_target', e.target.value)} />
                     </td>
@@ -227,6 +231,18 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
                   </tr>
                 ))}
               </tbody>
+              <tfoot className="bg-gray-100">
+                <tr>
+                  <td colSpan="3" className="px-6 py-3 text-right text-sm font-bold text-gray-600 uppercase tracking-wider">Total</td>
+                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseFloat(t.total_revenue_target || 0), 0).toFixed(2)}</td>
+                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseFloat(t.nbd_revenue_target || 0), 0).toFixed(2)}</td>
+                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseFloat(t.crr_revenue_target || 0), 0).toFixed(2)}</td>
+                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseInt(t.total_visit_plan || 0), 0)}</td>
+                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseInt(t.nbd_visit_plan || 0), 0)}</td>
+                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseInt(t.crr_visit_plan || 0), 0)}</td>
+                  <td colSpan="3"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -234,7 +250,8 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
         <div className="p-4 border-t flex justify-between items-center">
           <button
             onClick={handleAutoCompute}
-            className="flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+            disabled
+            className="flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             <Zap size={16} className="mr-2" />
             Auto-compute
