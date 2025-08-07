@@ -1,8 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { X, Target, Zap } from 'lucide-react';
+import { X, Target, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const getWeekNumber = (d) => {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return [d.getUTCFullYear(), weekNo];
+}
 
 const SetTargetModal = ({ isOpen, onClose, performers, onSave }) => {
   const [targets, setTargets] = useState({});
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    return nextWeek;
+  });
 
   useEffect(() => {
     if (performers) {
@@ -23,6 +36,14 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave }) => {
       setTargets(initialTargets);
     }
   }, [performers]);
+
+  const handleWeekChange = (direction) => {
+    setSelectedDate(currentDate => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+      return newDate;
+    });
+  };
 
   const handleInputChange = (mrId, field, value) => {
     setTargets(prevTargets => ({
@@ -50,11 +71,22 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave }) => {
     return null;
   }
 
+  const [year, weekNo] = getWeekNumber(selectedDate);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
         <div className="p-4 border-b flex justify-between items-center">
           <h2 className="text-xl font-semibold">Set Weekly Targets</h2>
+          <div className="flex items-center gap-4">
+            <button onClick={() => handleWeekChange('prev')} className="p-2 rounded-full hover:bg-gray-200">
+              <ChevronLeft size={20} />
+            </button>
+            <div className="font-semibold">{`Year ${year}, Week ${weekNo}`}</div>
+            <button onClick={() => handleWeekChange('next')} className="p-2 rounded-full hover:bg-gray-200">
+              <ChevronRight size={20} />
+            </button>
+          </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
             <X size={20} />
           </button>
@@ -66,21 +98,30 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave }) => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">MR Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Revenue</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Revenue</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Visits</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Visits</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Visits</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Conv. %</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Conv. %</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Conv. %</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">NBD Revenue</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CRR Revenue</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {(performers || []).map((performer) => (
                   <tr key={performer.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10">{performer.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.total_revenue_target} onChange={(e) => handleInputChange(performer.id, 'total_revenue_target', e.target.value)} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.nbd_revenue_target} onChange={(e) => handleInputChange(performer.id, 'nbd_revenue_target', e.target.value)} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.crr_revenue_target} onChange={(e) => handleInputChange(performer.id, 'crr_revenue_target', e.target.value)} />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input type="number" className="w-24 p-1 border rounded" value={targets[performer.id]?.total_visit_plan} onChange={(e) => handleInputChange(performer.id, 'total_visit_plan', e.target.value)} />
                     </td>
@@ -98,15 +139,6 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave }) => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.id]?.crr_conversion_percent_plan} onChange={(e) => handleInputChange(performer.id, 'crr_conversion_percent_plan', e.target.value)} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.total_revenue_target} onChange={(e) => handleInputChange(performer.id, 'total_revenue_target', e.target.value)} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.nbd_revenue_target} onChange={(e) => handleInputChange(performer.id, 'nbd_revenue_target', e.target.value)} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.crr_revenue_target} onChange={(e) => handleInputChange(performer.id, 'crr_revenue_target', e.target.value)} />
                     </td>
                   </tr>
                 ))}
