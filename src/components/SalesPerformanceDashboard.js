@@ -2222,7 +2222,7 @@ const SortIcon = ({ column }) => {
                 <div className="text-xs font-semibold text-blue-600">{formatCurrency(data.confirmedValue)}</div>
               </div>
               <div className="text-sm font-medium text-green-700">
-                Delivered ({deliveryPercent}%)
+                Dispatched ({deliveryPercent}%)
                 <div className="text-xs text-gray-600">{data.deliveredOrders} orders</div>
                 <div className="text-xs font-semibold text-green-600">{formatCurrency(data.deliveredValue)}</div>
               </div>
@@ -2250,7 +2250,7 @@ const SortIcon = ({ column }) => {
               >
                 <div className="text-white text-xs font-bold text-center">
                   <div>{deliveryPercent}%</div>
-                  <div className="text-[10px]">Delivered</div>
+                  <div className="text-[10px]">Dispatched</div>
                 </div>
               </div>
 
