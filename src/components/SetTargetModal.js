@@ -104,6 +104,16 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   
+function getWeekStartDate(year, weekNumber) {
+    const firstDayOfYear = new Date(year, 0, 1);
+    const daysToAdd = (weekNumber - 1) * 7;
+    const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+    const dayOfWeek = weekDate.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    weekDate.setDate(weekDate.getDate() + daysToMonday);
+    return weekDate;
+}
+  
 const handleSave = async () => {
   setIsSaving(true);
   const [year, weekNo] = getWeekNumber(selectedDate);
