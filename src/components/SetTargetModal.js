@@ -103,26 +103,47 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   
-// Add this CORRECTED function at the top of your SetTargetModal.js file (after imports, before the component)
+// REPLACE BOTH functions at the top of your SetTargetModal.js file
+
+const getWeekNumber = (d) => {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return [d.getUTCFullYear(), weekNo];
+};
 
 function getWeekStartDate(year, weekNumber) {
-    // ISO week calculation - more accurate
-    const january4th = new Date(year, 0, 4); // January 4th is always in week 1
-    const startOfWeek1 = new Date(january4th);
+    // Use the same logic as getWeekNumber but in reverse
+    // This ensures consistency between week number calculation and date calculation
     
-    // Find Monday of week 1
-    const dayOfWeek = january4th.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days to Monday
-    startOfWeek1.setDate(january4th.getDate() + daysToMonday);
+    // Start with January 1st of the year
+    const jan1 = new Date(year, 0, 1);
     
-    // Calculate the target week's Monday
-    const targetWeekMonday = new Date(startOfWeek1);
-    targetWeekMonday.setDate(startOfWeek1.getDate() + (weekNumber - 1) * 7);
+    // Calculate days to add to get to the Monday of the specified week
+    // Week 1 contains January 4th (ISO week standard)
+    const jan4 = new Date(year, 0, 4);
+    const jan4DayOfWeek = jan4.getDay(); // 0=Sunday, 1=Monday, etc.
     
-    return targetWeekMonday;
+    // Find Monday of week 1 (which contains Jan 4th)
+    const week1Monday = new Date(jan4);
+    const daysToMonday = jan4DayOfWeek === 0 ? -6 : 1 - jan4DayOfWeek;
+    week1Monday.setDate(jan4.getDate() + daysToMonday);
+    
+    // Calculate Monday of target week
+    const targetMonday = new Date(week1Monday);
+    targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
+    
+    console.log(`Week ${weekNumber}, ${year}:`);
+    console.log(`- Jan 4th: ${jan4.toISOString().split('T')[0]} (${jan4.toLocaleDateString('en-US', { weekday: 'long' })})`);
+    console.log(`- Week 1 Monday: ${week1Monday.toISOString().split('T')[0]} (${week1Monday.toLocaleDateString('en-US', { weekday: 'long' })})`);
+    console.log(`- Target Monday: ${targetMonday.toISOString().split('T')[0]} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
+    
+    return targetMonday;
 }
 
-
+// REPLACE ONLY THE handleSave FUNCTION in your existing SetTargetModal.js
+// Keep everything else exactly the same - just replace this one function
 
 const handleSave = async () => {
   setIsSaving(true);
