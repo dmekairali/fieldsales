@@ -12,10 +12,9 @@ const getWeekNumber = (d) => {
 const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   const [targets, setTargets] = useState({});
   const [selectedDate, setSelectedDate] = useState(() => {
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    return nextWeek;
-  });
+  const today = new Date();
+  return today; // This will show current week
+});
   const [defaultTargets, setDefaultTargets] = useState({
     total_visit_plan: 11,
     nbd_visit_plan: 3,
@@ -104,16 +103,27 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   
+// Add this CORRECTED function at the top of your SetTargetModal.js file (after imports, before the component)
+
 function getWeekStartDate(year, weekNumber) {
-    const firstDayOfYear = new Date(year, 0, 1);
-    const daysToAdd = (weekNumber - 1) * 7;
-    const weekDate = new Date(firstDayOfYear.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
-    const dayOfWeek = weekDate.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    weekDate.setDate(weekDate.getDate() + daysToMonday);
-    return weekDate;
+    // ISO week calculation - more accurate
+    const january4th = new Date(year, 0, 4); // January 4th is always in week 1
+    const startOfWeek1 = new Date(january4th);
+    
+    // Find Monday of week 1
+    const dayOfWeek = january4th.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // If Sunday, go back 6 days to Monday
+    startOfWeek1.setDate(january4th.getDate() + daysToMonday);
+    
+    // Calculate the target week's Monday
+    const targetWeekMonday = new Date(startOfWeek1);
+    targetWeekMonday.setDate(startOfWeek1.getDate() + (weekNumber - 1) * 7);
+    
+    return targetWeekMonday;
 }
-  
+
+
+
 const handleSave = async () => {
   setIsSaving(true);
   const [year, weekNo] = getWeekNumber(selectedDate);
@@ -172,13 +182,9 @@ const handleSave = async () => {
 
     // Step 5: Prepare records for insertion with correct working days
     const recordsToInsert = [];
-    const weekStartDate = getWeekStartDate(year, weekNo);
+    const weekStartDate = getWeekStartDate(year, weekNo); // This now returns Monday
     
-    // Ensure week starts on Monday (day 1)
-    const mondayDate = new Date(weekStartDate);
-    while (mondayDate.getDay() !== 1) {
-      mondayDate.setDate(mondayDate.getDate() + 1);
-    }
+    console.log(`Week ${weekNo} starts on: ${weekStartDate.toISOString().split('T')[0]} (${weekStartDate.toLocaleDateString('en-US', { weekday: 'long' })})`);
 
     performers.forEach(performer => {
       const performerTarget = targets[performer.id];
@@ -194,15 +200,15 @@ const handleSave = async () => {
         return;
       }
 
-      // Create records for Monday to Saturday only (6 working days)
+      // Create records for Monday to Saturday (6 working days)
       for (let i = 0; i < 6; i++) {
-        const target_date = new Date(mondayDate);
-        target_date.setDate(mondayDate.getDate() + i);
+        const target_date = new Date(weekStartDate);
+        target_date.setDate(weekStartDate.getDate() + i);
         
-        // Double-check: ensure we're only creating Monday-Saturday records
-        const dayOfWeek = target_date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+        // Verify we're creating valid working days (1-6, Mon-Sat)
+        const dayOfWeek = target_date.getDay();
         if (dayOfWeek === 0) {
-          console.warn(`Skipping Sunday date: ${target_date.toISOString().split('T')[0]}`);
+          console.error(`ERROR: Trying to create Sunday record: ${target_date.toISOString().split('T')[0]}`);
           continue; // Skip Sunday
         }
 
@@ -211,8 +217,8 @@ const handleSave = async () => {
           mr_name: performer.name,
           week_number: weekNo,
           week_year: year,
-          week_start_date: mondayDate.toISOString().split('T')[0],
-          week_end_date: new Date(mondayDate.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Monday + 5 days = Saturday
+          week_start_date: weekStartDate.toISOString().split('T')[0],
+          week_end_date: new Date(weekStartDate.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Monday + 5 days = Saturday
           target_date: target_date.toISOString().split('T')[0],
           total_visit_plan: performerTarget.total_visit_plan,
           nbd_visit_plan: performerTarget.nbd_visit_plan,
@@ -229,7 +235,7 @@ const handleSave = async () => {
           created_by: 'SYSTEM_MANUAL_ENTRY',
         };
         
-        console.log(`Creating record for ${performer.name} on ${target_date.toLocaleDateString('en-US', { weekday: 'long' })} (day ${dayOfWeek})`);
+        console.log(`Creating record for ${performer.name} on ${target_date.toISOString().split('T')[0]} (${target_date.toLocaleDateString('en-US', { weekday: 'long' })}) - Day ${dayOfWeek}`);
         recordsToInsert.push(record);
       }
     });
