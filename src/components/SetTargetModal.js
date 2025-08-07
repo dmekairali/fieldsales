@@ -103,36 +103,158 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
 
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    const [year, weekNo] = getWeekNumber(selectedDate);
-    const targetsToSave = {};
-    performers.forEach(p => {
-      targetsToSave[p.id] = { ...targets[p.id], name: p.name };
+  
+const handleSave = async () => {
+  setIsSaving(true);
+  const [year, weekNo] = getWeekNumber(selectedDate);
+  
+  try {
+    console.log('🎯 Starting save process...');
+    console.log('Performers data:', performers);
+    
+    // Step 1: Get employee_ids from medical_representatives table
+    const performerNames = performers.map(p => p.name);
+    console.log('Looking up employee_ids for names:', performerNames);
+    
+    const { data: mrData, error: mrError } = await supabase
+      .from('medical_representatives')
+      .select('employee_id, name')
+      .in('name', performerNames);
+
+    if (mrError) {
+      throw new Error(`Failed to get employee IDs: ${mrError.message}`);
+    }
+
+    if (!mrData || mrData.length === 0) {
+      throw new Error('No matching medical representatives found in database');
+    }
+
+    console.log('Found MR data:', mrData);
+
+    // Step 2: Create name to employee_id mapping
+    const nameToIdMap = {};
+    mrData.forEach(mr => {
+      nameToIdMap[mr.name] = mr.employee_id;
     });
 
-    try {
-      const response = await fetch('/api/set-mr-weekly-targets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ targets: targetsToSave, week: weekNo, year }),
-      });
+    console.log('Name to ID mapping:', nameToIdMap);
 
-      if (!response.ok) {
-        throw new Error('Failed to save targets');
+    // Step 3: Check for missing mappings
+    const missingMappings = performers.filter(p => !nameToIdMap[p.name]);
+    if (missingMappings.length > 0) {
+      throw new Error(`Employee IDs not found for: ${missingMappings.map(p => p.name).join(', ')}`);
+    }
+
+    // Step 4: Delete existing records for this week
+    const employeeIds = performers.map(p => nameToIdMap[p.name]);
+    console.log('Employee IDs:', employeeIds);
+
+    const { error: deleteError } = await supabase
+      .from('mr_weekly_targets')
+      .delete()
+      .in('employee_id', employeeIds)
+      .eq('week_number', weekNo)
+      .eq('week_year', year);
+
+    if (deleteError) {
+      console.warn('Delete existing records warning:', deleteError);
+    }
+
+    // Step 5: Prepare records for insertion with correct working days
+    const recordsToInsert = [];
+    const weekStartDate = getWeekStartDate(year, weekNo);
+    
+    // Ensure week starts on Monday (day 1)
+    const mondayDate = new Date(weekStartDate);
+    while (mondayDate.getDay() !== 1) {
+      mondayDate.setDate(mondayDate.getDate() + 1);
+    }
+
+    performers.forEach(performer => {
+      const performerTarget = targets[performer.id];
+      const employeeId = nameToIdMap[performer.name];
+      
+      if (!performerTarget) {
+        console.warn(`No target data for ${performer.name}`);
+        return;
       }
 
-      alert('Targets saved successfully!');
-      onClose();
-    } catch (error) {
-      console.error('Error saving targets:', error);
-      alert('Error saving targets. Please try again.');
-    } finally {
-      setIsSaving(false);
+      if (!employeeId) {
+        console.error(`No employee ID found for ${performer.name}`);
+        return;
+      }
+
+      // Create records for Monday to Saturday only (6 working days)
+      for (let i = 0; i < 6; i++) {
+        const target_date = new Date(mondayDate);
+        target_date.setDate(mondayDate.getDate() + i);
+        
+        // Double-check: ensure we're only creating Monday-Saturday records
+        const dayOfWeek = target_date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+        if (dayOfWeek === 0) {
+          console.warn(`Skipping Sunday date: ${target_date.toISOString().split('T')[0]}`);
+          continue; // Skip Sunday
+        }
+
+        const record = {
+          employee_id: employeeId,
+          mr_name: performer.name,
+          week_number: weekNo,
+          week_year: year,
+          week_start_date: mondayDate.toISOString().split('T')[0],
+          week_end_date: new Date(mondayDate.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Monday + 5 days = Saturday
+          target_date: target_date.toISOString().split('T')[0],
+          total_visit_plan: performerTarget.total_visit_plan,
+          nbd_visit_plan: performerTarget.nbd_visit_plan,
+          crr_visit_plan: performerTarget.crr_visit_plan,
+          total_conversion_percent_plan: performerTarget.total_conversion_percent_plan,
+          nbd_conversion_percent_plan: performerTarget.nbd_conversion_percent_plan,
+          crr_conversion_percent_plan: performerTarget.crr_conversion_percent_plan,
+          total_revenue_target: performerTarget.total_revenue_target,
+          nbd_revenue_target: performerTarget.nbd_revenue_target,
+          crr_revenue_target: performerTarget.crr_revenue_target,
+          per_day_revenue_total: (performerTarget.total_revenue_target / 6).toFixed(2),
+          per_day_nbd_revenue: (performerTarget.nbd_revenue_target / 6).toFixed(2),
+          per_day_crr_revenue: (performerTarget.crr_revenue_target / 6).toFixed(2),
+          created_by: 'SYSTEM_MANUAL_ENTRY',
+        };
+        
+        console.log(`Creating record for ${performer.name} on ${target_date.toLocaleDateString('en-US', { weekday: 'long' })} (day ${dayOfWeek})`);
+        recordsToInsert.push(record);
+      }
+    });
+
+    if (recordsToInsert.length === 0) {
+      throw new Error('No records to insert');
     }
-  };
+
+    console.log(`Inserting ${recordsToInsert.length} records...`);
+    console.log('Sample record:', recordsToInsert[0]);
+    console.log('Date validation:', recordsToInsert.map(r => ({ 
+      date: r.target_date, 
+      day: new Date(r.target_date).toLocaleDateString('en-US', { weekday: 'long' })
+    })));
+
+    // Step 6: Insert records
+    const { data, error } = await supabase
+      .from('mr_weekly_targets')
+      .insert(recordsToInsert);
+
+    if (error) {
+      throw new Error(`Database insert failed: ${error.message}`);
+    }
+
+    console.log('Insert successful!');
+    alert('Targets saved successfully!');
+    onClose();
+
+  } catch (error) {
+    console.error('Error saving targets:', error);
+    alert(`Error saving targets: ${error.message}`);
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   if (!isOpen) {
     return null;
