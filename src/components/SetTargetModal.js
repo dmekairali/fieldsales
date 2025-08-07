@@ -101,11 +101,32 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
     alert('Auto-computation complete!');
   };
 
-  const handleSave = () => {
-    // onSave(targets);
-    // For now, just logging to console as backend is on hold.
-    console.log('Saving targets:', targets);
-    onClose();
+  const handleSave = async () => {
+    const [year, weekNo] = getWeekNumber(selectedDate);
+    const targetsToSave = {};
+    performers.forEach(p => {
+      targetsToSave[p.id] = { ...targets[p.id], name: p.name };
+    });
+
+    try {
+      const response = await fetch('/api/set-mr-weekly-targets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ targets: targetsToSave, week: weekNo, year }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save targets');
+      }
+
+      alert('Targets saved successfully!');
+      onClose();
+    } catch (error) {
+      console.error('Error saving targets:', error);
+      alert('Error saving targets. Please try again.');
+    }
   };
 
   if (!isOpen) {
