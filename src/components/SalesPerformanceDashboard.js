@@ -2561,6 +2561,7 @@ const SortIcon = ({ column }) => {
           console.log('Targets to be saved:', targets);
           // Backend call will be implemented here later
         }}
+        supabase={supabase}
       />
 
       {/* Enhanced KPI Cards - Two Rows Layout */}
