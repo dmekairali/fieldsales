@@ -2552,7 +2552,11 @@ const SortIcon = ({ column }) => {
       <SetTargetModal
         isOpen={isTargetModalOpen}
         onClose={() => setIsTargetModalOpen(false)}
-        performers={getFilteredMedicalReps().activeReps}
+        performers={
+          selectedMR === 'all'
+            ? getFilteredMedicalReps().activeReps
+            : medicalReps.filter(rep => standardizeName(rep.name) === selectedMR)
+        }
         onSave={(targets) => {
           console.log('Targets to be saved:', targets);
           // Backend call will be implemented here later
