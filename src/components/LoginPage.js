@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import React, { useState } from 'react';
+import authService from '../services/AuthService';
 import { 
   Lock, 
   Mail, 
@@ -24,124 +24,29 @@ const LoginPage = ({ onLoginSuccess }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Check if user is already logged in
-  useEffect(() => {
-    checkSession();
-  }, []);
-
-  const checkSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // User is already logged in, validate with user_profiles
-        await validateUserProfile(session.user);
-      }
-    } catch (error) {
-      console.error('Session check error:', error);
-    }
-  };
-
-  const validateUserProfile = async (user) => {
-    try {
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', user.email)
-        .eq('is_active', true)
-        .single();
-
-      if (error || !profile) {
-        setError('User profile not found or inactive');
-        await supabase.auth.signOut();
-        return;
-      }
-
-      // Update last login
-      await supabase
-        .from('user_profiles')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', profile.id);
-
-      onLoginSuccess?.(profile);
-    } catch (error) {
-      console.error('Profile validation error:', error);
-      setError('Failed to validate user profile');
-    }
-  };
-
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      // First, validate input
       if (!formData.email || !formData.password) {
         setError('Please fill in all fields');
         setLoading(false);
         return;
       }
 
-      // Authenticate with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password
-      });
-
-      if (authError) {
-        setError(authError.message);
-        setLoading(false);
-        return;
-      }
-
-      // Validate user profile exists and is active
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select(`
-          id,
-          email,
-          full_name,
-          employee_id,
-          access_level,
-          mr_name,
-          assigned_territories,
-          assigned_states,
-          is_active,
-          reporting_manager,
-          area_sales_manager,
-          regional_sales_manager,
-          team_members
-        `)
-        .eq('email', formData.email.trim().toLowerCase())
-        .eq('is_active', true)
-        .single();
-
-      if (profileError || !profile) {
-        setError('User profile not found or account is inactive. Please contact your administrator.');
-        await supabase.auth.signOut();
-        setLoading(false);
-        return;
-      }
-
-      // Update last login timestamp
-      await supabase
-        .from('user_profiles')
-        .update({ 
-          last_login: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profile.id);
+      const { profile } = await authService.signIn(formData.email, formData.password);
 
       setSuccess('Login successful! Redirecting...');
       
-      // Call the success callback with user profile
       setTimeout(() => {
         onLoginSuccess?.(profile);
       }, 1000);
 
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('An unexpected error occurred. Please try again.');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -153,7 +58,6 @@ const LoginPage = ({ onLoginSuccess }) => {
       ...prev,
       [name]: value
     }));
-    // Clear errors when user starts typing
     if (error) setError('');
   };
 
@@ -170,7 +74,6 @@ const LoginPage = ({ onLoginSuccess }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-violet-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <LogIn className="h-8 w-8 text-white" />
@@ -179,10 +82,8 @@ const LoginPage = ({ onLoginSuccess }) => {
           <p className="text-gray-600">Sign in to your Field Sales Dashboard</p>
         </div>
 
-        {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <div className="space-y-6">
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
                 Email Address
@@ -205,7 +106,6 @@ const LoginPage = ({ onLoginSuccess }) => {
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
                 Password
@@ -239,7 +139,6 @@ const LoginPage = ({ onLoginSuccess }) => {
               </div>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
@@ -247,7 +146,6 @@ const LoginPage = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* Success Message */}
             {success && (
               <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                 <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
@@ -255,7 +153,6 @@ const LoginPage = ({ onLoginSuccess }) => {
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               type="button"
               onClick={handleSubmit}
@@ -276,7 +173,6 @@ const LoginPage = ({ onLoginSuccess }) => {
             </button>
           </div>
 
-          {/* Footer */}
           <div className="mt-6 pt-6 border-t border-gray-200">
             <div className="text-center">
               <p className="text-sm text-gray-600">
@@ -286,7 +182,6 @@ const LoginPage = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        {/* Access Levels Info */}
         <div className="mt-6 bg-white rounded-lg border border-gray-200 p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Access Levels</h3>
           <div className="grid grid-cols-2 gap-2">

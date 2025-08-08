@@ -18,8 +18,6 @@ import FiveForFive from './components/FiveForFive';
 
 
 import { useMedicalRepresentatives } from './hooks/useMedicalRepresentatives';
-import { usePageVisibility } from './hooks/usePageVisibility';
-import { supabase } from './supabaseClient';
 import './index.css';
 import { 
   Calendar, 
@@ -236,17 +234,6 @@ function App() {
     getMRByName,
     totalMRs 
   } = useMedicalRepresentatives();
-  const isVisible = usePageVisibility();
-
-  useEffect(() => {
-    if (isVisible) {
-      console.log('Page is visible, ensuring Supabase client is active.');
-      supabase.auth.startAutoRefresh();
-    } else {
-      console.log('Page is hidden, Supabase client auto-refresh might be paused.');
-      supabase.auth.stopAutoRefresh();
-    }
-  }, [isVisible]);
 
   // Initialize authentication
   useEffect(() => {
