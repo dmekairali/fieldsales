@@ -1,14 +1,10 @@
 // src/hooks/useMedicalRepresentatives.js
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { useOnlineStatus } from './useOnlineStatus';
-
-
 export const useMedicalRepresentatives = () => {
     const [mrList, setMrList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const isOnline = useOnlineStatus();
 
     const fetchMRs = async () => {
         try {
@@ -48,11 +44,8 @@ export const useMedicalRepresentatives = () => {
     };
 
     useEffect(() => {
-        if (isOnline) {
-            console.log('Online, fetching MRs...');
-            fetchMRs();
-        }
-    }, [isOnline]);
+        fetchMRs();
+    }, []);
 
     useEffect(() => {
         const mrSubscription = supabase

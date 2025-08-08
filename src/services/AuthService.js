@@ -5,6 +5,7 @@ class AuthService {
   constructor() {
     this.currentUser = null;
     this.listeners = [];
+    this.initialize();
   }
 
   // ===================================================================
@@ -12,42 +13,47 @@ class AuthService {
   // ===================================================================
 
   /**
-   * Sign in user with email and password
+   * Sign in user with email and password by checking the user_profiles table
    */
   async signIn(email, password) {
     try {
-      // Authenticate with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password: password
-      });
+      const trimmedEmail = email.trim().toLowerCase();
 
-      if (authError) {
-        throw new Error(authError.message);
+      // Fetch user profile from the database
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('email', trimmedEmail)
+        .single();
+
+      if (error || !profile) {
+        throw new Error('User profile not found.');
       }
-
-      // Get user profile from user_profiles table
-      const profile = await this.getUserProfile(email);
       
-      if (!profile || !profile.is_active) {
-        await supabase.auth.signOut();
-        throw new Error('User profile not found or account is inactive');
+      // Check if the account is active
+      if (!profile.is_active) {
+        throw new Error('Your account is inactive. Please contact your administrator.');
       }
 
-      // Update last login
+      // WARNING: Storing and comparing passwords in plain text is highly insecure.
+      // This is implemented as per the request.
+      if (profile.password !== password) {
+        throw new Error('Invalid email or password.');
+      }
+
+      // If credentials are correct, update last login
       await this.updateLastLogin(profile.id);
 
-      this.currentUser = {
-        ...authData.user,
-        profile: profile
-      };
+      // Set the user session
+      this.currentUser = { profile };
+      localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
 
       this.notifyListeners('SIGNED_IN', this.currentUser);
       
       return {
         success: true,
         user: this.currentUser,
-        profile: profile
+        profile: this.currentUser.profile
       };
 
     } catch (error) {
@@ -60,49 +66,27 @@ class AuthService {
    * Sign out current user
    */
   async signOut() {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-
-      this.currentUser = null;
-      this.notifyListeners('SIGNED_OUT', null);
-
-      return { success: true };
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
-    }
+    this.currentUser = null;
+    localStorage.removeItem('currentUser');
+    this.notifyListeners('SIGNED_OUT', null);
+    return { success: true };
   }
 
   /**
-   * Get current session
+   * Get current session from localStorage
    */
   async getCurrentSession() {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) throw error;
-      
-      if (session && session.user) {
-        // Validate user profile
-        const profile = await this.getUserProfile(session.user.email);
-        
-        if (profile && profile.is_active) {
-          this.currentUser = {
-            ...session.user,
-            profile: profile
-          };
-          return this.currentUser;
-        } else {
-          // Invalid profile, sign out
-          await this.signOut();
-          return null;
-        }
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        this.currentUser = JSON.parse(storedUser);
+        return this.currentUser;
       }
-      
       return null;
     } catch (error) {
       console.error('Session check error:', error);
+      this.currentUser = null;
+      localStorage.removeItem('currentUser');
       return null;
     }
   }
@@ -122,7 +106,7 @@ class AuthService {
   }
 
   // ===================================================================
-  // USER PROFILE METHODS
+  // USER PROFILE METHODS (can remain mostly the same)
   // ===================================================================
 
   /**
@@ -133,21 +117,9 @@ class AuthService {
       const { data, error } = await supabase
         .from('user_profiles')
         .select(`
-          id,
-          email,
-          full_name,
-          employee_id,
-          access_level,
-          mr_name,
-          assigned_territories,
-          assigned_states,
-          is_active,
-          last_login,
-          created_at,
-          reporting_manager,
-          area_sales_manager,
-          regional_sales_manager,
-          team_members
+          id, email, full_name, employee_id, access_level, mr_name,
+          assigned_territories, assigned_states, is_active, last_login, created_at,
+          reporting_manager, area_sales_manager, regional_sales_manager, team_members
         `)
         .eq('email', email.trim().toLowerCase())
         .single();
@@ -156,7 +128,6 @@ class AuthService {
         console.error('Error fetching user profile:', error);
         return null;
       }
-
       return data;
     } catch (error) {
       console.error('Get user profile error:', error);
@@ -205,6 +176,7 @@ class AuthService {
       // Update current user if it's the same user
       if (this.currentUser && this.currentUser.profile.id === userId) {
         this.currentUser.profile = { ...this.currentUser.profile, ...data };
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
         this.notifyListeners('PROFILE_UPDATED', this.currentUser);
       }
 
@@ -219,90 +191,38 @@ class AuthService {
   // ACCESS CONTROL METHODS
   // ===================================================================
 
-  /**
-   * Check if user has required access level
-   */
   hasAccess(requiredLevel) {
     if (!this.currentUser || !this.currentUser.profile) {
       return false;
     }
-
     const userLevel = this.currentUser.profile.access_level;
-    
-    // Access level hierarchy: admin > manager > mr > viewer
-    const levelHierarchy = {
-      'viewer': 1,
-      'mr': 2,
-      'manager': 3,
-      'admin': 4
-    };
-
-    const userLevelNum = levelHierarchy[userLevel] || 0;
-    const requiredLevelNum = levelHierarchy[requiredLevel] || 0;
-
-    return userLevelNum >= requiredLevelNum;
+    const levelHierarchy = { 'viewer': 1, 'mr': 2, 'manager': 3, 'admin': 4 };
+    return (levelHierarchy[userLevel] || 0) >= (levelHierarchy[requiredLevel] || 0);
   }
 
-  /**
-   * Check if user is admin
-   */
-  isAdmin() {
-    return this.hasAccess('admin');
-  }
+  isAdmin() { return this.hasAccess('admin'); }
+  isManager() { return this.hasAccess('manager'); }
+  isMR() { return this.hasAccess('mr'); }
 
-  /**
-   * Check if user is manager or above
-   */
-  isManager() {
-    return this.hasAccess('manager');
-  }
-
-  /**
-   * Check if user is MR or above
-   */
-  isMR() {
-    return this.hasAccess('mr');
-  }
-
-  /**
-   * Get user territories
-   */
   getUserTerritories() {
-    if (!this.currentUser || !this.currentUser.profile) {
-      return [];
-    }
-    return this.currentUser.profile.assigned_territories || [];
+    return this.currentUser?.profile?.assigned_territories || [];
   }
 
-  /**
-   * Get user states
-   */
   getUserStates() {
-    if (!this.currentUser || !this.currentUser.profile) {
-      return [];
-    }
-    return this.currentUser.profile.assigned_states || [];
+    return this.currentUser?.profile?.assigned_states || [];
   }
 
   // ===================================================================
   // EVENT LISTENERS
   // ===================================================================
 
-  /**
-   * Add auth state change listener
-   */
   onAuthStateChange(callback) {
     this.listeners.push(callback);
-    
-    // Return unsubscribe function
     return () => {
       this.listeners = this.listeners.filter(listener => listener !== callback);
     };
   }
 
-  /**
-   * Notify all listeners
-   */
   notifyListeners(event, data) {
     this.listeners.forEach(callback => {
       try {
@@ -317,57 +237,11 @@ class AuthService {
   // INITIALIZATION
   // ===================================================================
 
-  /**
-   * Initialize auth service
-   */
   async initialize() {
-    try {
-      // Check current session
-      await this.getCurrentSession();
-
-      // Listen for auth changes
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth state changed:', event, session);
-
-        switch (event) {
-          case 'SIGNED_IN':
-          case 'TOKEN_REFRESHED':
-          case 'USER_UPDATED':
-            if (session && session.user) {
-              const profile = await this.getUserProfile(session.user.email);
-              if (profile && profile.is_active) {
-                const newUserData = { ...session.user, profile };
-                // Avoid unnecessary notifications if user data is the same
-                if (JSON.stringify(this.currentUser) !== JSON.stringify(newUserData)) {
-                  this.currentUser = newUserData;
-                  this.notifyListeners('SIGNED_IN', this.currentUser);
-                }
-              } else {
-                // If profile is invalid, treat as sign out
-                this.currentUser = null;
-                this.notifyListeners('SIGNED_OUT', null);
-                await supabase.auth.signOut();
-              }
-            }
-            break;
-          case 'SIGNED_OUT':
-            this.currentUser = null;
-            this.notifyListeners('SIGNED_OUT', null);
-            break;
-          default:
-          // Do nothing for other events like 'PASSWORD_RECOVERY', etc.
-        }
-      });
-
-      return { success: true };
-    } catch (error) {
-      console.error('Auth service initialization error:', error);
-      return { success: false, error: error.message };
-    }
+    await this.getCurrentSession();
+    // No need to listen to supabase.auth events anymore
   }
 }
 
-// Create singleton instance
 const authService = new AuthService();
-
 export default authService;

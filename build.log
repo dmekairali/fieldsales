@@ -1,0 +1,154 @@
+
+> field-sales@1.0.0 build
+> CI=false react-scripts build
+
+Creating an optimized production build...
+Compiled with warnings.
+
+Critical dependency: the request of a dependency is an expression
+
+[eslint]
+src/App.js
+  Line 32:3:    'DollarSign' is defined but never used                        no-unused-vars
+  Line 39:3:    'Filter' is defined but never used                            no-unused-vars
+  Line 218:24:  'setNbdDateRange' is assigned a value but never used          no-unused-vars
+  Line 219:32:  'setNbdPerformanceFilter' is assigned a value but never used  no-unused-vars
+
+src/components/CriticalParameters.js
+  Line 15:3:    'PieChart' is defined but never used                                                                                   no-unused-vars
+  Line 16:3:    'Pie' is defined but never used                                                                                        no-unused-vars
+  Line 17:3:    'Cell' is defined but never used                                                                                       no-unused-vars
+  Line 21:3:    'TrendingDown' is defined but never used                                                                               no-unused-vars
+  Line 27:3:    'CheckCircle' is defined but never used                                                                                no-unused-vars
+  Line 28:3:    'Calendar' is defined but never used                                                                                   no-unused-vars
+  Line 30:3:    'Filter' is defined but never used                                                                                     no-unused-vars
+  Line 31:3:    'Download' is defined but never used                                                                                   no-unused-vars
+  Line 38:3:    'Zap' is defined but never used                                                                                        no-unused-vars
+  Line 39:3:    'Eye' is defined but never used                                                                                        no-unused-vars
+  Line 40:3:    'ChevronDown' is defined but never used                                                                                no-unused-vars
+  Line 41:3:    'ChevronUp' is defined but never used                                                                                  no-unused-vars
+  Line 46:7:    'COLORS' is assigned a value but never used                                                                            no-unused-vars
+  Line 211:6:   React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array           react-hooks/exhaustive-deps
+  Line 730:75:  Comments inside children section of tag should be placed inside braces                                                 react/jsx-no-comment-textnodes
+  Line 968:6:   React Hook React.useMemo has a missing dependency: 'metricsOptions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/components/EmergencyDashboard.js
+  Line 13:3:  'ChevronUp' is defined but never used                                                                                  no-unused-vars
+  Line 43:8:  React Hook useEffect has a missing dependency: 'fetchTerritoryData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  Line 49:8:  React Hook useEffect has a missing dependency: 'fetchTerritoryData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/components/GeocodingDashboard.js
+  Line 400:8:  React Hook useEffect has a missing dependency: 'loadStats'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/components/LostAnalysis.js
+  Line 21:3:   'List' is defined but never used                                                                                                                                                                                                        no-unused-vars
+  Line 22:3:   'Avatar' is defined but never used                                                                                                                                                                                                      no-unused-vars
+  Line 30:3:   'ArrowUpOutlined' is defined but never used                                                                                                                                                                                             no-unused-vars
+  Line 31:3:   'ArrowDownOutlined' is defined but never used                                                                                                                                                                                           no-unused-vars
+  Line 37:3:   'HistoryOutlined' is defined but never used                                                                                                                                                                                             no-unused-vars
+  Line 42:3:   'DownloadOutlined' is defined but never used                                                                                                                                                                                            no-unused-vars
+  Line 116:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array                                                                                                                            react-hooks/exhaustive-deps
+  Line 120:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array. Mutable values like 'pagination.current' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+
+src/components/MonthlyPlanDashboardV2.js
+  Line 7:3:     'TrendingUp' is defined but never used                                                                              no-unused-vars
+  Line 8:3:     'MapPin' is defined but never used                                                                                  no-unused-vars
+  Line 11:3:    'DollarSign' is defined but never used                                                                              no-unused-vars
+  Line 26:3:    'PlayCircle' is defined but never used                                                                              no-unused-vars
+  Line 43:3:    'Building' is defined but never used                                                                                no-unused-vars
+  Line 44:3:    'TrendingDown' is defined but never used                                                                            no-unused-vars
+  Line 258:10:  'projectChangeLogs' is assigned a value but never used                                                              no-unused-vars
+  Line 258:29:  'setProjectChangeLogs' is assigned a value but never used                                                           no-unused-vars
+  Line 268:9:   'decompressionService' is assigned a value but never used                                                           no-unused-vars
+  Line 290:6:   React Hook useEffect has a missing dependency: 'loadAllPlans'. Either include it or remove the dependency array     react-hooks/exhaustive-deps
+  Line 304:6:   React Hook useEffect has a missing dependency: 'loadPlanDetails'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  Line 450:11:  'results' is assigned a value but never used                                                                        no-unused-vars
+
+src/components/NBDPerformanceDashboard.js
+  Line 12:3:   'Clock' is defined but never used                                                                                       no-unused-vars
+  Line 21:3:   'ArrowDownRight' is defined but never used                                                                              no-unused-vars
+  Line 23:3:   'Minus' is defined but never used                                                                                       no-unused-vars
+  Line 31:12:  'allMRs' is assigned a value but never used                                                                             no-unused-vars
+  Line 55:8:   React Hook useEffect has a missing dependency: 'fetchNBDPerformance'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  Line 66:8:   React Hook useEffect has a missing dependency: 'nbdData.length'. Either include it or remove the dependency array       react-hooks/exhaustive-deps
+
+src/components/ProtectedRoute.js
+  Line 34:6:  React Hook useEffect has a missing dependency: 'initializeAuth'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/components/RouteOptimizationDashboard.js
+  Line 37:8:  React Hook useEffect has a missing dependency: 'fetchCustomers'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/components/SalesPerformanceDashboard.js
+  Line 2:147:   'RadarChart' is defined but never used                                                                                                                                                                                                      no-unused-vars
+  Line 2:159:   'PolarGrid' is defined but never used                                                                                                                                                                                                       no-unused-vars
+  Line 2:170:   'PolarAngleAxis' is defined but never used                                                                                                                                                                                                  no-unused-vars
+  Line 2:186:   'PolarRadiusAxis' is defined but never used                                                                                                                                                                                                 no-unused-vars
+  Line 2:203:   'Radar' is defined but never used                                                                                                                                                                                                           no-unused-vars
+  Line 3:10:    'Calendar' is defined but never used                                                                                                                                                                                                        no-unused-vars
+  Line 3:89:    'ChevronDown' is defined but never used                                                                                                                                                                                                     no-unused-vars
+  Line 3:102:   'Filter' is defined but never used                                                                                                                                                                                                          no-unused-vars
+  Line 3:131:   'User' is defined but never used                                                                                                                                                                                                            no-unused-vars
+  Line 3:145:   'Phone' is defined but never used                                                                                                                                                                                                           no-unused-vars
+  Line 532:6:   React Hook useEffect has an unnecessary dependency: 'loadingLogs'. Either exclude it or remove the dependency array. Outer scope values like 'loadingLogs' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+  Line 672:11:  'now' is assigned a value but never used                                                                                                                                                                                                    no-unused-vars
+  Line 675:5:   Expected a default case                                                                                                                                                                                                                     default-case
+  Line 786:5:   Expected a default case                                                                                                                                                                                                                     default-case
+  Line 889:4:   React Hook useEffect has a missing dependency: 'fetchFilterData'. Either include it or remove the dependency array                                                                                                                          react-hooks/exhaustive-deps
+  Line 899:4:   React Hook useEffect has missing dependencies: 'fetchDashboardData' and 'getUnknownMRsFromSalesData'. Either include them or remove the dependency array                                                                                    react-hooks/exhaustive-deps
+  Line 916:6:   React Hook useEffect has missing dependencies: 'getFilteredMedicalReps' and 'selectedMR'. Either include them or remove the dependency array                                                                                                react-hooks/exhaustive-deps
+  Line 2311:9:  'ChartWrapper' is assigned a value but never used                                                                                                                                                                                           no-unused-vars
+
+src/components/SetTargetModal.js
+  Line 467:13:  'data' is assigned a value but never used  no-unused-vars
+
+src/components/VisitQualityMonitor.js
+  Line 10:3:  'Activity' is defined but never used                                                                                 no-unused-vars
+  Line 11:3:  'Users' is defined but never used                                                                                    no-unused-vars
+  Line 15:3:  'Filter' is defined but never used                                                                                   no-unused-vars
+  Line 49:8:  React Hook useEffect has a missing dependency: 'fetchQualityData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/components/WeeklyRevisionDashboard.js
+  Line 20:3:   'Zap' is defined but never used                                                                                       no-unused-vars
+  Line 22:3:   'Edit3' is defined but never used                                                                                     no-unused-vars
+  Line 24:3:   'ChevronRight' is defined but never used                                                                              no-unused-vars
+  Line 25:3:   'ChevronLeft' is defined but never used                                                                               no-unused-vars
+  Line 27:3:   'Download' is defined but never used                                                                                  no-unused-vars
+  Line 28:3:   'Play' is defined but never used                                                                                      no-unused-vars
+  Line 29:3:   'Pause' is defined but never used                                                                                     no-unused-vars
+  Line 30:3:   'RotateCcw' is defined but never used                                                                                 no-unused-vars
+  Line 69:10:  'dashboardData' is assigned a value but never used                                                                    no-unused-vars
+  Line 93:6:   React Hook useEffect has a missing dependency: 'loadDashboardData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+src/services/MonthlyPlanDecompressionService.js
+  Line 437:27:  'customer' is assigned a value but never used    no-unused-vars
+  Line 695:15:  'tierCounts' is assigned a value but never used  no-unused-vars
+
+src/services/RouteOptimizer.js
+  Line 332:13:  'prioritizeUrgency' is assigned a value but never used                                                                                            no-unused-vars
+  Line 493:31:  Function declared in a loop contains unsafe references to variable(s) 'currentLocation', 'currentLocation', 'totalTravelTime', 'totalTravelTime'  no-loop-func
+  Line 545:47:  Function declared in a loop contains unsafe references to variable(s) 'currentLocation', 'currentLocation', 'totalTravelTime'                     no-loop-func
+
+Search for the keywords to learn more about each warning.
+To ignore, add // eslint-disable-next-line to the line before.
+
+File sizes after gzip:
+
+  589.04 kB  build/static/js/main.62ac5feb.js
+  282 B      build/static/css/main.abce6110.css
+
+The bundle size is significantly larger than recommended.
+Consider reducing it with code splitting: https://goo.gl/9VhYWB
+You can also analyze the project dependencies: https://goo.gl/LeUzfb
+
+The project was built assuming it is hosted at /.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+You may serve it with a static server:
+
+  npm install -g serve
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
