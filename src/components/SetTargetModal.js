@@ -96,6 +96,7 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Add these helper functions at the top of your SetTargetModal.js file (after imports)
+// Add these helper functions at the top of your SetTargetModal.js file (after imports)
 
 function formatDateLocal(date) {
     const year = date.getFullYear();
@@ -158,7 +159,6 @@ const handleSave = async () => {
     
     console.log('🎯 Starting save process...');
     console.log('📊 Performers data:', performers);
-    
     
     // Step 1: Get employee_ids from medical_representatives table (case-insensitive)
     const performerNames = performers.map(p => p.name);
@@ -226,6 +226,8 @@ const handleSave = async () => {
       const lowerName = p.name.toLowerCase().trim();
       return nameToIdMap[lowerName];
     });
+    
+    console.log('🗑️ Employee IDs to clean up:', employeeIds);
 
     const { error: deleteError } = await supabase
       .from('mr_weekly_targets')
@@ -255,21 +257,39 @@ const handleSave = async () => {
     const recordsToInsert = [];
 
     performers.forEach(performer => {
-      const performerTarget = targets[performer.id] || targets[performer.name]; // Try both ID and name as key
-      const employeeId = nameToIdMap[performer.name];
+      // Try multiple ways to find target data
+      const performerTarget = targets[performer.id] || 
+                             targets[performer.name] || 
+                             targets[performer.name.toLowerCase()] ||
+                             targets[performer.name.toUpperCase()];
+      
+      const lowerPerformerName = performer.name.toLowerCase().trim();
+      const employeeId = nameToIdMap[lowerPerformerName]; // Case-insensitive lookup
+      
+      console.log(`🔍 Processing performer: "${performer.name}"`);
+      console.log(`📋 Lowercase key: "${lowerPerformerName}"`);
+      console.log(`🆔 Employee ID found: ${employeeId || 'NOT FOUND'}`);
+      console.log(`🎯 Target data found: ${!!performerTarget}`);
+      console.log(`🔑 Available target keys:`, Object.keys(targets));
       
       if (!performerTarget) {
-        console.warn(`⚠️ No target data for ${performer.name} (tried both performer.id and performer.name)`);
-        console.log('Available target keys:', Object.keys(targets));
+        console.warn(`⚠️ No target data for ${performer.name}`);
+        console.log('Tried keys:', [
+          performer.id, 
+          performer.name, 
+          performer.name.toLowerCase(), 
+          performer.name.toUpperCase()
+        ]);
         return;
       }
 
       if (!employeeId) {
-        console.error(`❌ No employee ID found for ${performer.name}`);
+        console.error(`❌ No employee ID found for ${performer.name} (lowercase: ${lowerPerformerName})`);
+        console.log('Available lowercase names in mapping:', Object.keys(nameToIdMap));
         return;
       }
 
-      console.log(`📝 Processing ${performer.name} (${employeeId})`);
+      console.log(`✅ Processing ${performer.name} (${employeeId}) - matched via: ${lowerPerformerName}`);
 
       // Create records for Monday to Saturday (6 working days)
       for (let i = 0; i < 6; i++) {
