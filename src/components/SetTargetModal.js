@@ -165,8 +165,7 @@ const handleSave = async () => {
     
     const { data: mrData, error: mrError } = await supabase
       .from('medical_representatives')
-      .select('employee_id, name')
-      .in('name', performerNames);
+      .select('employee_id, name');
 
     if (mrError) {
       throw new Error(`Failed to get employee IDs: ${mrError.message}`);
