@@ -105,39 +105,43 @@ const getWeekNumber = (d) => {
   return [d.getUTCFullYear(), weekNo];
 };
 
-function getWeekStartDate(year, weekNumber) {
-    // Simple, clean Monday calculation
-    
-    // January 4th is always in week 1 (ISO standard)
-    const jan4 = new Date(year, 0, 4);
-    const jan4DayOfWeek = jan4.getDay(); // 0=Sunday, 1=Monday, etc.
-    
-    // Calculate Monday of week 1
-    const week1Monday = new Date(jan4);
-    const daysToMonday = jan4DayOfWeek === 0 ? 1 : (1 - jan4DayOfWeek);
-    week1Monday.setDate(jan4.getDate() + daysToMonday);
-    
-    // Calculate Monday of target week
-    const targetMonday = new Date(week1Monday);
-    targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
-    
-    // Final safety check - ensure it's Monday
-    if (targetMonday.getDay() !== 1) {
-        console.warn(`Date is not Monday, adjusting...`);
-        while (targetMonday.getDay() !== 1) {
-            targetMonday.setDate(targetMonday.getDate() + 1);
-        }
+
+  function getWeekStartDate(year, weekNumber) {
+  // Create a date for January 1st of the year
+  const jan1 = new Date(year, 0, 1);
+  
+  // Get the day of week for January 1st (0=Sunday, 1=Monday, etc.)
+  const jan1DayOfWeek = jan1.getDay();
+  
+  // Calculate the date of the first Thursday (ISO week starts with Monday)
+  // If Jan 1 is Friday/Saturday/Sunday, the first week is the next week
+  let firstThursday;
+  if (jan1DayOfWeek <= 4) { // Thursday or before
+    firstThursday = new Date(jan1);
+    firstThursday.setDate(jan1.getDate() + (4 - jan1DayOfWeek));
+  } else { // Friday/Saturday/Sunday
+    firstThursday = new Date(jan1);
+    firstThursday.setDate(jan1.getDate() + (4 - jan1DayOfWeek + 7));
+  }
+  
+  // Calculate the Monday of week 1
+  const week1Monday = new Date(firstThursday);
+  week1Monday.setDate(firstThursday.getDate() - 3);
+  
+  // Calculate the Monday of the target week
+  const targetMonday = new Date(week1Monday);
+  targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
+  
+  // Final verification
+  if (targetMonday.getDay() !== 1) {
+    console.error('Calculation error - not Monday:', targetMonday);
+    // Force correction if needed
+    while (targetMonday.getDay() !== 1) {
+      targetMonday.setDate(targetMonday.getDate() + 1);
     }
-    
-    // Use local date formatting instead of ISO to avoid timezone issues
-    const year_ = targetMonday.getFullYear();
-    const month_ = String(targetMonday.getMonth() + 1).padStart(2, '0');
-    const day_ = String(targetMonday.getDate()).padStart(2, '0');
-    const localDateString = `${year_}-${month_}-${day_}`;
-    
-    console.log(`Week ${weekNumber}, ${year} Monday: ${localDateString} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
-    
-    return targetMonday;
+  }
+  
+  return targetMonday;
 }
 
 
