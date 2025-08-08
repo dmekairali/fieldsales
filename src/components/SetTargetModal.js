@@ -76,9 +76,6 @@ const handleAutoCompute = async () => {
     return;
   }
 
-  console.log('Orders data:', data);
-  console.log('Performers:', performers.filter(p => p.role_level !== 'SALES_AGENT'));
-
   // Helper function to standardize names for matching
   const standardizeName = (name) => {
     return name?.toString().trim().toLowerCase().replace(/\s+/g, ' ') || '';
@@ -87,35 +84,34 @@ const handleAutoCompute = async () => {
   const revenueByPerformer = {};
   data.forEach(order => {
     const standardizedOrderMR = standardizeName(order.mr_name);
-    console.log('Order MR (standardized):', standardizedOrderMR);
     
     // Find matching performer by comparing standardized names
     const matchingPerformer = performers
       .filter(p => p.role_level !== 'SALES_AGENT')
       .find(p => {
         const standardizedPerformerName = standardizeName(p.name);
-        console.log('Comparing:', standardizedOrderMR, 'vs', standardizedPerformerName);
         return standardizedPerformerName === standardizedOrderMR;
       });
     
     if (matchingPerformer) {
-      console.log('Match found for:', matchingPerformer.name);
-      if (!revenueByPerformer[matchingPerformer.id]) {
-        revenueByPerformer[matchingPerformer.id] = 0;
+      // Use the performer's name as key instead of undefined id
+      const performerKey = matchingPerformer.name; // or matchingPerformer.id if it exists
+      if (!revenueByPerformer[performerKey]) {
+        revenueByPerformer[performerKey] = 0;
       }
-      revenueByPerformer[matchingPerformer.id] += order.net_amount;
-    } else {
-      console.log('No match found for order MR:', order.mr_name);
+      revenueByPerformer[performerKey] += order.net_amount;
     }
   });
 
-  console.log('Revenue by performer:', revenueByPerformer);
+ // console.log('Revenue by performer:', revenueByPerformer);
 
   const newTargets = { ...targets };
   performers
     .filter(performer => performer.role_level !== 'SALES_AGENT')
     .forEach(performer => {
-      const totalRevenue = revenueByPerformer[performer.id] || 0;
+      // Use the performer's name to lookup revenue instead of id
+      const performerKey = performer.name; // or performer.id if it exists
+      const totalRevenue = revenueByPerformer[performerKey] || 0;
       const weeklyAverage = totalRevenue / 3; // 3 weeks average
       
       console.log(`${performer.name}: Total=${totalRevenue}, Weekly Avg=${weeklyAverage}`);
@@ -133,9 +129,8 @@ const handleAutoCompute = async () => {
 
   setTargets(newTargets);
   setIsAutoComputing(false);
-  alert('Auto-computation complete!');
+ // alert('Auto-computation complete!');
 };
-
   const [isSaving, setIsSaving] = useState(false);
 
   // Add these helper functions at the top of your SetTargetModal.js file (after imports)
