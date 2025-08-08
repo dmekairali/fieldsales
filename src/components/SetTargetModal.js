@@ -159,11 +159,13 @@ const handleSave = async () => {
     console.log('🎯 Starting save process...');
     console.log('📊 Performers data:', performers);
     
-   // Step 1: Get employee_ids from medical_representatives table
+    
+    // Step 1: Get employee_ids from medical_representatives table (case-insensitive)
     const performerNames = performers.map(p => p.name);
     console.log('🔍 Looking up employee_ids for names:', performerNames);
     
-    const { data: mrData, error: mrError } = await supabase
+    // Use ilike (case-insensitive) or get all records and filter in JavaScript
+    const { data: allMrData, error: mrError } = await supabase
       .from('medical_representatives')
       .select('employee_id, name');
 
@@ -171,11 +173,28 @@ const handleSave = async () => {
       throw new Error(`Failed to get employee IDs: ${mrError.message}`);
     }
 
-    if (!mrData || mrData.length === 0) {
-      throw new Error('No matching medical representatives found in database');
+    if (!allMrData || allMrData.length === 0) {
+      throw new Error('No medical representatives found in database');
     }
 
-    console.log('✅ Found MR data:', mrData);
+    // Filter matching records using case-insensitive comparison
+    const mrData = allMrData.filter(mr => {
+      const dbNameLower = mr.name.toLowerCase().trim();
+      return performerNames.some(performerName => 
+        performerName.toLowerCase().trim() === dbNameLower
+      );
+    });
+
+    console.log('✅ All MR records:', allMrData.length);
+    console.log('✅ Matching MR data:', mrData);
+    console.log('✅ Matched names:', mrData.map(mr => mr.name));
+
+    if (mrData.length === 0) {
+      console.error('❌ No matches found!');
+      console.log('Looking for:', performerNames.map(n => n.toLowerCase()));
+      console.log('Available in DB:', allMrData.map(mr => `"${mr.name}" (lowercase: "${mr.name.toLowerCase()}")`));
+      throw new Error(`No matching medical representatives found for: ${performerNames.join(', ')}`);
+    }
 
     // Step 2: Create name to employee_id mapping (case-insensitive)
     const nameToIdMap = {};
@@ -207,7 +226,6 @@ const handleSave = async () => {
       const lowerName = p.name.toLowerCase().trim();
       return nameToIdMap[lowerName];
     });
-    
 
     const { error: deleteError } = await supabase
       .from('mr_weekly_targets')
