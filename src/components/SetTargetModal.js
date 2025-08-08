@@ -274,9 +274,9 @@ const handleSave = async () => {
           crr_conversion_percent_plan: parseFloat(performerTarget.crr_conversion_percent_plan) || 0,
           
           // Revenue targets
-          total_revenue_target: parseFloat(performerTarget.total_revenue_target) || 0,
-          nbd_revenue_target: parseFloat(performerTarget.nbd_revenue_target) || 0,
-          crr_revenue_target: parseFloat(performerTarget.crr_revenue_target) || 0,
+          total_revenue_target: parseFloat((parseFloat(performerTarget.total_revenue_target) / 6).toFixed(2)) || 0,
+          nbd_revenue_target: parseFloat((parseFloat(performerTarget.nbd_revenue_target) / 6).toFixed(2)) || 0,
+          crr_revenue_target: parseFloat((parseFloat(performerTarget.crr_revenue_target) / 6).toFixed(2)) || 0,
           
           // Per day calculations
           per_day_revenue_total: parseFloat((parseFloat(performerTarget.total_revenue_target) / 6).toFixed(2)) || 0,
