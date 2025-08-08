@@ -95,132 +95,262 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
 
   const [isSaving, setIsSaving] = useState(false);
 
-  
-/**
- * Get ISO week number and year for a date
- * @param {Date} date - Input date
- * @returns {[number, number]} - [year, weekNumber]
- */
-// Correct ISO Week Number Calculation
-const getWeekNumber = (date) => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); // Thursday
-  const week1 = new Date(d.getFullYear(), 0, 4);
-  return [d.getFullYear(), 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)];
+  // Add these helper functions at the top of your SetTargetModal.js file (after imports)
+
+function formatDateLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+const getWeekNumber = (d) => {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return [d.getUTCFullYear(), weekNo];
 };
 
-// Get Monday of ISO Week (Fixed)
-const getWeekStartDate = (year, weekNumber) => {
-  const date = new Date(year, 0, 1);
-  const dayOffset = date.getDay() === 0 ? 1 : 8 - date.getDay(); // Adjust to next Monday
-  
-  // Find first Thursday (ISO week definition)
-  const firstThursday = new Date(year, 0, dayOffset + 3);
-  
-  // Calculate Monday of week 1
-  const week1Monday = new Date(firstThursday);
-  week1Monday.setDate(firstThursday.getDate() - 3);
-  
-  // Calculate target Monday
-  const targetMonday = new Date(week1Monday);
-  targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
-  
-  // Final verification
-  if (targetMonday.getDay() !== 1) {
-    console.warn('Adjusting to Monday');
-    while (targetMonday.getDay() !== 1) {
-      targetMonday.setDate(targetMonday.getDate() + 1);
+function getWeekStartDate(year, weekNumber) {
+    console.log(`🔍 Calculating Monday for Week ${weekNumber}, ${year}`);
+    
+    // January 4th is always in week 1 (ISO standard)
+    const jan4 = new Date(year, 0, 4);
+    const jan4DayOfWeek = jan4.getDay(); // 0=Sunday, 1=Monday, etc.
+    
+    // Calculate Monday of week 1
+    const week1Monday = new Date(jan4);
+    const daysToMonday = jan4DayOfWeek === 0 ? 1 : (1 - jan4DayOfWeek);
+    week1Monday.setDate(jan4.getDate() + daysToMonday);
+    
+    // Calculate Monday of target week
+    const targetMonday = new Date(week1Monday);
+    targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
+    
+    // Final safety check - ensure it's Monday
+    if (targetMonday.getDay() !== 1) {
+        console.warn(`⚠️ Date ${formatDateLocal(targetMonday)} is not Monday, adjusting...`);
+        while (targetMonday.getDay() !== 1) {
+            targetMonday.setDate(targetMonday.getDate() + 1);
+        }
+        console.log(`✅ Adjusted to Monday: ${formatDateLocal(targetMonday)}`);
     }
-  }
-  
-  return targetMonday;
-};
+    
+    console.log(`✅ Week ${weekNumber}, ${year} Monday: ${formatDateLocal(targetMonday)} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
+    
+    return targetMonday;
+}
 
-// Fixed handleSave with correct date generation
+// REPLACE your existing handleSave function with this complete version:
+
 const handleSave = async () => {
   setIsSaving(true);
   
   try {
+    // Step 0: Test date calculation first
     const [year, weekNo] = getWeekNumber(selectedDate);
-    const weekStartDate = getWeekStartDate(year, weekNo);
+    console.log('🧪 TESTING: Week calculation for selected date:', selectedDate);
+    console.log('🧪 Calculated week:', weekNo, 'year:', year);
     
-    console.log(`Saving for Year ${year}, Week ${weekNo}`);
-    console.log(`Correct week start: ${weekStartDate.toDateString()}`); // Should be Mon Aug 4
+    const testWeekStart = getWeekStartDate(year, weekNo);
+    console.log('🧪 Week start result:', formatDateLocal(testWeekStart), testWeekStart.toLocaleDateString('en-US', { weekday: 'long' }));
     
-    // Verify Monday
-    if (weekStartDate.getDay() !== 1) {
-      throw new Error('Week should start on Monday');
-    }
-
-    // Get employee IDs
+    console.log('🎯 Starting save process...');
+    console.log('📊 Performers data:', performers);
+    
+    // Step 1: Get employee_ids from medical_representatives table
     const performerNames = performers.map(p => p.name);
-    const { data: mrData } = await supabase
+    console.log('🔍 Looking up employee_ids for names:', performerNames);
+    
+    const { data: mrData, error: mrError } = await supabase
       .from('medical_representatives')
       .select('employee_id, name')
       .in('name', performerNames);
 
-    // Create records for Monday-Saturday (6 days)
-    const recordsToInsert = [];
-    const weekEndDate = new Date(weekStartDate);
-    weekEndDate.setDate(weekStartDate.getDate() + 5); // Saturday
+    if (mrError) {
+      throw new Error(`Failed to get employee IDs: ${mrError.message}`);
+    }
+
+    if (!mrData || mrData.length === 0) {
+      throw new Error('No matching medical representatives found in database');
+    }
+
+    console.log('✅ Found MR data:', mrData);
+
+    // Step 2: Create name to employee_id mapping
+    const nameToIdMap = {};
+    mrData.forEach(mr => {
+      nameToIdMap[mr.name] = mr.employee_id;
+    });
+
+    console.log('🗺️ Name to ID mapping:', nameToIdMap);
+
+    // Step 3: Check for missing mappings
+    const missingMappings = performers.filter(p => !nameToIdMap[p.name]);
+    if (missingMappings.length > 0) {
+      throw new Error(`Employee IDs not found for: ${missingMappings.map(p => p.name).join(', ')}`);
+    }
+
+    // Step 4: Delete existing records for this week
+    const employeeIds = performers.map(p => nameToIdMap[p.name]);
+    console.log('🗑️ Employee IDs to clean up:', employeeIds);
+
+    const { error: deleteError } = await supabase
+      .from('mr_weekly_targets')
+      .delete()
+      .in('employee_id', employeeIds)
+      .eq('week_number', weekNo)
+      .eq('week_year', year);
+
+    if (deleteError) {
+      console.warn('⚠️ Delete existing records warning:', deleteError);
+    } else {
+      console.log('✅ Cleaned up existing records');
+    }
+
+    // Step 5: Calculate correct dates
+    const weekStartDate = getWeekStartDate(year, weekNo); // This returns Monday
     
+    // Calculate week end date (Saturday)
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 5); // Monday + 5 days = Saturday
+    
+    console.log('📅 Final week dates:');
+    console.log(`- Week start (Monday): ${formatDateLocal(weekStartDate)}`);
+    console.log(`- Week end (Saturday): ${formatDateLocal(weekEndDate)}`);
+
+    // Step 6: Prepare records for insertion
+    const recordsToInsert = [];
+
     performers.forEach(performer => {
-      const performerTarget = targets[performer.id];
-      const employeeId = mrData.find(mr => mr.name === performer.name)?.employee_id;
+      const performerTarget = targets[performer.id] || targets[performer.name]; // Try both ID and name as key
+      const employeeId = nameToIdMap[performer.name];
       
-      if (!performerTarget || !employeeId) return;
-      
-      // Generate dates from Monday to Saturday
+      if (!performerTarget) {
+        console.warn(`⚠️ No target data for ${performer.name} (tried both performer.id and performer.name)`);
+        console.log('Available target keys:', Object.keys(targets));
+        return;
+      }
+
+      if (!employeeId) {
+        console.error(`❌ No employee ID found for ${performer.name}`);
+        return;
+      }
+
+      console.log(`📝 Processing ${performer.name} (${employeeId})`);
+
+      // Create records for Monday to Saturday (6 working days)
       for (let i = 0; i < 6; i++) {
         const targetDate = new Date(weekStartDate);
         targetDate.setDate(weekStartDate.getDate() + i);
         
-        // Verify day (1=Mon to 6=Sat)
-        if (targetDate.getDay() === 0) {
-          throw new Error('Invalid Sunday date generated');
-        }
+        // Verify we're creating valid working days (1-6, Mon-Sat)
+        const dayOfWeek = targetDate.getDay();
+        const dayName = targetDate.toLocaleDateString('en-US', { weekday: 'long' });
         
-        recordsToInsert.push({
+        if (dayOfWeek === 0) {
+          console.error(`❌ ERROR: Trying to create Sunday record: ${formatDateLocal(targetDate)}`);
+          continue; // Skip Sunday
+        }
+
+        const record = {
           employee_id: employeeId,
           mr_name: performer.name,
           week_number: weekNo,
           week_year: year,
-          week_start_date: weekStartDate.toISOString().split('T')[0],
-          week_end_date: weekEndDate.toISOString().split('T')[0],
-          target_date: targetDate.toISOString().split('T')[0],
-          total_visit_plan: performerTarget.total_visit_plan,
-          nbd_visit_plan: performerTarget.nbd_visit_plan,
-          crr_visit_plan: performerTarget.crr_visit_plan,
-          total_conversion_percent_plan: performerTarget.total_conversion_percent_plan,
-          nbd_conversion_percent_plan: performerTarget.nbd_conversion_percent_plan,
-          crr_conversion_percent_plan: performerTarget.crr_conversion_percent_plan,
-          total_revenue_target: performerTarget.total_revenue_target,
-          nbd_revenue_target: performerTarget.nbd_revenue_target,
-          crr_revenue_target: performerTarget.crr_revenue_target,
-          per_day_revenue_total: (performerTarget.total_revenue_target / 6).toFixed(2),
-          per_day_nbd_revenue: (performerTarget.nbd_revenue_target / 6).toFixed(2),
-          per_day_crr_revenue: (performerTarget.crr_revenue_target / 6).toFixed(2),
+          week_start_date: formatDateLocal(weekStartDate), // Use Monday date
+          week_end_date: formatDateLocal(weekEndDate), // Use Saturday date  
+          target_date: formatDateLocal(targetDate),
+          
+          // Visit plans
+          total_visit_plan: parseInt(performerTarget.total_visit_plan) || 0,
+          nbd_visit_plan: parseInt(performerTarget.nbd_visit_plan) || 0,
+          crr_visit_plan: parseInt(performerTarget.crr_visit_plan) || 0,
+          
+          // Conversion percentages
+          total_conversion_percent_plan: parseFloat(performerTarget.total_conversion_percent_plan) || 0,
+          nbd_conversion_percent_plan: parseFloat(performerTarget.nbd_conversion_percent_plan) || 0,
+          crr_conversion_percent_plan: parseFloat(performerTarget.crr_conversion_percent_plan) || 0,
+          
+          // Revenue targets
+          total_revenue_target: parseFloat(performerTarget.total_revenue_target) || 0,
+          nbd_revenue_target: parseFloat(performerTarget.nbd_revenue_target) || 0,
+          crr_revenue_target: parseFloat(performerTarget.crr_revenue_target) || 0,
+          
+          // Per day calculations
+          per_day_revenue_total: parseFloat((parseFloat(performerTarget.total_revenue_target) / 6).toFixed(2)) || 0,
+          per_day_nbd_revenue: parseFloat((parseFloat(performerTarget.nbd_revenue_target) / 6).toFixed(2)) || 0,
+          per_day_crr_revenue: parseFloat((parseFloat(performerTarget.crr_revenue_target) / 6).toFixed(2)) || 0,
+          
+          // Metadata
           created_by: 'SYSTEM_MANUAL_ENTRY',
-        });
+          created_at: new Date().toISOString(),
+          is_active: true
+        };
+        
+        console.log(`✅ Creating record for ${performer.name} on ${formatDateLocal(targetDate)} (${dayName}) - Day ${dayOfWeek}`);
+        recordsToInsert.push(record);
       }
     });
+
+    if (recordsToInsert.length === 0) {
+      throw new Error('No valid records to insert. Check target data and performer mappings.');
+    }
+
+    console.log(`💾 Ready to insert ${recordsToInsert.length} records`);
+    console.log('📋 Sample record:', recordsToInsert[0]);
     
-    console.log('Records to insert:', recordsToInsert);
+    // Validation summary
+    const dateValidation = recordsToInsert.map(r => ({ 
+      date: r.target_date, 
+      day: new Date(r.target_date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' }),
+      dayNum: new Date(r.target_date + 'T00:00:00').getDay()
+    }));
     
-    // 9. Insert the new records
-    const { error: insertError } = await supabase
+    console.log('📅 Date validation:', dateValidation);
+    
+    // Check for any Sunday records (should be none)
+    const sundayRecords = dateValidation.filter(d => d.dayNum === 0);
+    if (sundayRecords.length > 0) {
+      console.error('❌ FOUND SUNDAY RECORDS:', sundayRecords);
+      throw new Error(`Found ${sundayRecords.length} Sunday records - this should not happen!`);
+    }
+
+    // Step 7: Insert records
+    console.log('🚀 Inserting records to database...');
+    
+    const { data, error } = await supabase
       .from('mr_weekly_targets')
       .insert(recordsToInsert);
 
-    if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
+    if (error) {
+      console.error('❌ Database insert error:', error);
+      throw new Error(`Database insert failed: ${error.message}`);
+    }
+
+    console.log('✅ Insert successful!');
+    console.log(`📊 Inserted ${recordsToInsert.length} records for ${performers.length} performers`);
     
-    alert('Targets saved successfully!');
+    alert(`✅ Success! Saved targets for Week ${weekNo}, ${year}\n📅 Dates: ${formatDateLocal(weekStartDate)} to ${formatDateLocal(weekEndDate)}\n📝 Created ${recordsToInsert.length} records`);
+    
+    // Call parent callback if provided
+    if (onSave) {
+      onSave({
+        success: true,
+        records_inserted: recordsToInsert.length,
+        week_number: weekNo,
+        week_year: year,
+        week_start_date: formatDateLocal(weekStartDate),
+        week_end_date: formatDateLocal(weekEndDate)
+      });
+    }
+    
     onClose();
-    
+
   } catch (error) {
-    console.error('Save error:', error);
-    alert(`Error saving targets: ${error.message}`);
+    console.error('❌ Error saving targets:', error);
+    alert(`❌ Error saving targets: ${error.message}`);
   } finally {
     setIsSaving(false);
   }
