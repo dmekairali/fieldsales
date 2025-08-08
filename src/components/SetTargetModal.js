@@ -104,7 +104,6 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
 
   
 // REPLACE BOTH functions at the top of your SetTargetModal.js file
-
 const getWeekNumber = (d) => {
   d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -131,16 +130,23 @@ function getWeekStartDate(year, weekNumber) {
     
     // Final safety check - ensure it's Monday
     if (targetMonday.getDay() !== 1) {
-        console.warn(`Date ${targetMonday.toISOString().split('T')[0]} is not Monday, adjusting...`);
+        console.warn(`Date is not Monday, adjusting...`);
         while (targetMonday.getDay() !== 1) {
             targetMonday.setDate(targetMonday.getDate() + 1);
         }
     }
     
-    console.log(`Week ${weekNumber}, ${year} Monday: ${targetMonday.toISOString().split('T')[0]} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
+    // Use local date formatting instead of ISO to avoid timezone issues
+    const year_ = targetMonday.getFullYear();
+    const month_ = String(targetMonday.getMonth() + 1).padStart(2, '0');
+    const day_ = String(targetMonday.getDate()).padStart(2, '0');
+    const localDateString = `${year_}-${month_}-${day_}`;
+    
+    console.log(`Week ${weekNumber}, ${year} Monday: ${localDateString} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
     
     return targetMonday;
 }
+
 
 
 // REPLACE ONLY THE handleSave FUNCTION in your existing SetTargetModal.js
