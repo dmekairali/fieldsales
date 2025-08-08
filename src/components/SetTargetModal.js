@@ -113,34 +113,43 @@ const getWeekNumber = (d) => {
   return [d.getUTCFullYear(), weekNo];
 };
 
+const getWeekNumber = (d) => {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return [d.getUTCFullYear(), weekNo];
+};
+
 function getWeekStartDate(year, weekNumber) {
-    // Use the same logic as getWeekNumber but in reverse
-    // This ensures consistency between week number calculation and date calculation
+    // Simple, clean Monday calculation
     
-    // Start with January 1st of the year
-    const jan1 = new Date(year, 0, 1);
-    
-    // Calculate days to add to get to the Monday of the specified week
-    // Week 1 contains January 4th (ISO week standard)
+    // January 4th is always in week 1 (ISO standard)
     const jan4 = new Date(year, 0, 4);
     const jan4DayOfWeek = jan4.getDay(); // 0=Sunday, 1=Monday, etc.
     
-    // Find Monday of week 1 (which contains Jan 4th)
+    // Calculate Monday of week 1
     const week1Monday = new Date(jan4);
-    const daysToMonday = jan4DayOfWeek === 0 ? -6 : 1 - jan4DayOfWeek;
+    const daysToMonday = jan4DayOfWeek === 0 ? 1 : (1 - jan4DayOfWeek);
     week1Monday.setDate(jan4.getDate() + daysToMonday);
     
     // Calculate Monday of target week
     const targetMonday = new Date(week1Monday);
     targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
     
-    console.log(`Week ${weekNumber}, ${year}:`);
-    console.log(`- Jan 4th: ${jan4.toISOString().split('T')[0]} (${jan4.toLocaleDateString('en-US', { weekday: 'long' })})`);
-    console.log(`- Week 1 Monday: ${week1Monday.toISOString().split('T')[0]} (${week1Monday.toLocaleDateString('en-US', { weekday: 'long' })})`);
-    console.log(`- Target Monday: ${targetMonday.toISOString().split('T')[0]} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
+    // Final safety check - ensure it's Monday
+    if (targetMonday.getDay() !== 1) {
+        console.warn(`Date ${targetMonday.toISOString().split('T')[0]} is not Monday, adjusting...`);
+        while (targetMonday.getDay() !== 1) {
+            targetMonday.setDate(targetMonday.getDate() + 1);
+        }
+    }
+    
+    console.log(`Week ${weekNumber}, ${year} Monday: ${targetMonday.toISOString().split('T')[0]} (${targetMonday.toLocaleDateString('en-US', { weekday: 'long' })})`);
     
     return targetMonday;
 }
+
 
 // REPLACE ONLY THE handleSave FUNCTION in your existing SetTargetModal.js
 // Keep everything else exactly the same - just replace this one function
