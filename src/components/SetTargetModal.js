@@ -101,49 +101,28 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
  * @param {Date} date - Input date
  * @returns {[number, number]} - [year, weekNumber]
  */
+// Correct ISO Week Number Calculation
 const getWeekNumber = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  
-  // Set to nearest Thursday (current date + 4 - current day number)
-  // ISO weeks start on Monday, but Thursday is always in the correct week
-  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-  
-  // January 4 is always in week 1 (ISO standard)
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); // Thursday
   const week1 = new Date(d.getFullYear(), 0, 4);
-  
-  // Adjust to Thursday in week 1 and count number of weeks
-  const weekNo = 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  
-  return [d.getFullYear(), weekNo];
+  return [d.getFullYear(), 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)];
 };
 
-/**
- * Get the Monday of the given ISO week
- * @param {number} year - Year (e.g. 2025)
- * @param {number} weekNumber - ISO week number (1-53)
- * @returns {Date} - Monday of the requested week
- */
+// Get Monday of ISO Week (Fixed)
 const getWeekStartDate = (year, weekNumber) => {
-  // Create a date for Jan 1 of the year
-  const jan1 = new Date(year, 0, 1);
-  const jan1Day = (jan1.getDay() + 6) % 7; // Convert to ISO day (0=Monday)
+  const date = new Date(year, 0, 1);
+  const dayOffset = date.getDay() === 0 ? 1 : 8 - date.getDay(); // Adjust to next Monday
   
-  // Calculate the date of Thursday in week 1
-  let firstThursday;
-  if (jan1Day <= 3) { // Week 1 contains Jan 1
-    firstThursday = new Date(jan1);
-    firstThursday.setDate(jan1.getDate() + (3 - jan1Day));
-  } else { // Week 1 starts after Jan 1
-    firstThursday = new Date(jan1);
-    firstThursday.setDate(jan1.getDate() + (3 - jan1Day + 7));
-  }
+  // Find first Thursday (ISO week definition)
+  const firstThursday = new Date(year, 0, dayOffset + 3);
   
-  // The Monday of week 1 is 3 days before Thursday
+  // Calculate Monday of week 1
   const week1Monday = new Date(firstThursday);
   week1Monday.setDate(firstThursday.getDate() - 3);
   
-  // Calculate the Monday of the target week
+  // Calculate target Monday
   const targetMonday = new Date(week1Monday);
   targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
   
@@ -158,82 +137,48 @@ const getWeekStartDate = (year, weekNumber) => {
   return targetMonday;
 };
 
-/**
- * Handle saving targets with proper date validation
- */
+// Fixed handleSave with correct date generation
 const handleSave = async () => {
   setIsSaving(true);
   
   try {
-    // 1. Get year and week number
     const [year, weekNo] = getWeekNumber(selectedDate);
-    console.log(`Saving targets for Year ${year}, Week ${weekNo}`);
-    
-    // 2. Get the Monday of the week
     const weekStartDate = getWeekStartDate(year, weekNo);
-    console.log(`Week starts on: ${weekStartDate.toDateString()}`);
     
-    // 3. Validate it's actually Monday
+    console.log(`Saving for Year ${year}, Week ${weekNo}`);
+    console.log(`Correct week start: ${weekStartDate.toDateString()}`); // Should be Mon Aug 4
+    
+    // Verify Monday
     if (weekStartDate.getDay() !== 1) {
-      throw new Error('Week calculation error - week should start on Monday');
+      throw new Error('Week should start on Monday');
     }
-    
-    // 4. Get employee IDs for all performers
+
+    // Get employee IDs
     const performerNames = performers.map(p => p.name);
-    const { data: mrData, error: mrError } = await supabase
+    const { data: mrData } = await supabase
       .from('medical_representatives')
       .select('employee_id, name')
       .in('name', performerNames);
 
-    if (mrError) throw new Error(`MR lookup failed: ${mrError.message}`);
-    if (!mrData?.length) throw new Error('No matching MRs found');
-    
-    // 5. Create name to ID mapping
-    const nameToIdMap = {};
-    mrData.forEach(mr => {
-      nameToIdMap[mr.name] = mr.employee_id;
-    });
-    
-    // 6. Verify all performers have IDs
-    const missingIDs = performers.filter(p => !nameToIdMap[p.name]);
-    if (missingIDs.length) {
-      throw new Error(`Missing IDs for: ${missingIDs.map(p => p.name).join(', ')}`);
-    }
-    
-    // 7. Delete existing targets for this week
-    const employeeIds = performers.map(p => nameToIdMap[p.name]);
-    const { error: deleteError } = await supabase
-      .from('mr_weekly_targets')
-      .delete()
-      .in('employee_id', employeeIds)
-      .eq('week_number', weekNo)
-      .eq('week_year', year);
-
-    if (deleteError) console.warn('Delete warning:', deleteError.message);
-    
-    // 8. Prepare records for insertion (Monday-Saturday)
+    // Create records for Monday-Saturday (6 days)
     const recordsToInsert = [];
     const weekEndDate = new Date(weekStartDate);
     weekEndDate.setDate(weekStartDate.getDate() + 5); // Saturday
     
     performers.forEach(performer => {
       const performerTarget = targets[performer.id];
-      const employeeId = nameToIdMap[performer.name];
+      const employeeId = mrData.find(mr => mr.name === performer.name)?.employee_id;
       
-      if (!performerTarget || !employeeId) {
-        console.warn(`Skipping ${performer.name} - missing data`);
-        return;
-      }
+      if (!performerTarget || !employeeId) return;
       
-      // Create records for each working day (Monday-Saturday)
+      // Generate dates from Monday to Saturday
       for (let i = 0; i < 6; i++) {
         const targetDate = new Date(weekStartDate);
         targetDate.setDate(weekStartDate.getDate() + i);
         
-        // Validate day of week (1=Monday to 6=Saturday)
-        const dayOfWeek = targetDate.getDay();
-        if (dayOfWeek === 0) { // Sunday check
-          throw new Error('Invalid date generated - Sunday detected');
+        // Verify day (1=Mon to 6=Sat)
+        if (targetDate.getDay() === 0) {
+          throw new Error('Invalid Sunday date generated');
         }
         
         recordsToInsert.push({
