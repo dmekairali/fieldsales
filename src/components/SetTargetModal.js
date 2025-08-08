@@ -254,7 +254,9 @@ const handleSave = async () => {
     console.log('📊 Performers data:', performers);
     
     // Step 1: Get employee_ids from medical_representatives table (case-insensitive)
-    const performerNames = performers.map(p => p.name);
+    const performerNames = performers
+    .filter(p => p.role_level !== 'SALES_AGENT')
+    .map(p => p.name);
     console.log('🔍 Looking up employee_ids for names:', performerNames);
     
     // Use ilike (case-insensitive) or get all records and filter in JavaScript
