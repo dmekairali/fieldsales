@@ -55,7 +55,11 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
     }));
   };
 
-  const handleAutoCompute = async () => {
+ const [isAutoComputing, setIsAutoComputing] = useState(false);
+
+const handleAutoCompute = async () => {
+  setIsAutoComputing(true);
+  
   const today = new Date();
   const threeWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 21);
 
@@ -72,6 +76,7 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   if (error) {
     console.error('Error fetching orders for auto-computation:', error);
     alert('Error fetching data for auto-computation.');
+    setIsAutoComputing(false);
     return;
   }
 
@@ -103,10 +108,20 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
     .forEach(performer => {
       const totalRevenue = revenueByPerformer[performer.id] || 0;
       const avgRevenue = totalRevenue / 3; // 3 weeks
+      
+      // Update total revenue target
       newTargets[performer.id].total_revenue_target = avgRevenue.toFixed(2);
+      
+      // Recalculate NBD and CRR revenue targets based on splits
+      const nbdRevenue = (avgRevenue * defaultTargets.nbd_revenue_split) / 100;
+      const crrRevenue = (avgRevenue * defaultTargets.crr_revenue_split) / 100;
+      
+      newTargets[performer.id].nbd_revenue_target = nbdRevenue.toFixed(2);
+      newTargets[performer.id].crr_revenue_target = crrRevenue.toFixed(2);
     });
 
   setTargets(newTargets);
+  setIsAutoComputing(false);
   alert('Auto-computation complete!');
 };
 
@@ -586,12 +601,20 @@ const handleSave = async () => {
 
         <div className="p-4 border-t flex justify-between items-center">
           <button
-           onClick={handleAutoCompute}
-           className="flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
-             >
-            <Zap size={16} className="mr-2" />
-            Auto-compute
-          </button>
+  onClick={handleAutoCompute}
+  disabled={isAutoComputing}
+  className="flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+>
+  {isAutoComputing ? (
+    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  ) : (
+    <Zap size={16} className="mr-2" />
+  )}
+  {isAutoComputing ? 'Computing...' : 'Auto-compute'}
+</button>
           <div className="flex gap-4">
             <button
               onClick={onClose}
