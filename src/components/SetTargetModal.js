@@ -305,10 +305,12 @@ const handleSave = async () => {
     console.log('📋 Original DB names:', dbNameMap);
 
     // Step 3: Check for missing mappings (case-insensitive)
-    const missingMappings = performers.filter(p => {
-      const lowerPerformerName = p.name.toLowerCase().trim();
-      return !nameToIdMap[lowerPerformerName];
-    });
+   const missingMappings = performers
+  .filter(p => p.role_level !== 'SALES_AGENT')
+  .filter(p => {
+    const lowerPerformerName = p.name.toLowerCase().trim();
+    return !nameToIdMap[lowerPerformerName];
+  });
     
     if (missingMappings.length > 0) {
       console.error('❌ Missing mappings for:', missingMappings.map(p => p.name));
@@ -317,10 +319,12 @@ const handleSave = async () => {
     }
 
     // Step 4: Delete existing records for this week (case-insensitive lookup)
-    const employeeIds = performers.map(p => {
-      const lowerName = p.name.toLowerCase().trim();
-      return nameToIdMap[lowerName];
-    });
+    const employeeIds = performers
+  .filter(p => p.role_level !== 'SALES_AGENT')
+  .map(p => {
+    const lowerName = p.name.toLowerCase().trim();
+    return nameToIdMap[lowerName];
+  });
     
     console.log('🗑️ Employee IDs to clean up:', employeeIds);
 
