@@ -72,6 +72,7 @@ const handleAutoComputeIndividual = async (mrName) => {
     .select('net_amount')
     .gte('order_date', threeWeeksAgo.toISOString().split('T')[0])
     .lte('order_date', today.toISOString().split('T')[0])
+    .eq('status', 'Order Confirmed')
     .ilike('mr_name', mrName);
 
   if (error) {
@@ -115,7 +116,8 @@ const handleAutoCompute = async () => {
     .from('orders')
     .select('mr_name, net_amount')
     .gte('order_date', threeWeeksAgo.toISOString().split('T')[0])
-    .lte('order_date', today.toISOString().split('T')[0]);
+    .lte('order_date', today.toISOString().split('T')[0])
+    .eq('status', 'Order Confirmed');
 
   if (error) {
     console.error('Error fetching orders for auto-computation:', error);
