@@ -159,7 +159,7 @@ const handleSave = async () => {
     console.log('🎯 Starting save process...');
     console.log('📊 Performers data:', performers);
     
-    // Step 1: Get employee_ids from medical_representatives table
+   // Step 1: Get employee_ids from medical_representatives table
     const performerNames = performers.map(p => p.name);
     console.log('🔍 Looking up employee_ids for names:', performerNames);
     
@@ -178,23 +178,37 @@ const handleSave = async () => {
 
     console.log('✅ Found MR data:', mrData);
 
-    // Step 2: Create name to employee_id mapping
+    // Step 2: Create name to employee_id mapping (case-insensitive)
     const nameToIdMap = {};
+    const dbNameMap = {}; // Store original DB names for reference
+    
     mrData.forEach(mr => {
-      nameToIdMap[mr.name] = mr.employee_id;
+      const lowerName = mr.name.toLowerCase().trim();
+      nameToIdMap[lowerName] = mr.employee_id;
+      dbNameMap[lowerName] = mr.name; // Keep original name for reference
     });
 
-    console.log('🗺️ Name to ID mapping:', nameToIdMap);
+    console.log('🗺️ Name to ID mapping (case-insensitive):', nameToIdMap);
+    console.log('📋 Original DB names:', dbNameMap);
 
-    // Step 3: Check for missing mappings
-    const missingMappings = performers.filter(p => !nameToIdMap[p.name]);
+    // Step 3: Check for missing mappings (case-insensitive)
+    const missingMappings = performers.filter(p => {
+      const lowerPerformerName = p.name.toLowerCase().trim();
+      return !nameToIdMap[lowerPerformerName];
+    });
+    
     if (missingMappings.length > 0) {
+      console.error('❌ Missing mappings for:', missingMappings.map(p => p.name));
+      console.log('Available DB names:', Object.values(dbNameMap));
       throw new Error(`Employee IDs not found for: ${missingMappings.map(p => p.name).join(', ')}`);
     }
 
-    // Step 4: Delete existing records for this week
-    const employeeIds = performers.map(p => nameToIdMap[p.name]);
-    console.log('🗑️ Employee IDs to clean up:', employeeIds);
+    // Step 4: Delete existing records for this week (case-insensitive lookup)
+    const employeeIds = performers.map(p => {
+      const lowerName = p.name.toLowerCase().trim();
+      return nameToIdMap[lowerName];
+    });
+    
 
     const { error: deleteError } = await supabase
       .from('mr_weekly_targets')
