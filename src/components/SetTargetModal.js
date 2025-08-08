@@ -96,40 +96,47 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   
-// Helper function to get ISO week number
-const getWeekNumber = (d) => {
-  // Create a new date object to avoid modifying the original
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+/**
+ * Get ISO week number and year for a date
+ * @param {Date} date - Input date
+ * @returns {[number, number]} - [year, weekNumber]
+ */
+const getWeekNumber = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
   
-  // Set to nearest Thursday: current date + 4 - current day number
-  // Make Sunday's day number 7 (ISO standard)
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  // Set to nearest Thursday (current date + 4 - current day number)
+  // ISO weeks start on Monday, but Thursday is always in the correct week
+  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
   
-  // Get first day of year
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  // January 4 is always in week 1 (ISO standard)
+  const week1 = new Date(d.getFullYear(), 0, 4);
   
-  // Calculate full weeks to nearest Thursday
-  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  // Adjust to Thursday in week 1 and count number of weeks
+  const weekNo = 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
   
-  return [date.getUTCFullYear(), weekNo];
+  return [d.getFullYear(), weekNo];
 };
 
-// Function to get the Monday of the given ISO week
+/**
+ * Get the Monday of the given ISO week
+ * @param {number} year - Year (e.g. 2025)
+ * @param {number} weekNumber - ISO week number (1-53)
+ * @returns {Date} - Monday of the requested week
+ */
 const getWeekStartDate = (year, weekNumber) => {
   // Create a date for Jan 1 of the year
   const jan1 = new Date(year, 0, 1);
-  const jan1Day = jan1.getDay() || 7; // Convert Sunday (0) to 7
+  const jan1Day = (jan1.getDay() + 6) % 7; // Convert to ISO day (0=Monday)
   
   // Calculate the date of Thursday in week 1
   let firstThursday;
-  if (jan1Day <= 4) {
-    // Week 1 contains Jan 1
+  if (jan1Day <= 3) { // Week 1 contains Jan 1
     firstThursday = new Date(jan1);
-    firstThursday.setDate(jan1.getDate() + (4 - jan1Day));
-  } else {
-    // Week 1 starts after Jan 1
+    firstThursday.setDate(jan1.getDate() + (3 - jan1Day));
+  } else { // Week 1 starts after Jan 1
     firstThursday = new Date(jan1);
-    firstThursday.setDate(jan1.getDate() + (4 - jan1Day + 7));
+    firstThursday.setDate(jan1.getDate() + (3 - jan1Day + 7));
   }
   
   // The Monday of week 1 is 3 days before Thursday
@@ -142,7 +149,7 @@ const getWeekStartDate = (year, weekNumber) => {
   
   // Final verification
   if (targetMonday.getDay() !== 1) {
-    console.warn('Adjusting date to Monday');
+    console.warn('Adjusting to Monday');
     while (targetMonday.getDay() !== 1) {
       targetMonday.setDate(targetMonday.getDate() + 1);
     }
@@ -151,14 +158,27 @@ const getWeekStartDate = (year, weekNumber) => {
   return targetMonday;
 };
 
+/**
+ * Handle saving targets with proper date validation
+ */
 const handleSave = async () => {
   setIsSaving(true);
-  const [year, weekNo] = getWeekNumber(selectedDate);
   
   try {
+    // 1. Get year and week number
+    const [year, weekNo] = getWeekNumber(selectedDate);
     console.log(`Saving targets for Year ${year}, Week ${weekNo}`);
     
-    // 1. Get employee IDs for all performers
+    // 2. Get the Monday of the week
+    const weekStartDate = getWeekStartDate(year, weekNo);
+    console.log(`Week starts on: ${weekStartDate.toDateString()}`);
+    
+    // 3. Validate it's actually Monday
+    if (weekStartDate.getDay() !== 1) {
+      throw new Error('Week calculation error - week should start on Monday');
+    }
+    
+    // 4. Get employee IDs for all performers
     const performerNames = performers.map(p => p.name);
     const { data: mrData, error: mrError } = await supabase
       .from('medical_representatives')
@@ -167,24 +187,20 @@ const handleSave = async () => {
 
     if (mrError) throw new Error(`MR lookup failed: ${mrError.message}`);
     if (!mrData?.length) throw new Error('No matching MRs found');
-
-    // 2. Create name to ID mapping
+    
+    // 5. Create name to ID mapping
     const nameToIdMap = {};
     mrData.forEach(mr => {
       nameToIdMap[mr.name] = mr.employee_id;
     });
-
-    // 3. Verify all performers have IDs
+    
+    // 6. Verify all performers have IDs
     const missingIDs = performers.filter(p => !nameToIdMap[p.name]);
     if (missingIDs.length) {
       throw new Error(`Missing IDs for: ${missingIDs.map(p => p.name).join(', ')}`);
     }
-
-    // 4. Get the correct week start (Monday)
-    const weekStartDate = getWeekStartDate(year, weekNo);
-    console.log(`Week ${weekNo} starts on: ${weekStartDate.toISOString().split('T')[0]}`);
-
-    // 5. Delete existing targets for this week
+    
+    // 7. Delete existing targets for this week
     const employeeIds = performers.map(p => nameToIdMap[p.name]);
     const { error: deleteError } = await supabase
       .from('mr_weekly_targets')
@@ -194,37 +210,39 @@ const handleSave = async () => {
       .eq('week_year', year);
 
     if (deleteError) console.warn('Delete warning:', deleteError.message);
-
-    // 6. Prepare records for insertion (Monday-Saturday)
+    
+    // 8. Prepare records for insertion (Monday-Saturday)
     const recordsToInsert = [];
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 5); // Saturday
+    
     performers.forEach(performer => {
       const performerTarget = targets[performer.id];
       const employeeId = nameToIdMap[performer.name];
-
+      
       if (!performerTarget || !employeeId) {
         console.warn(`Skipping ${performer.name} - missing data`);
         return;
       }
-
-      // Create 6 records (Monday to Saturday)
+      
+      // Create records for each working day (Monday-Saturday)
       for (let i = 0; i < 6; i++) {
         const targetDate = new Date(weekStartDate);
         targetDate.setDate(weekStartDate.getDate() + i);
-
-        // Verify day of week (1=Monday to 6=Saturday)
-        const dayOfWeek = targetDate.getDay() || 7; // Convert Sunday (0) to 7
-        if (dayOfWeek === 7) {
-          console.error('Invalid Sunday date generated');
-          continue;
+        
+        // Validate day of week (1=Monday to 6=Saturday)
+        const dayOfWeek = targetDate.getDay();
+        if (dayOfWeek === 0) { // Sunday check
+          throw new Error('Invalid date generated - Sunday detected');
         }
-
+        
         recordsToInsert.push({
           employee_id: employeeId,
           mr_name: performer.name,
           week_number: weekNo,
           week_year: year,
           week_start_date: weekStartDate.toISOString().split('T')[0],
-          week_end_date: new Date(weekStartDate.getTime() + 5 * 86400000).toISOString().split('T')[0], // +5 days = Saturday
+          week_end_date: weekEndDate.toISOString().split('T')[0],
           target_date: targetDate.toISOString().split('T')[0],
           total_visit_plan: performerTarget.total_visit_plan,
           nbd_visit_plan: performerTarget.nbd_visit_plan,
@@ -242,16 +260,19 @@ const handleSave = async () => {
         });
       }
     });
-
-    // 7. Insert the new records
+    
+    console.log('Records to insert:', recordsToInsert);
+    
+    // 9. Insert the new records
     const { error: insertError } = await supabase
       .from('mr_weekly_targets')
       .insert(recordsToInsert);
 
     if (insertError) throw new Error(`Insert failed: ${insertError.message}`);
-
+    
     alert('Targets saved successfully!');
     onClose();
+    
   } catch (error) {
     console.error('Save error:', error);
     alert(`Error saving targets: ${error.message}`);
