@@ -63,10 +63,6 @@ const handleAutoCompute = async () => {
   const today = new Date();
   const threeWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 21);
 
-  const performerIds = performers
-    .filter(p => p.role_level !== 'SALES_AGENT')
-    .map(p => p.name); // Use name instead of id for matching
-
   const { data, error } = await supabase
     .from('orders')
     .select('mr_name, net_amount')
@@ -80,6 +76,9 @@ const handleAutoCompute = async () => {
     return;
   }
 
+  console.log('Orders data:', data);
+  console.log('Performers:', performers.filter(p => p.role_level !== 'SALES_AGENT'));
+
   // Helper function to standardize names for matching
   const standardizeName = (name) => {
     return name?.toString().trim().toLowerCase().replace(/\s+/g, ' ') || '';
@@ -88,33 +87,45 @@ const handleAutoCompute = async () => {
   const revenueByPerformer = {};
   data.forEach(order => {
     const standardizedOrderMR = standardizeName(order.mr_name);
+    console.log('Order MR (standardized):', standardizedOrderMR);
     
     // Find matching performer by comparing standardized names
     const matchingPerformer = performers
       .filter(p => p.role_level !== 'SALES_AGENT')
-      .find(p => standardizeName(p.name) === standardizedOrderMR);
+      .find(p => {
+        const standardizedPerformerName = standardizeName(p.name);
+        console.log('Comparing:', standardizedOrderMR, 'vs', standardizedPerformerName);
+        return standardizedPerformerName === standardizedOrderMR;
+      });
     
     if (matchingPerformer) {
+      console.log('Match found for:', matchingPerformer.name);
       if (!revenueByPerformer[matchingPerformer.id]) {
         revenueByPerformer[matchingPerformer.id] = 0;
       }
       revenueByPerformer[matchingPerformer.id] += order.net_amount;
+    } else {
+      console.log('No match found for order MR:', order.mr_name);
     }
   });
+
+  console.log('Revenue by performer:', revenueByPerformer);
 
   const newTargets = { ...targets };
   performers
     .filter(performer => performer.role_level !== 'SALES_AGENT')
     .forEach(performer => {
       const totalRevenue = revenueByPerformer[performer.id] || 0;
-      const avgRevenue = totalRevenue / 3; // 3 weeks
+      const weeklyAverage = totalRevenue / 3; // 3 weeks average
+      
+      console.log(`${performer.name}: Total=${totalRevenue}, Weekly Avg=${weeklyAverage}`);
       
       // Update total revenue target
-      newTargets[performer.id].total_revenue_target = avgRevenue.toFixed(2);
+      newTargets[performer.id].total_revenue_target = weeklyAverage.toFixed(2);
       
       // Recalculate NBD and CRR revenue targets based on splits
-      const nbdRevenue = (avgRevenue * defaultTargets.nbd_revenue_split) / 100;
-      const crrRevenue = (avgRevenue * defaultTargets.crr_revenue_split) / 100;
+      const nbdRevenue = (weeklyAverage * defaultTargets.nbd_revenue_split) / 100;
+      const crrRevenue = (weeklyAverage * defaultTargets.crr_revenue_split) / 100;
       
       newTargets[performer.id].nbd_revenue_target = nbdRevenue.toFixed(2);
       newTargets[performer.id].crr_revenue_target = crrRevenue.toFixed(2);
