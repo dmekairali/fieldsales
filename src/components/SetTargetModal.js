@@ -547,18 +547,39 @@ const handleSave = async () => {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-100">
-                <tr>
-                  <td colSpan="3" className="px-6 py-3 text-right text-sm font-bold text-gray-600 uppercase tracking-wider">Total</td>
-                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseFloat(t.total_revenue_target || 0), 0).toFixed(2)}</td>
-                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseFloat(t.nbd_revenue_target || 0), 0).toFixed(2)}</td>
-                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseFloat(t.crr_revenue_target || 0), 0).toFixed(2)}</td>
-                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseInt(t.total_visit_plan || 0), 0)}</td>
-                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseInt(t.nbd_visit_plan || 0), 0)}</td>
-                  <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">{Object.values(targets).reduce((acc, t) => acc + parseInt(t.crr_visit_plan || 0), 0)}</td>
-                  <td colSpan="3"></td>
-                </tr>
-              </tfoot>
+             <tfoot className="bg-gray-100">
+  <tr>
+    <td colSpan="3" className="px-6 py-3 text-right text-sm font-bold text-gray-600 uppercase tracking-wider">Total</td>
+    <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
+      {performers
+        ?.reduce((acc, p) => acc + parseFloat(targets[p.id]?.total_revenue_target || 0), 0)
+        .toFixed(2)}
+    </td>
+    <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
+      {performers
+        ?.reduce((acc, p) => acc + parseFloat(targets[p.id]?.nbd_revenue_target || 0), 0)
+        .toFixed(2)}
+    </td>
+    <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
+      {performers
+        ?.reduce((acc, p) => acc + parseFloat(targets[p.id]?.crr_revenue_target || 0), 0)
+        .toFixed(2)}
+    </td>
+    <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
+      {performers
+        ?.reduce((acc, p) => acc + parseInt(targets[p.id]?.total_visit_plan || 0), 0)}
+    </td>
+    <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
+      {performers
+        ?.reduce((acc, p) => acc + parseInt(targets[p.id]?.nbd_visit_plan || 0), 0)}
+    </td>
+    <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
+      {performers
+        ?.reduce((acc, p) => acc + parseInt(targets[p.id]?.crr_visit_plan || 0), 0)}
+    </td>
+    <td colSpan="3"></td>
+  </tr>
+</tfoot>
             </table>
           </div>
         </div>
