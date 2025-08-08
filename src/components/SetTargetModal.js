@@ -56,42 +56,59 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
   };
 
   const handleAutoCompute = async () => {
-    const today = new Date();
-    const threeWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 21);
+  const today = new Date();
+  const threeWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 21);
 
-    const performerIds = performers.map(p => p.id);
+  const performerIds = performers
+    .filter(p => p.role_level !== 'SALES_AGENT')
+    .map(p => p.name); // Use name instead of id for matching
 
-    const { data, error } = await supabase
-      .from('orders')
-      .select('mr_name, net_amount')
-      .in('mr_name', performerIds)
-      .gte('order_date', threeWeeksAgo.toISOString().split('T')[0])
-      .lte('order_date', today.toISOString().split('T')[0]);
+  const { data, error } = await supabase
+    .from('orders')
+    .select('mr_name, net_amount')
+    .gte('order_date', threeWeeksAgo.toISOString().split('T')[0])
+    .lte('order_date', today.toISOString().split('T')[0]);
 
-    if (error) {
-      console.error('Error fetching orders for auto-computation:', error);
-      alert('Error fetching data for auto-computation.');
-      return;
-    }
+  if (error) {
+    console.error('Error fetching orders for auto-computation:', error);
+    alert('Error fetching data for auto-computation.');
+    return;
+  }
 
-    const revenueByPerformer = {};
-    data.forEach(order => {
-      if (!revenueByPerformer[order.mr_name]) {
-        revenueByPerformer[order.mr_name] = 0;
+  // Helper function to standardize names for matching
+  const standardizeName = (name) => {
+    return name?.toString().trim().toLowerCase().replace(/\s+/g, ' ') || '';
+  };
+
+  const revenueByPerformer = {};
+  data.forEach(order => {
+    const standardizedOrderMR = standardizeName(order.mr_name);
+    
+    // Find matching performer by comparing standardized names
+    const matchingPerformer = performers
+      .filter(p => p.role_level !== 'SALES_AGENT')
+      .find(p => standardizeName(p.name) === standardizedOrderMR);
+    
+    if (matchingPerformer) {
+      if (!revenueByPerformer[matchingPerformer.id]) {
+        revenueByPerformer[matchingPerformer.id] = 0;
       }
-      revenueByPerformer[order.mr_name] += order.net_amount;
-    });
+      revenueByPerformer[matchingPerformer.id] += order.net_amount;
+    }
+  });
 
-    const newTargets = { ...targets };
-    performers.forEach(performer => {
+  const newTargets = { ...targets };
+  performers
+    .filter(performer => performer.role_level !== 'SALES_AGENT')
+    .forEach(performer => {
       const totalRevenue = revenueByPerformer[performer.id] || 0;
       const avgRevenue = totalRevenue / 3; // 3 weeks
       newTargets[performer.id].total_revenue_target = avgRevenue.toFixed(2);
     });
 
-    setTargets(newTargets);
-    alert('Auto-computation complete!');
-  };
+  setTargets(newTargets);
+  alert('Auto-computation complete!');
+};
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -495,7 +512,7 @@ const handleSave = async () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {(performers || []).map((performer, index) => (
+                {(performers || []).filter(performer => performer.role_level !== 'SALES_AGENT').map((performer, index) => (
                   <tr key={performer.id} className="hover:bg-gray-50">
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10">{performer.name}</td>
@@ -548,10 +565,9 @@ const handleSave = async () => {
 
         <div className="p-4 border-t flex justify-between items-center">
           <button
-            onClick={handleAutoCompute}
-            disabled
-            className="flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
+           onClick={handleAutoCompute}
+           className="flex items-center px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+             >
             <Zap size={16} className="mr-2" />
             Auto-compute
           </button>
