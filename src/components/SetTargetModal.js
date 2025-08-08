@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Target, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Target, Zap, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 
 
 const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
+  const [showDefaultTargets, setShowDefaultTargets] = useState(false);
   const [targets, setTargets] = useState({});
   const [selectedDate, setSelectedDate] = useState(() => {
   const today = new Date();
@@ -27,10 +28,11 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
         const nbd_revenue_target = (defaultTargets.total_revenue_target * defaultTargets.nbd_revenue_split) / 100;
         const crr_revenue_target = (defaultTargets.total_revenue_target * defaultTargets.crr_revenue_split) / 100;
 
-        initialTargets[performer.id] = {
+        initialTargets[performer.name] = {
           ...defaultTargets,
           nbd_revenue_target,
           crr_revenue_target,
+          source: 'Default',
         };
       });
       setTargets(initialTargets);
@@ -45,17 +47,63 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
     });
   };
 
-  const handleInputChange = (mrId, field, value) => {
+  const handleInputChange = (mrName, field, value) => {
     setTargets(prevTargets => ({
       ...prevTargets,
-      [mrId]: {
-        ...prevTargets[mrId],
-        [field]: value
+      [mrName]: {
+        ...prevTargets[mrName],
+        [field]: value,
+        source: 'Manual',
       }
     }));
   };
 
  const [isAutoComputing, setIsAutoComputing] = useState(false);
+
+const handleAutoComputeIndividual = async (mrName) => {
+  setIsAutoComputing(true); // Consider a more granular loading state later
+
+  const today = new Date();
+  const threeWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 21);
+
+  // Fetch orders for the specific MR
+  const { data, error } = await supabase
+    .from('orders')
+    .select('net_amount')
+    .gte('order_date', threeWeeksAgo.toISOString().split('T')[0])
+    .lte('order_date', today.toISOString().split('T')[0])
+    .ilike('mr_name', mrName);
+
+  if (error) {
+    console.error(`Error fetching orders for ${mrName}:`, error);
+    alert(`Could not fetch data for ${mrName}.`);
+    setIsAutoComputing(false);
+    return;
+  }
+
+  const totalRevenue = data.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+  const weeklyAverage = totalRevenue / 3;
+
+  console.log(`Individual Compute for ${mrName}: Total=${totalRevenue}, Weekly Avg=${weeklyAverage}`);
+
+  const finalTargetRevenue = Math.max(weeklyAverage, defaultTargets.total_revenue_target);
+  const targetSource = weeklyAverage < defaultTargets.total_revenue_target ? 'Default' : 'Computed';
+  const nbdRevenue = (finalTargetRevenue * defaultTargets.nbd_revenue_split) / 100;
+  const crrRevenue = (finalTargetRevenue * defaultTargets.crr_revenue_split) / 100;
+
+  setTargets(prevTargets => ({
+    ...prevTargets,
+    [mrName]: {
+      ...prevTargets[mrName],
+      total_revenue_target: finalTargetRevenue.toFixed(2),
+      nbd_revenue_target: nbdRevenue.toFixed(2),
+      crr_revenue_target: crrRevenue.toFixed(2),
+      source: targetSource,
+    }
+  }));
+
+  setIsAutoComputing(false);
+};
 
 const handleAutoCompute = async () => {
   setIsAutoComputing(true);
@@ -116,15 +164,22 @@ const handleAutoCompute = async () => {
       
       console.log(`${performer.name}: Total=${totalRevenue}, Weekly Avg=${weeklyAverage}`);
       
+      // New logic: Use default target if it's higher than the computed average
+      const finalTargetRevenue = Math.max(weeklyAverage, defaultTargets.total_revenue_target);
+      const targetSource = weeklyAverage < defaultTargets.total_revenue_target ? 'Default' : 'Computed';
+
       // Update total revenue target
-      newTargets[performer.id].total_revenue_target = weeklyAverage.toFixed(2);
+      newTargets[performer.name].total_revenue_target = finalTargetRevenue.toFixed(2);
       
       // Recalculate NBD and CRR revenue targets based on splits
-      const nbdRevenue = (weeklyAverage * defaultTargets.nbd_revenue_split) / 100;
-      const crrRevenue = (weeklyAverage * defaultTargets.crr_revenue_split) / 100;
+      const nbdRevenue = (finalTargetRevenue * defaultTargets.nbd_revenue_split) / 100;
+      const crrRevenue = (finalTargetRevenue * defaultTargets.crr_revenue_split) / 100;
       
-      newTargets[performer.id].nbd_revenue_target = nbdRevenue.toFixed(2);
-      newTargets[performer.id].crr_revenue_target = crrRevenue.toFixed(2);
+      newTargets[performer.name].nbd_revenue_target = nbdRevenue.toFixed(2);
+      newTargets[performer.name].crr_revenue_target = crrRevenue.toFixed(2);
+
+      // Set the source of the target
+      newTargets[performer.name].source = targetSource;
     });
 
   setTargets(newTargets);
@@ -296,8 +351,8 @@ const handleSave = async () => {
 
     performers.forEach(performer => {
       // Try multiple ways to find target data
-      const performerTarget = targets[performer.id] || 
-                             targets[performer.name] || 
+      const performerTarget = targets[performer.name] || 
+                             targets[performer.id] || 
                              targets[performer.name.toLowerCase()] ||
                              targets[performer.name.toUpperCase()];
       
@@ -474,43 +529,54 @@ const handleSave = async () => {
           </button>
         </div>
 
-        <div className="p-4 grid grid-cols-5 gap-4 border-b">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Total Revenue</label>
-            <input type="number" value={defaultTargets.total_revenue_target} onChange={(e) => handleDefaultTargetChange('total_revenue_target', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">NBD Revenue %</label>
-            <input type="number" value={defaultTargets.nbd_revenue_split} onChange={(e) => handleDefaultTargetChange('nbd_revenue_split', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">CRR Revenue %</label>
-            <input type="number" value={defaultTargets.crr_revenue_split} onChange={(e) => handleDefaultTargetChange('crr_revenue_split', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Total Visits</label>
-            <input type="number" value={defaultTargets.total_visit_plan} onChange={(e) => handleDefaultTargetChange('total_visit_plan', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">NBD Visits</label>
-            <input type="number" value={defaultTargets.nbd_visit_plan} onChange={(e) => handleDefaultTargetChange('nbd_visit_plan', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">CRR Visits</label>
-            <input type="number" value={defaultTargets.crr_visit_plan} onChange={(e) => handleDefaultTargetChange('crr_visit_plan', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Total Conv. %</label>
-            <input type="number" value={defaultTargets.total_conversion_percent_plan} onChange={(e) => handleDefaultTargetChange('total_conversion_percent_plan', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">NBD Conv. %</label>
-            <input type="number" value={defaultTargets.nbd_conversion_percent_plan} onChange={(e) => handleDefaultTargetChange('nbd_conversion_percent_plan', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">CRR Conv. %</label>
-            <input type="number" value={defaultTargets.crr_conversion_percent_plan} onChange={(e) => handleDefaultTargetChange('crr_conversion_percent_plan', e.target.value)} className="w-full p-1 border rounded" />
-          </div>
+        <div className="p-4 border-b">
+          <button 
+            onClick={() => setShowDefaultTargets(!showDefaultTargets)} 
+            className="flex items-center gap-2 text-gray-700 hover:text-blue-600 w-full text-left mb-2"
+          >
+            <h3 className="text-lg font-semibold">Default Target Settings</h3>
+            {showDefaultTargets ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </button>
+          {showDefaultTargets && (
+            <div className="p-4 bg-gray-50 rounded-lg grid grid-cols-5 gap-4 border">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Total Revenue</label>
+                <input type="number" value={defaultTargets.total_revenue_target} onChange={(e) => handleDefaultTargetChange('total_revenue_target', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">NBD Revenue %</label>
+                <input type="number" value={defaultTargets.nbd_revenue_split} onChange={(e) => handleDefaultTargetChange('nbd_revenue_split', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">CRR Revenue %</label>
+                <input type="number" value={defaultTargets.crr_revenue_split} onChange={(e) => handleDefaultTargetChange('crr_revenue_split', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Total Visits</label>
+                <input type="number" value={defaultTargets.total_visit_plan} onChange={(e) => handleDefaultTargetChange('total_visit_plan', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">NBD Visits</label>
+                <input type="number" value={defaultTargets.nbd_visit_plan} onChange={(e) => handleDefaultTargetChange('nbd_visit_plan', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">CRR Visits</label>
+                <input type="number" value={defaultTargets.crr_visit_plan} onChange={(e) => handleDefaultTargetChange('crr_visit_plan', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Total Conv. %</label>
+                <input type="number" value={defaultTargets.total_conversion_percent_plan} onChange={(e) => handleDefaultTargetChange('total_conversion_percent_plan', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">NBD Conv. %</label>
+                <input type="number" value={defaultTargets.nbd_conversion_percent_plan} onChange={(e) => handleDefaultTargetChange('nbd_conversion_percent_plan', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">CRR Conv. %</label>
+                <input type="number" value={defaultTargets.crr_conversion_percent_plan} onChange={(e) => handleDefaultTargetChange('crr_conversion_percent_plan', e.target.value)} className="w-full p-1 border rounded" />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 overflow-y-auto">
@@ -518,9 +584,11 @@ const handleSave = async () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100 sticky top-0 z-10">
                 <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Actions</th>
                   <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">S.No.</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider sticky left-0 bg-gray-100 z-10">MR Name</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Target Source</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">Total Revenue</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">NBD Revenue</th>
                   <th className="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">CRR Revenue</th>
@@ -534,69 +602,94 @@ const handleSave = async () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {(performers || []).filter(performer => performer.role_level !== 'SALES_AGENT').map((performer, index) => (
-                  <tr key={performer.id} className="hover:bg-gray-50">
+                  <tr key={performer.name} className="hover:bg-gray-50">
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <button 
+                        onClick={() => handleAutoComputeIndividual(performer.name)} 
+                        className="p-1 text-yellow-600 hover:text-yellow-800 disabled:text-gray-400"
+                        disabled={isAutoComputing}
+                        title="Auto-compute for this MR"
+                      >
+                        <Zap size={16} />
+                      </button>
+                    </td>
                     <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{index + 1}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white z-10">{performer.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{performer.role_level}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.total_revenue_target} onChange={(e) => handleInputChange(performer.id, 'total_revenue_target', e.target.value)} />
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        targets[performer.name]?.source === 'Default' ? 'bg-gray-100 text-gray-800' :
+                        targets[performer.name]?.source === 'Computed' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-blue-100 text-blue-800'
+                      }`}>
+                        {targets[performer.name]?.source}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.nbd_revenue_target} onChange={(e) => handleInputChange(performer.id, 'nbd_revenue_target', e.target.value)} />
+                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.name]?.total_revenue_target} onChange={(e) => handleInputChange(performer.name, 'total_revenue_target', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.id]?.crr_revenue_target} onChange={(e) => handleInputChange(performer.id, 'crr_revenue_target', e.target.value)} />
+                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.name]?.nbd_revenue_target} onChange={(e) => handleInputChange(performer.name, 'nbd_revenue_target', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" className="w-24 p-1 border rounded" value={targets[performer.id]?.total_visit_plan} onChange={(e) => handleInputChange(performer.id, 'total_visit_plan', e.target.value)} />
+                      <input type="number" step="0.01" className="w-32 p-1 border rounded" value={targets[performer.name]?.crr_revenue_target} onChange={(e) => handleInputChange(performer.name, 'crr_revenue_target', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" className="w-24 p-1 border rounded" value={targets[performer.id]?.nbd_visit_plan} onChange={(e) => handleInputChange(performer.id, 'nbd_visit_plan', e.target.value)} />
+                      <input type="number" className="w-24 p-1 border rounded" value={targets[performer.name]?.total_visit_plan} onChange={(e) => handleInputChange(performer.name, 'total_visit_plan', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" className="w-24 p-1 border rounded" value={targets[performer.id]?.crr_visit_plan} onChange={(e) => handleInputChange(performer.id, 'crr_visit_plan', e.target.value)} />
+                      <input type="number" className="w-24 p-1 border rounded" value={targets[performer.name]?.nbd_visit_plan} onChange={(e) => handleInputChange(performer.name, 'nbd_visit_plan', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.id]?.total_conversion_percent_plan} onChange={(e) => handleInputChange(performer.id, 'total_conversion_percent_plan', e.target.value)} />
+                      <input type="number" className="w-24 p-1 border rounded" value={targets[performer.name]?.crr_visit_plan} onChange={(e) => handleInputChange(performer.name, 'crr_visit_plan', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.id]?.nbd_conversion_percent_plan} onChange={(e) => handleInputChange(performer.id, 'nbd_conversion_percent_plan', e.target.value)} />
+                      <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.name]?.total_conversion_percent_plan} onChange={(e) => handleInputChange(performer.name, 'total_conversion_percent_plan', e.target.value)} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.id]?.crr_conversion_percent_plan} onChange={(e) => handleInputChange(performer.id, 'crr_conversion_percent_plan', e.target.value)} />
+                      <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.name]?.nbd_conversion_percent_plan} onChange={(e) => handleInputChange(performer.name, 'nbd_conversion_percent_plan', e.target.value)} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input type="number" step="0.01" className="w-24 p-1 border rounded" value={targets[performer.name]?.crr_conversion_percent_plan} onChange={(e) => handleInputChange(performer.name, 'crr_conversion_percent_plan', e.target.value)} />
                     </td>
                   </tr>
                 ))}
               </tbody>
              <tfoot className="bg-gray-100">
   <tr>
-    <td colSpan="3" className="px-6 py-3 text-right text-sm font-bold text-gray-600 uppercase tracking-wider">Total</td>
+    <td colSpan="5" className="px-6 py-3 text-right text-sm font-bold text-gray-600 uppercase tracking-wider">Total</td>
     <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
       {performers
-        ?.reduce((acc, p) => acc + parseFloat(targets[p.id]?.total_revenue_target || 0), 0)
+        ?.filter(p => p.role_level !== 'SALES_AGENT')
+        .reduce((acc, p) => acc + parseFloat(targets[p.name]?.total_revenue_target || 0), 0)
         .toFixed(2)}
     </td>
     <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
       {performers
-        ?.reduce((acc, p) => acc + parseFloat(targets[p.id]?.nbd_revenue_target || 0), 0)
+        ?.filter(p => p.role_level !== 'SALES_AGENT')
+        .reduce((acc, p) => acc + parseFloat(targets[p.name]?.nbd_revenue_target || 0), 0)
         .toFixed(2)}
     </td>
     <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
       {performers
-        ?.reduce((acc, p) => acc + parseFloat(targets[p.id]?.crr_revenue_target || 0), 0)
+        ?.filter(p => p.role_level !== 'SALES_AGENT')
+        .reduce((acc, p) => acc + parseFloat(targets[p.name]?.crr_revenue_target || 0), 0)
         .toFixed(2)}
     </td>
     <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
       {performers
-        ?.reduce((acc, p) => acc + parseInt(targets[p.id]?.total_visit_plan || 0), 0)}
+        ?.filter(p => p.role_level !== 'SALES_AGENT')
+        .reduce((acc, p) => acc + parseInt(targets[p.name]?.total_visit_plan || 0), 0)}
     </td>
     <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
       {performers
-        ?.reduce((acc, p) => acc + parseInt(targets[p.id]?.nbd_visit_plan || 0), 0)}
+        ?.filter(p => p.role_level !== 'SALES_AGENT')
+        .reduce((acc, p) => acc + parseInt(targets[p.name]?.nbd_visit_plan || 0), 0)}
     </td>
     <td className="px-6 py-3 text-left text-sm font-bold text-gray-600">
       {performers
-        ?.reduce((acc, p) => acc + parseInt(targets[p.id]?.crr_visit_plan || 0), 0)}
+        ?.filter(p => p.role_level !== 'SALES_AGENT')
+        .reduce((acc, p) => acc + parseInt(targets[p.name]?.crr_visit_plan || 0), 0)}
     </td>
     <td colSpan="3"></td>
   </tr>
@@ -651,3 +744,4 @@ const handleSave = async () => {
 };
 
 export default SetTargetModal;
+  
