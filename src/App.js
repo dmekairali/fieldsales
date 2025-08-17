@@ -8,8 +8,9 @@ import VisitQualityMonitor from './components/VisitQualityMonitor';
 import NBDPerformanceDashboard from './components/NBDPerformanceDashboard';
 import RouteOptimizationDashboard from './components/RouteOptimizationDashboard';
 import GeocodingDashboard from './components/GeocodingDashboard';
-import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
-import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
+// import MonthlyPlanDashboardV2 from './components/MonthlyPlanDashboardV2';
+// import WeeklyRevisionDashboard from './components/WeeklyRevisionDashboard';
+import AITPPlanDashboard from './components/AITPPlanDashboard';
 import SalesPerformanceDashboard from './components/SalesPerformanceDashboard';
 import LiveTracker from './components/LiveTracker';
 import LostAnalysis from './components/LostAnalysis';
@@ -38,7 +39,8 @@ import {
   Search,
   Filter,
   LogOut,
-  Shield
+  Shield,
+  Cpu
 } from 'lucide-react';
 
 // Settings Dropdown Component
@@ -289,22 +291,13 @@ function App() {
         requiredAccess: 'viewer'
       },
       {
-        id: 'monthly-planning',
-        name: 'Monthly Planning',
-        icon: Calendar,
-        description: 'AI-powered tour planning',
-        color: 'violet',
+        id: 'ai-tour-plans',
+        name: 'AI Tour Plans',
+        icon: Cpu,
+        description: 'Manager view for AI-powered territory planning',
+        color: 'purple',
         badge: 'NEW',
-        requiredAccess: 'mr'
-      },
-      {
-        id: 'weekly-revision',
-        name: 'Weekly Revision',
-        icon: Activity,
-        description: 'Performance tracking',
-        color: 'green',
-        count: 3,
-        requiredAccess: 'mr'
+        requiredAccess: 'manager'
       },
       {
         id: 'emergency',
@@ -457,30 +450,8 @@ function App() {
           </>
         );
 
-      case 'monthly-planning':
-        return (
-          <MonthlyPlanDashboardV2
-            selectedMR={selectedMR}
-            selectedMRName={selectedMRName}
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            onMonthChange={setSelectedMonth}
-            onYearChange={setSelectedYear}
-          />
-        );
-      
-      case 'weekly-revision':
-        return (
-          <WeeklyRevisionDashboard 
-            mrName={selectedMRName !== 'ALL_MRS' ? selectedMRName : null}
-            selectedMonth={selectedMonth}
-            selectedYear={selectedYear}
-            mrData={selectedMR}
-            onRevisionComplete={(result) => {
-              console.log('✅ Revision completed:', result);
-            }}
-          />
-        );
+      case 'ai-tour-plans':
+        return <AITPPlanDashboard />;
       
       case 'emergency':
         return <EmergencyDashboard />;
@@ -721,33 +692,6 @@ function App() {
                   </select>
                 </div>
 
-                {/* Month/Year Selectors - Show for Monthly Planning and Weekly Revision */}
-                {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {monthNames.slice(1).map((month, index) => (
-                        <option key={index + 1} value={index + 1}>
-                          {month}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="bg-white border border-gray-300 rounded-lg px-2 py-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {[2024, 2025, 2026].map(year => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 {/* User Welcome */}
                 <div className="hidden lg:flex items-center space-x-2 text-sm">
@@ -805,12 +749,6 @@ function App() {
                     <span>Joined: {selectedMR.joining_date ? new Date(selectedMR.joining_date).toLocaleDateString() : 'N/A'}</span>
                     <span className="hidden lg:inline">•</span>
                     <span>ID: {selectedMR.employee_id}</span>
-                    {(activeTab === 'monthly-planning' || activeTab === 'weekly-revision') && (
-                      <>
-                        <span className="hidden lg:inline">•</span>
-                        <span>{monthNames[selectedMonth]} {selectedYear}</span>
-                      </>
-                    )}
                   </div>
                 </div>
               </div>
