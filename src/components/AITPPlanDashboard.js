@@ -7,26 +7,14 @@ import {
   ArrowUpDown, Edit3, ThumbsUp, Cpu, Bot, User, RefreshCw
 } from 'lucide-react';
 
-// Replace with actual supabase import
-// import { supabase } from '../supabaseClient';
-
-const supabase = {
-  from: (table) => ({
-    select: (fields) => ({
-      eq: (column, value) => ({
-        single: () => Promise.resolve({ data: null, error: null }),
-        order: (col, opts) => Promise.resolve({ data: [], error: null })
-      }),
-      order: (column, options) => Promise.resolve({ data: [], error: null })
-    })
-  })
-};
+// Import actual supabase client
+import { supabase } from '../supabaseClient';
 
 const AITPPlanDashboard = () => {
   const [activeView, setActiveView] = useState("overview");
   const [selectedMR, setSelectedMR] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState(8);
-  const [selectedYear, setSelectedYear] = useState(2025);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [mrPlansData, setMrPlansData] = useState([]);
   const [actualVisitsData, setActualVisitsData] = useState([]);
   const [medicalReps, setMedicalReps] = useState([]);
