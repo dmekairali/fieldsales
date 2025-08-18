@@ -57,24 +57,36 @@ const AITPPlanDashboard = () => {
 
       if (plansError) throw plansError;
 
-      // Load actual visits (DCR data)
+      // Load actual visits from mr_visits table
       const { data: visitsData, error: visitsError } = await supabase
-        .from('dcr_visits') // Adjust table name as needed
+        .from('mr_visits')
         .select('*')
-        .gte('visit_date', `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`)
-        .lt('visit_date', `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}-01`);
+        .gte('dcrDate', `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`)
+        .lt('dcrDate', `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}-01`);
 
       if (visitsError) throw visitsError;
 
+      // Load orders from orders table
+      const { data: ordersData, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('status', 'Order Confirmed')
+        .gte('order_date', `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-01`)
+        .lt('order_date', `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, '0')}-01`);
+
+      if (ordersError) throw ordersError;
+
       // Enrich plans with actual data
       const enrichedData = (plansData || []).map(plan => {
-        const actualVisits = (visitsData || []).filter(visit => visit.mr_name === plan.mr_name);
-        const actualRevenue = actualVisits.reduce((sum, visit) => sum + (visit.revenue || 0), 0);
+        const actualVisits = (visitsData || []).filter(visit => visit.empName === plan.mr_name);
+        const actualOrders = (ordersData || []).filter(order => order.mr_name === plan.mr_name);
+        const actualRevenue = actualOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
         return {
           ...plan,
           actual_visits: actualVisits.length,
           actual_revenue: actualRevenue,
+          actual_orders: actualOrders.length,
           achievement_percentage: plan.total_planned_visits > 0 ?
             Math.round((actualVisits.length / plan.total_planned_visits) * 100) : 0,
           revenue_achievement: plan.total_revenue_target > 0 ?
@@ -230,7 +242,7 @@ const AITPPlanDashboard = () => {
   const getActualVisitsForDay = (day) => {
     if (!selectedMR || !day) return [];
     const dateStr = `${selectedYear}-${selectedMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    return actualVisitsData.filter(visit => visit.mr_name === selectedMR && visit.visit_date === dateStr);
+    return actualVisitsData.filter(visit => visit.empName === selectedMR && visit.dcrDate === dateStr);
   };
 
   const monthNames = [
