@@ -16,7 +16,7 @@ const SetTargetModal = ({ isOpen, onClose, performers, onSave, supabase }) => {
     total_conversion_percent_plan: 20,
     nbd_conversion_percent_plan: 5,
     crr_conversion_percent_plan: 15,
-    total_revenue_target: 50000,
+    total_revenue_target: 60000,
     nbd_revenue_split: 15,
     crr_revenue_split: 85,
   });
