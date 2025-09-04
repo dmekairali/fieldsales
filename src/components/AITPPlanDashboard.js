@@ -82,13 +82,27 @@ const AITPPlanDashboard = () => {
         const actualOrders = (ordersData || []).filter(order => order.mr_name === plan.mr_name);
         const actualRevenue = actualOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
 
+        let plannedVisits = plan.total_planned_visits;
+        const planJson = plan.current_plan_json || plan.original_plan_json;
+
+        if (planJson && planJson.daily_plan) {
+            plannedVisits = planJson.daily_plan.reduce((total, day) => {
+                const dayParts = day.dayparts || {};
+                const amVisits = dayParts.AM?.length || 0;
+                const pmVisits = dayParts.PM?.length || 0;
+                const eveVisits = dayParts.EVE?.length || 0;
+                return total + amVisits + pmVisits + eveVisits;
+            }, 0);
+        }
+
         return {
           ...plan,
+          total_planned_visits: plannedVisits,
           actual_visits: actualVisits.length,
           actual_revenue: actualRevenue,
           actual_orders: actualOrders.length,
-          achievement_percentage: plan.total_planned_visits > 0 ?
-            Math.round((actualVisits.length / plan.total_planned_visits) * 100) : 0,
+          achievement_percentage: plannedVisits > 0 ?
+            Math.round((actualVisits.length / plannedVisits) * 100) : 0,
           revenue_achievement: plan.total_revenue_target > 0 ?
             Math.round((actualRevenue / plan.total_revenue_target) * 100) : 0
         };
