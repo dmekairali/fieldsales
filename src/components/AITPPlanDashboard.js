@@ -798,7 +798,7 @@ const AITPPlanDashboard = () => {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily Plan Details</h3>
               <div className="space-y-4">
-                {selectedPlanData.original_plan_json.daily_plan.slice(0, 4).map((dayPlan, index) => {
+                {selectedPlanData.original_plan_json.daily_plan.map((dayPlan, index) => {
                   const dateObj = new Date(dayPlan.date);
                   const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
                   const totalVisits = Object.values(dayPlan.dayparts || {}).flat().length;
