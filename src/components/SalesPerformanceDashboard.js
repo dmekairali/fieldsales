@@ -179,7 +179,6 @@ globalAddLog('Cache miss - fetching fresh data from database...', 'info');
           if (tableName === 'orders') {
             query = query
               .in('customer_type', ['Doctor', 'Retailer'])
-              .eq('status', 'Order Confirmed')
               .or('delivery_status.eq.Dispatch Confirmed,delivery_status.is.null');
           }
         }
@@ -1097,6 +1096,9 @@ const fetchDashboardData = async () => {
   previousOrders, previousVisits,
   mrs, allVisits, historicalData
 ) => {
+
+    const confirmedOrdersAll = currentOrders.filter(order => order.status === 'Order Confirmed');
+  const pendingOrders = currentOrders.filter(order => order.status === null || order.status === '');
   // Helper function to calculate metrics for a period
   const calculateMetrics = (orders, visits) => {
     // Create a map of visits by date and customer for conversion tracking
@@ -1155,8 +1157,19 @@ const fetchDashboardData = async () => {
     };
   };
 
-  const currentMetrics = calculateMetrics(currentOrders, currentVisits);
+  const currentMetrics = calculateMetrics(confirmedOrdersAll, currentVisits);
   const previousMetrics = calculateMetrics(previousOrders, previousVisits);
+    const pendingOrderCount = pendingOrders.length;
+  const pendingOrderRevenue = pendingOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+  const totalDaysPending = pendingOrders.reduce((sum, order) => {
+    const orderDate = new Date(order.order_date);
+    const today = new Date();
+    const diffTime = Math.abs(today - orderDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return sum + diffDays;
+  }, 0);
+  const avgDaysPending = pendingOrders.length > 0 ? totalDaysPending / pendingOrders.length : 0;
+  const confirmedPlusPendingRevenue = currentMetrics.totalRevenue + pendingOrderRevenue;
 
   // Calculate actual change percentages
   const calculateChange = (current, previous) => {
@@ -1257,7 +1270,8 @@ const fetchDashboardData = async () => {
       crrRevenue: 0,
       newProspects: 0,
       billsPending: 0,
-      paymentPending: 0
+      paymentPending: 0,
+      pendingOrderRevenue: 0
     };
     console.log('Initialized single MR:', selectedMR, 'with role:', performerMap[selectedMR].roleLevel);
   } else {
@@ -1294,7 +1308,8 @@ const fetchDashboardData = async () => {
         crrRevenue: 0,
         newProspects: 0,
         billsPending: 0,
-        paymentPending: 0
+        paymentPending: 0,
+        pendingOrderRevenue: 0
       };
     });
 
@@ -1323,7 +1338,8 @@ const fetchDashboardData = async () => {
           crrRevenue: 0,
           newProspects: 0,
           billsPending: 0,
-          paymentPending: 0
+          paymentPending: 0,
+          pendingOrderRevenue: 0
         };
       }
     });
@@ -1334,24 +1350,28 @@ const fetchDashboardData = async () => {
   currentOrders.forEach(order => {
     const mrName = order.mr_name_standardized || standardizeName(order.mr_name);
     if (performerMap[mrName]) {
-      performerMap[mrName].revenue += order.net_amount || 0;
-      performerMap[mrName].orders += 1;
-      
-      if (order.order_type === 'NBD') {
-        performerMap[mrName].nbdOrders += 1;
-        performerMap[mrName].nbdRevenue += order.net_amount || 0;
-      } else if (order.order_type === 'CRR') {
-        performerMap[mrName].crrOrders += 1;
-        performerMap[mrName].crrRevenue += order.net_amount || 0;
-      }
-      
-      if (order.status === 'Order Confirmed' && order.delivery_status === null) {
-        performerMap[mrName].billsPending += 1;
-      }
-      
-      if (order.payment_status === null) {
-        performerMap[mrName].paymentPending += 1;
-      }
+        if(order.status === 'Order Confirmed'){
+            performerMap[mrName].revenue += order.net_amount || 0;
+            performerMap[mrName].orders += 1;
+
+            if (order.order_type === 'NBD') {
+                performerMap[mrName].nbdOrders += 1;
+                performerMap[mrName].nbdRevenue += order.net_amount || 0;
+            } else if (order.order_type === 'CRR') {
+                performerMap[mrName].crrOrders += 1;
+                performerMap[mrName].crrRevenue += order.net_amount || 0;
+            }
+
+            if (order.delivery_status === null) {
+                performerMap[mrName].billsPending += 1;
+            }
+
+            if (order.payment_status === null) {
+                performerMap[mrName].paymentPending += 1;
+            }
+        } else if (order.status === null || order.status === '') {
+            performerMap[mrName].pendingOrderRevenue += order.net_amount || 0;
+        }
     }
   });
 
@@ -1428,6 +1448,10 @@ const fetchDashboardData = async () => {
     deliveryRate: currentMetrics.deliveryRate.toFixed(1),
     activeReps,
     targetAchievement,
+    pendingOrderCount,
+    pendingOrderRevenue,
+    avgDaysPending: avgDaysPending.toFixed(1),
+    confirmedPlusPendingRevenue,
 
     // Calculate actual changes
     totalRevenueChange: calculateChange(currentMetrics.totalRevenue, previousMetrics.totalRevenue),
@@ -1534,7 +1558,7 @@ const generateMonthlyHistoricalData = (selectedMonth, filteredHistoricalData) =>
     });
     
     // Calculate metrics (same logic as KPI cards)
-    const revenue = monthOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const revenue = monthOrders.filter(o => o.status === 'Order Confirmed').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = monthTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = monthVisits.length;
     
@@ -1606,7 +1630,7 @@ const generateWeeklyHistoricalData = (selectedWeek, filteredHistoricalData) => {
     });
     
     // Calculate metrics (same logic as KPI cards)
-    const revenue = weekOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const revenue = weekOrders.filter(o => o.status === 'Order Confirmed').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = weekTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = weekVisits.length;
     
@@ -1690,7 +1714,7 @@ const generateQuarterlyHistoricalData = (selectedQuarter, filteredHistoricalData
     });
     
     // Calculate metrics (same logic as KPI cards)
-    const revenue = quarterOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const revenue = quarterOrders.filter(o => o.status === 'Order Confirmed').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = quarterTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = quarterVisits.length;
     
@@ -1760,7 +1784,7 @@ const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
     });
     
     // Calculate metrics (same logic as KPI cards)
-    const revenue = yearOrders.reduce((sum, order) => sum + (order.net_amount || 0), 0);
+    const revenue = yearOrders.filter(o => o.status === 'Order Confirmed').reduce((sum, order) => sum + (order.net_amount || 0), 0);
     const target = yearTargets.reduce((sum, target) => sum + (target.total_revenue_target || 0), 0);
     const visitCount = yearVisits.length;
     
@@ -1866,7 +1890,6 @@ const generateYearlyHistoricalData = (selectedYear, filteredHistoricalData) => {
         .gte('order_date', currentRange.start)
         .lte('order_date', currentRange.end)
         .in('customer_type', ['Doctor', 'Retailer'])
-        .eq('status', 'Order Confirmed')
         .not('mr_name', 'is', null),
       
       supabase
@@ -2098,12 +2121,12 @@ const SortIcon = ({ column }) => {
                   </div>
                 </th>
                 <th 
-                  className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20 cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('newProspects')}
+                  className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24 cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('pendingOrderRevenue')}
                 >
-                  <div className="flex items-center justify-center space-x-1">
-                    <span>New Prospects</span>
-                    <SortIcon column="newProspects" />
+                  <div className="flex items-center justify-end space-x-1">
+                    <span>Order pending (revenue)</span>
+                    <SortIcon column="pendingOrderRevenue" />
                   </div>
                 </th>
                 <th 
@@ -2173,7 +2196,11 @@ const SortIcon = ({ column }) => {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-900 w-20">{rep.convertedVisits}</td>
                   <td className="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-900 w-24">{rep.nbdConversion}%</td>
-                  <td className="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-900 w-20">{rep.newProspects}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium text-gray-900 w-24">
+                    <span title={new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(rep.pendingOrderRevenue)}>
+                      {formatCurrency(rep.pendingOrderRevenue)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-900 w-20">
                     <span className={rep.billsPending > 0 ? 'text-orange-600 font-medium' : 'text-gray-900'}>
                       {rep.billsPending}
@@ -2653,6 +2680,34 @@ const SortIcon = ({ column }) => {
           change={0}
           icon={XCircle}
           color="bg-red-500"
+        />
+      </div>
+
+      {/* Third Row for Pending Orders */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8 min-w-0">
+        <KPICard
+          title="Order Pendings - Count"
+          value={dashboardData.overview.pendingOrderCount}
+          icon={ShoppingCart}
+          color="bg-yellow-500"
+        />
+        <KPICard
+          title="Order Pendings - Revenue"
+          value={formatCurrency(dashboardData.overview.pendingOrderRevenue)}
+          icon={DollarSign}
+          color="bg-yellow-600"
+        />
+        <KPICard
+          title="Avg Days Pending"
+          value={`${dashboardData.overview.avgDaysPending} days`}
+          icon={Clock}
+          color="bg-red-500"
+        />
+        <KPICard
+          title="Confirmed + Pending Revenue"
+          value={formatCurrency(dashboardData.overview.confirmedPlusPendingRevenue)}
+          icon={TrendingUp}
+          color="bg-green-500"
         />
       </div>
 
